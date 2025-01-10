@@ -7,7 +7,6 @@ import bookRoutes from "./routes/Book.routes";
 import cors from "cors";
 import { logger } from "./middleware/logger";
 dotenv.config();
-import { authenticate } from "./middleware/auth";
 
 const app = express();
 if (!process.env.FRONTEND_URL) {
