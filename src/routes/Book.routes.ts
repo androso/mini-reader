@@ -23,6 +23,8 @@ router.post("/", authenticate, upload.single("file"), async (req, res) => {
             const fileName = `${req.user.id}-${Date.now()}-${req?.file.originalname}`;
             await uploadFile(fileName, fileBuffer);
 
+            // create embeddings from file 
+            
             const [book] = await db
                 .insert(books)
                 .values({
