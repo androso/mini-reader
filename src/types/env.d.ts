@@ -7,5 +7,6 @@ declare namespace NodeJS{
         OPENAI_API_KEY : string;
         CHROMA_URL : string;
         CHROMA_CLIENT_AUTH_CREDENTIALS : string;
+        DATABASE_URL : string;
     }
 }
