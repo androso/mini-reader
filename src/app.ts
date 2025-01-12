@@ -1,10 +1,11 @@
 import express from "express";
-import { QueryController } from "./controllers/QueryControllers";
 import dotenv from "dotenv";
 import authRoutes from "./routes/Auth.routes";
 import userRoutes from "./routes/User.routes";
+import bookRoutes from "./routes/Book.routes";
 import cors from "cors";
 import { logger } from "./middleware/logger";
+import { queryController } from "./controllers/QueryControllers";
 dotenv.config();
 
 const app = express();
@@ -25,7 +26,6 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(logger);
 
-const queryController = new QueryController(process.env.DO_SPACES_NAME || "");
 app.get("/", (req, res) => {
 	res.send("Hello World");
 });
@@ -38,5 +38,5 @@ app.delete(
 // auth routes
 app.use("/api/auth", authRoutes);
 app.use("/api/user", userRoutes);
-
+app.use("/api/books", bookRoutes)
 export default app;

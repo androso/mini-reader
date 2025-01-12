@@ -45,9 +45,10 @@ export const verifyGoogleToken = async (token: string) => {
 };
 
 export const generateToken = (user: any) => {
-	return jwt.sign({ userId: user.id }, process.env.JWT_SECRET!, {
+	const tk =  jwt.sign({ userId: user.id }, process.env.JWT_SECRET!, {
 		expiresIn: "7d",
 	});
+	return tk
 };
 
 export const verifyToken = async (token: any) => {
@@ -56,7 +57,8 @@ export const verifyToken = async (token: any) => {
 			userId: string;
 		};
 
-		return await db.select().from(Users).where(eq(Users.id, decoded.userId));
+        const [user] = await db.select().from(Users).where(eq(Users.id, decoded.userId));
+        return user;
 	} catch (e) {
 		console.error(e);
 		return null;

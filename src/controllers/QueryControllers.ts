@@ -2,7 +2,6 @@
 import { Request, Response } from 'express';
 import { ProcessQueryRequest, QueryResponse } from '../types';
 import { EPUBProcessor } from '../services/EPUBProcessor';
-import { DeleteCollectionResponse } from '../types';
 
 // Define QueryController class
 export class QueryController {
@@ -39,3 +38,5 @@ export class QueryController {
     }
   }
 }
+
+export const queryController = new QueryController(process.env.DO_SPACES_NAME || "");

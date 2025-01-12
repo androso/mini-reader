@@ -27,8 +27,8 @@ router.post("/google", async (req, res) => {
 				.set({ updatedAt: new Date() })
 				.where(eq(Users.googleId, payload.sub));
 		}
-
-		const jwtToken = generateToken(user);
+		
+		const jwtToken = generateToken(user[0]);
 		res.json({ token: jwtToken, user: user[0] });
 	} catch (e) {
 		console.error(e);

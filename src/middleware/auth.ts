@@ -10,7 +10,6 @@ export async function authenticate(
 	if (!token) {
 		return res.status(401).json({ message: "No token provided" });
 	}
-
 	const user = await verifyToken(token);
 	if (!user) {
 		return res.status(401).json({ message: "Invalid token" });
