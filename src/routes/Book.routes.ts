@@ -24,7 +24,7 @@ router.post("/", authenticate, upload.single("file"), async (req, res) => {
             await uploadFile(fileName, fileBuffer);
 
             // create embeddings from file 
-            
+             
             const [book] = await db
                 .insert(books)
                 .values({
