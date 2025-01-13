@@ -16,7 +16,7 @@ export class QueryController {
   async handleQuery(req: Request<{}, {}, ProcessQueryRequest>, res: Response<QueryResponse>) {
     try {
       const { fileKey, collectionName, query } = req.body;
-      const result = await this.epubProcessor.processAndQuery(fileKey, collectionName, query);
+      const result = await this.epubProcessor.processAndQuery(fileKey, query);
       res.json(result);
     } catch (error) {
       res.status(500).json({ error: `Server error: ${error}` });
