@@ -11,34 +11,34 @@ dotenv.config();
 
 const app = express();
 if (!process.env.FRONTEND_URL) {
-	console.warn("FRONTEND_URL not set, CORS is not enabled");
+  console.warn("FRONTEND_URL not set, CORS is not enabled");
 }
 
 app.use(
-	cors({
-		origin: process.env.FRONTEND_URL || false,
-		methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-		allowedHeaders: ["Content-Type", "Authorization"],
-		credentials: true,
-	}),
+  cors({
+    origin: process.env.FRONTEND_URL || false,
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
+  })
 );
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(logger);
 
-
 app.get("/", (req, res) => {
-	res.send("Hello World");
+  res.send("Hello World");
 });
+app.post("/process", (req, res) => queryController.handleProcess(req, res));
 app.post("/query", (req, res) => queryController.handleQuery(req, res));
 app.delete(
-	"/collection/:collectionName",
-	queryController.handleDelete.bind(queryController),
+  "/collection/:collectionName",
+  queryController.handleDelete.bind(queryController)
 );
 
 // auth routes
 app.use("/api/auth", authRoutes);
 app.use("/api/user", userRoutes);
-app.use("/api/books", bookRoutes)
+app.use("/api/books", bookRoutes);
 export default app;

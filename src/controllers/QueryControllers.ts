@@ -13,16 +13,29 @@ export class QueryController {
   }
 
   // Define query handler function for Express route handler
-  async handleQuery(
-    req: Request<{}, {}, ProcessQueryRequest>,
-    res: Response<QueryResponse>
-  ) {
+  async handleProcess(req: Request, res: Response) {
     try {
-      const { fileKey, query } = req.body;
-      const result = await this.epubProcessor.processAndQuery(fileKey, query);
+      const { fileKey } = req.body;
+      const result = await this.epubProcessor.processBook(fileKey);
+      if (result.error) {
+        res.status(500).json(result);
+      }
+      res.status(200).json({ collectionName: result.collectionName });
+    } catch (error) {
+      res.status(500).json({ error: "Error processing book" });
+    }
+  }
+  //query
+  async handleQuery(req: Request, res: Response) {
+    try {
+      const { collectionName, query } = req.body;
+      const result = await this.epubProcessor.queryCollection(
+        collectionName,
+        query
+      );
       res.json(result);
     } catch (error) {
-      res.status(500).json({ error: `Server error: ${error}` });
+      res.status(500).json({ error: "Error querying collection" });
     }
   }
 
@@ -32,11 +45,9 @@ export class QueryController {
       const success = await this.epubProcessor.deleteCollection(collectionName);
 
       if (success) {
-        res
-          .status(200)
-          .json({
-            message: `Collection ${collectionName} deleted successfully`,
-          });
+        res.status(200).json({
+          message: `Collection ${collectionName} deleted successfully`,
+        });
       } else {
         res.status(500).json({ error: "Failed to delete collection" });
       }
