@@ -177,7 +177,7 @@ export class EPUBProcessor {
       return false;
     }
   }
-  
+
   async getCollectionNameFromEpub(epubBuffer: Buffer): Promise<string> {
     try {
       const metadata = await extractMetadata(epubBuffer);
@@ -191,63 +191,64 @@ export class EPUBProcessor {
     }
   }
 
-  // Process EPUB file and query ChromaDB collection
-  async processAndQuery(
-    epubKey: string,
-    query: string
-  ): Promise<QueryResponse> {
+  // Process EPUB file
+  async processBook(
+    epubKey: string
+  ): Promise<{ collectionName: string; error?: string }> {
     try {
-      // First download the file to get metadata
       const downloaded = await this.s3Service.downloadFile(
         epubKey,
         this.localFilePath
       );
       if (!downloaded) {
-        return { error: "Failed to download EPUB file" };
+        return { collectionName: "", error: "Error downloading file" };
       }
 
-      // Read the file content
       const epubBuffer = await readFile(this.localFilePath);
-
-      // Get collection name based on epub metadata
       const collectionName = await this.getCollectionNameFromEpub(epubBuffer);
 
-      // First check if collection exists
+      // Check if collection already exists
       let collectionExists = false;
       try {
-        // Try to get collection - this should throw if collection doesn't exist
         await this.chromaService.getOrCreateCollection(collectionName);
         collectionExists = true;
-      } catch (error) {
-        console.log("Collection does not exist, will process EPUB...");
+      } catch (err) {
+        console.error("Collection doesn't exist, will process EPUB");
       }
-
       if (!collectionExists) {
-        // Process EPUB file and add to collection
         const processed = await this.processEpub(collectionName);
         if (!processed) {
-          return { error: "Failed to process EPUB file" };
+          return { collectionName: "", error: "Error processing EPUB" };
         }
-        console.log("EPUB processed successfully");
       }
-
-      // Query the collection (whether it existed or we just created it)
+      await unlink(this.localFilePath);
+      return { collectionName };
+    } catch (err) {
+      console.error("Error processing book:", err);
+      return { collectionName: "", error: "Error processing book" };
+    }
+  }
+  //query ChromaDB collection
+  async queryCollection(
+    collectionName: string,
+    query: string
+  ): Promise<QueryResponse> {
+    try {
+      try {
+        await this.chromaService.getOrCreateCollection(collectionName);
+      } catch (err) {
+        console.error("Error getting collection:", err);
+        return { error: "Error getting collection" };
+      }
       const results = await this.chromaService.queryCollection(
         collectionName,
         query
       );
-
       if (!results.documents[0]?.length) {
         return { error: "No results found for query" };
       }
-
       const context = results.documents[0].join("\n\n");
       const answer = await this.openAIService.generateResponse(context, query);
-
-      // Cleanup temporary file
-      await unlink(this.localFilePath).catch((err) =>
-        console.error("Error deleting temporary file:", err)
-      );
 
       return {
         answer,
@@ -255,14 +256,9 @@ export class EPUBProcessor {
           (doc): doc is string => doc !== null
         ),
       };
-    } catch (error) {
-      console.error("Error in processAndQuery:", error);
-      if (error instanceof Error) {
-        return {
-          error: error.message || "An error occurred during processing",
-        };
-      }
-      return { error: "An unknown error occurred during processing" };
+    } catch (err) {
+      console.error("Error querying collection:", err);
+      return { error: "Error querying collection" };
     }
   }
 }
