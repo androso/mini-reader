@@ -1,7 +1,5 @@
 import { ChromaClient, OpenAIEmbeddingFunction } from "chromadb";
 import dotenv from "dotenv";
-import { Worker } from "worker_threads";
-import path from "path";
 
 dotenv.config();
 
@@ -18,28 +16,16 @@ export class ChromaService {
         credentials: process.env.CHROMA_CLIENT_AUTH_CREDENTIALS || "",
       },
     });
-    //test connection
-    //this.testConnection();
 
     this.embeddingFunction = new OpenAIEmbeddingFunction({
       openai_api_key: process.env.OPENAI_API_KEY || "",
       openai_model: "text-embedding-ada-002",
     });
   }
-  //test connection function
-  private async testConnection() {
-    try {
-      await this.client.heartbeat();
-      console.log("ChromaDB Connection: OK");
-    } catch (error) {
-      console.error("ChromaDB Connection Failed:", error);
-    }
-  }
 
   async getOrCreateCollection(name: string) {
     try {
       let collection;
-      // First try to get existing collection
       try {
         collection = await this.client.getCollection({
           name,
@@ -55,7 +41,6 @@ export class ChromaService {
       }
       // Cache collection ID for future use (avoiding repeated API calls)
       this.collections.set(name, collection.id);
-      // Return collection object
       return collection;
     } catch (error) {
       console.error("Error in getOrCreateCollection:", error);
@@ -75,7 +60,7 @@ export class ChromaService {
         (doc) => doc && doc.length > 0 && doc.length < 4000
       );
 
-      // Increased batch size
+      // Increased batch size and concurrency for faster processing
       const BATCH_SIZE = 75;
       const CONCURRENT_BATCHES = 8; // Number of concurrent requests
 
@@ -131,8 +116,6 @@ export class ChromaService {
         // Wait for the current group of batches to complete
         const batchResults = await Promise.all(batchPromises);
         results.push(...batchResults);
-
-        // Optional: Add a small delay between batch groups to prevent overwhelming the server
       }
 
       const totalSuccess = results.filter((r) => r?.success).length;
@@ -150,14 +133,13 @@ export class ChromaService {
   }
 
   async queryCollection(collectionName: string, query: string, nResults = 3) {
-    // Get or create collection
     const collection = await this.getOrCreateCollection(collectionName);
-    // Query collection and return results (documents)
     return await collection.query({
       queryTexts: [query],
       nResults,
     });
   }
+
   async deleteCollection(name: string): Promise<boolean> {
     try {
       await this.client.deleteCollection({ name });

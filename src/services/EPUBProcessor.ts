@@ -12,7 +12,6 @@ import { LLMChunker } from "../utils/LlmChunks";
 import { extractMetadata, createHash } from "../utils/bookUtils";
 
 export class EPUBProcessor {
-  // Define services
   private s3Service: S3Service;
   private chromaService: ChromaService;
   private openAIService: OpenAIService;
@@ -169,7 +168,6 @@ export class EPUBProcessor {
     }
   }
 
-  //using chroma service to delete
   async deleteCollection(name: string): Promise<boolean> {
     try {
       await this.chromaService.deleteCollection(name);
@@ -179,6 +177,7 @@ export class EPUBProcessor {
       return false;
     }
   }
+  
   async getCollectionNameFromEpub(epubBuffer: Buffer): Promise<string> {
     try {
       const metadata = await extractMetadata(epubBuffer);
@@ -193,20 +192,26 @@ export class EPUBProcessor {
   }
 
   // Process EPUB file and query ChromaDB collection
-  async processAndQuery(epubKey: string, query: string): Promise<QueryResponse> {
+  async processAndQuery(
+    epubKey: string,
+    query: string
+  ): Promise<QueryResponse> {
     try {
       // First download the file to get metadata
-      const downloaded = await this.s3Service.downloadFile(epubKey, this.localFilePath);
+      const downloaded = await this.s3Service.downloadFile(
+        epubKey,
+        this.localFilePath
+      );
       if (!downloaded) {
         return { error: "Failed to download EPUB file" };
       }
-  
+
       // Read the file content
       const epubBuffer = await readFile(this.localFilePath);
-  
+
       // Get collection name based on epub metadata
       const collectionName = await this.getCollectionNameFromEpub(epubBuffer);
-  
+
       // First check if collection exists
       let collectionExists = false;
       try {
@@ -216,7 +221,7 @@ export class EPUBProcessor {
       } catch (error) {
         console.log("Collection does not exist, will process EPUB...");
       }
-  
+
       if (!collectionExists) {
         // Process EPUB file and add to collection
         const processed = await this.processEpub(collectionName);
@@ -225,22 +230,25 @@ export class EPUBProcessor {
         }
         console.log("EPUB processed successfully");
       }
-  
+
       // Query the collection (whether it existed or we just created it)
-      const results = await this.chromaService.queryCollection(collectionName, query);
-      
+      const results = await this.chromaService.queryCollection(
+        collectionName,
+        query
+      );
+
       if (!results.documents[0]?.length) {
         return { error: "No results found for query" };
       }
-  
+
       const context = results.documents[0].join("\n\n");
       const answer = await this.openAIService.generateResponse(context, query);
-  
+
       // Cleanup temporary file
       await unlink(this.localFilePath).catch((err) =>
         console.error("Error deleting temporary file:", err)
       );
-  
+
       return {
         answer,
         source_documents: results.documents[0].filter(
