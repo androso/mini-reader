@@ -20,5 +20,5 @@ export interface Metadata {
   title?: string;
   creator?: string;
   identifier?: string;
-  size: number;
+  //size: number;
 }

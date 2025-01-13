@@ -12,7 +12,7 @@ export async function extractMetadata(file: Buffer): Promise<Metadata> {
   }
 
   const metadata: Metadata = {
-    size: file.length,
+
   };
   
   try {
@@ -36,10 +36,18 @@ export async function extractMetadata(file: Buffer): Promise<Metadata> {
 
 //create a hast per metadata book
 export function createHash(metadata: Metadata): string {
-  const hash = crypto.createHash("sha256");
-  hash.update(JSON.stringify(metadata));
-  return hash.digest("hex");
-}
+    // Sort properties to ensure consistent order
+    const normalized = {
+      title: metadata.title?.trim(),
+      creator: metadata.creator?.trim(),
+      identifier: metadata.identifier?.trim()
+      // Intentionally exclude size as it might vary slightly
+    };
+    
+    const hash = crypto.createHash("sha256");
+    hash.update(JSON.stringify(normalized));
+    return hash.digest("hex");
+  }
 
 //decrypt metadata hash
 export function decryptHash(hash: string): Metadata {
