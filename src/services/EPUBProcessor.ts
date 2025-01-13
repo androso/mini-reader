@@ -2,7 +2,6 @@
 import { S3Service } from './S3Services';
 import { ChromaService } from './ChromaService';
 import { OpenAIService } from './OpenAIServices';
-import { readFile } from 'fs/promises';
 import EPub from 'epub';
 import { JSDOM } from 'jsdom';
 import { QueryResponse } from '../types';
@@ -83,7 +82,7 @@ export class EPUBProcessor {
           reject(error);
         }
       });
-      
+ 
       epub.parse();
       console.log('[extractTextFromEpub] Started EPUB parsing');
     });
