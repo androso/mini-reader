@@ -49,10 +49,4 @@ export function createHash(metadata: Metadata): string {
     return hash.digest("hex");
   }
 
-//decrypt metadata hash
-export function decryptHash(hash: string): Metadata {
-  const metadata = JSON.parse(Buffer.from(hash, "hex").toString());
-  return metadata;
-}
-
 
