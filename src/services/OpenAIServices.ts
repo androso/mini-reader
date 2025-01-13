@@ -15,7 +15,7 @@ export class OpenAIService {
   //generate response function to generate response from the model based on the context and query
   async generateResponse(context: string, query: string): Promise<string> {
     const response = await this.client.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: 'gpt-4o-mini-2024-07-18',
       messages: [
         { role: 'system', content: 'You are a helpful assistant. Answer the question based on the provided context.' },
         { role: 'user', content: `Context:\n${context}\n\nQuestion: ${query}\n\nAnswer:` }
