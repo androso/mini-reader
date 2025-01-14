@@ -264,3 +264,4 @@ export class EPUBProcessor {
       return { error: "Error querying collection" };
     }
   }
+}
