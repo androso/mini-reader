@@ -25,7 +25,8 @@ router.post("/", authenticate, upload.single("file"), async (req, res) => {
             await uploadFile(fileName, fileBuffer);
             const collection = await queryController.handleProcess(fileBuffer);
             if(collection.error) {
-                return res.status(500).json({ error: "Error processing file" });
+                res.status(500).json({ error: "Error processing file to generate a collection" });
+                return;
             }
 
             const [book] = await db
