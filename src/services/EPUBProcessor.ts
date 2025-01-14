@@ -13,17 +13,13 @@ import { extractMetadata, createHash } from "../utils/bookUtils";
 import fs from "fs/promises";
 
 export class EPUBProcessor {
-  private s3Service: S3Service;
   private chromaService: ChromaService;
   private openAIService: OpenAIService;
-  private localFilePath: string;
 
   constructor(bucketName: string) {
     // Initialize services
-    this.s3Service = new S3Service(bucketName);
     this.chromaService = new ChromaService();
     this.openAIService = new OpenAIService();
-    this.localFilePath = path.join(__dirname, "../../temp_epub_file.epub");
   }
 
   private async extractTextFromEpub(buffer: Buffer): Promise<string[]> {

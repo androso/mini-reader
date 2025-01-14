@@ -43,8 +43,6 @@ export class LLMChunker {
     return Promise.all(workerPromises);
   }
 
-
-
   private createInitialChunks(text: string): string[] {
     if (!text || text.length < this.minChunkSize) {
       return text ? [text] : [];
