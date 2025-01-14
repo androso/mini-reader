@@ -5,7 +5,7 @@ const router = Router();
 //@ts-ignore
 /**
  * @swagger
-  * /api/users:
+ * /api/user:
  *   get:
  *     tags:
  *       - User
@@ -46,7 +46,7 @@ const router = Router();
  */
 
 router.get("/", authenticate, (req, res) => {
-	res.json({ user: req.user });
+    res.json({ user: req.user });
 });
 
 export default router;
