@@ -16,10 +16,56 @@ const upload = multer({
 });
 /**
  * @swagger
- * tags:
- *   - name: Books
- *     description: Book management endpoints
- * 
+ * components:
+ *   securitySchemes:
+ *     bearerAuth:
+ *       type: http
+ *       scheme: bearer
+ *       bearerFormat: JWT
+ *   schemas:
+ *     User:
+ *       type: object
+ *       properties:
+ *         id:
+ *           type: string
+ *           description: Unique identifier for the user
+ *         name:
+ *           type: string
+ *           description: User's full name
+ *         email:
+ *           type: string
+ *           description: User's email address
+ *         googleId:
+ *           type: string
+ *           description: User's Google ID
+ *         createdAt:
+ *           type: string
+ *           format: date-time
+ *         updatedAt:
+ *           type: string
+ *           format: date-time
+ *     Book:
+ *       type: object
+ *       properties:
+ *         id:
+ *           type: string
+ *           description: Unique identifier for the book
+ *         title:
+ *           type: string
+ *           description: Book title
+ *         userId:
+ *           type: string
+ *           description: ID of the user who uploaded the book
+ *         fileKey:
+ *           type: string
+ *           description: Storage key for the book file
+ *         createdAt:
+ *           type: string
+ *           format: date-time
+ */
+
+/**
+ * @swagger
  * /api/books:
  *   post:
  *     tags: [Books]
@@ -37,6 +83,7 @@ const upload = multer({
  *               file:
  *                 type: string
  *                 format: binary
+ *                 description: EPUB file to upload (max 80MB)
  *     responses:
  *       200:
  *         description: File successfully uploaded and processed
@@ -47,21 +94,12 @@ const upload = multer({
  *               properties:
  *                 message:
  *                   type: string
- *                   example: "File upload succesfull"
+ *                   example: "File upload successful"
  *                 book:
- *                   type: object
- *                   properties:
- *                     title:
- *                       type: string
- *                       example: "cordwainer-smith_short-fiction.epub"
- *                     userId:
- *                       type: string
- *                       example: "1ba8cd628f61"
- *                     fileKey:
- *                       type: string
- *                       example: "fdd2a6cd-f354-4428-9084-a893a9132318-1736868043356-cordwainer-smith_short-fiction.epub"
+ *                   $ref: '#/components/schemas/Book'
  *                 collection:
  *                   type: string
+ *                   description: ChromaDB collection name
  *                   example: "book_1ba8cd628f61"
  *       401:
  *         description: Authentication failed
@@ -72,9 +110,9 @@ const upload = multer({
  *               properties:
  *                 message:
  *                   type: string
- *                   example: "No token provided"
+ *                   example: "No token provided or invalid token"
  *       400:
- *         description: Upload failed
+ *         description: Bad request
  *         content:
  *           application/json:
  *             schema:
@@ -82,7 +120,17 @@ const upload = multer({
  *               properties:
  *                 error:
  *                   type: string
- *                   example: "Upload failed"
+ *                   example: "No file uploaded or invalid file format"
+ *       413:
+ *         description: Payload too large
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "File size exceeds 80MB limit"
  */
 router.post("/", authenticate, upload.single("file"), async (req, res) => {
     try {

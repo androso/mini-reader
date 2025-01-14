@@ -22,7 +22,8 @@ const router: Router = express.Router();
  *             properties:
  *               token:
  *                 type: string
- *                 description: Google OAuth token
+ *                 description: Google OAuth ID token
+ *                 example: "eyJhbGciOiJSUzI1NiIsImtpZCI6IjFiZDY3..."
  *             required:
  *               - token
  *     responses:
@@ -35,10 +36,10 @@ const router: Router = express.Router();
  *               properties:
  *                 token:
  *                   type: string
- *                   description: JWT token for authenticated user
+ *                   description: JWT access token
+ *                   example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVC..."
  *                 user:
- *                   type: object
- *                   description: User details
+ *                   $ref: '#/components/schemas/User'
  *       401:
  *         description: Authentication failed
  *         content:
@@ -48,7 +49,7 @@ const router: Router = express.Router();
  *               properties:
  *                 message:
  *                   type: string
- *                   example: Authentication failed
+ *                   example: "Invalid Google OAuth token"
  */
 
 router.post("/google", async (req, res) => {

@@ -5,7 +5,7 @@ const router = Router();
 //@ts-ignore
 /**
  * @swagger
- * /api/users:
+  * /api/users:
  *   get:
  *     tags:
  *       - User
@@ -22,12 +22,27 @@ const router = Router();
  *               type: object
  *               properties:
  *                 user:
- *                   type: object
- *                   description: User object containing user details
+ *                   $ref: '#/components/schemas/User'
  *       401:
- *         description: Unauthorized - Invalid or missing authentication token
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "No token provided or invalid token"
  *       500:
  *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Internal server error"
  */
 
 router.get("/", authenticate, (req, res) => {
