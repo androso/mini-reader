@@ -6,6 +6,7 @@ import { authenticate } from "../middleware/auth";
 import { db } from "../db";
 import { books } from "../../migrations/schema";
 import { eq } from "drizzle-orm";
+import { queryController, QueryController } from "../controllers/QueryControllers";
 
 const upload = multer({
     storage: multer.memoryStorage(),
@@ -22,6 +23,10 @@ router.post("/", authenticate, upload.single("file"), async (req, res) => {
             const fileBuffer = req.file.buffer;
             const fileName = `${req.user.id}-${Date.now()}-${req?.file.originalname}`;
             await uploadFile(fileName, fileBuffer);
+            const collection = await queryController.handleProcess(fileBuffer);
+            if(collection.error) {
+                return res.status(500).json({ error: "Error processing file" });
+            }
 
             const [book] = await db
                 .insert(books)
@@ -35,6 +40,7 @@ router.post("/", authenticate, upload.single("file"), async (req, res) => {
             return res.json({
                 message: "File upload succesfull",
                 book,
+                collection: collection.collectionName
             });
         }
     } catch (e) {
