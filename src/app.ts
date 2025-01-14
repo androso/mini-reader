@@ -6,7 +6,6 @@ import bookRoutes from "./routes/Book.routes";
 import cors from "cors";
 import { logger } from "./middleware/logger";
 import { queryController } from "./controllers/QueryControllers";
-
 dotenv.config();
 
 const app = express();
