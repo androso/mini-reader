@@ -1,6 +1,7 @@
 import JSZip from "jszip";
 import crypto from "crypto";
 import { Metadata } from "../types";
+import { parseStringPromise } from "xml2js";
 
 export async function extractMetadata(file: Buffer): Promise<Metadata> {
   const zip = new JSZip();
@@ -14,23 +15,30 @@ export async function extractMetadata(file: Buffer): Promise<Metadata> {
   const metadata: Metadata = {};
 
   try {
-    // Parse container.xml to get OPF path
-    const opfPath = containerXml.match(/full-path="([^"]+)"/)?.[1];
+    // Parse container.xml properly
+    const container = await parseStringPromise(containerXml);
+    const opfPath = container.container.rootfiles[0].rootfile[0].$["full-path"];
+
     if (!opfPath) {
       throw new Error("Cannot find OPF file path");
     }
+
     const opfContent = await zip.file(opfPath)?.async("text");
     if (opfContent) {
-      metadata.title = opfContent.match(/<dc:title[^>]*>([^<]+)/)?.[1];
-      metadata.creator = opfContent.match(/<dc:creator[^>]*>([^<]+)/)?.[1];
-      metadata.identifier = opfContent.match(
-        /<dc:identifier[^>]*>([^<]+)/
-      )?.[1];
+      const opf = await parseStringPromise(opfContent);
+      const meta = opf.package.metadata[0];
+
+      // Handle potential arrays of values
+      metadata.title = meta["dc:title"]?.[0]?._ || meta["dc:title"]?.[0];
+      metadata.creator = meta["dc:creator"]?.[0]?._ || meta["dc:creator"]?.[0];
+      metadata.identifier =
+        meta["dc:identifier"]?.[0]?._ || meta["dc:identifier"]?.[0];
     }
   } catch (err) {
     console.error("Error extracting metadata", err);
     throw err;
   }
+
   return metadata;
 }
 
@@ -41,7 +49,6 @@ export function createHash(metadata: Metadata): string {
     title: metadata.title?.trim(),
     creator: metadata.creator?.trim(),
     identifier: metadata.identifier?.trim(),
-    // Intentionally exclude size as it might vary slightly
   };
 
   const hash = crypto.createHash("sha256");
