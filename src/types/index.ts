@@ -15,3 +15,10 @@ export interface DeleteCollectionResponse {
   message?: string;
   error?: string;
 }
+
+export interface Metadata {
+  title?: string;
+  creator?: string;
+  identifier?: string;
+  //size: number;
+}

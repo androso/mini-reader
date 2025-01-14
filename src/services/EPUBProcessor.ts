@@ -2,268 +2,265 @@
 import { S3Service } from "./S3Services";
 import { ChromaService } from "./ChromaService";
 import { OpenAIService } from "./OpenAIServices";
+import { readFile } from "fs/promises";
 import EPub from "epub";
 import { JSDOM } from "jsdom";
 import { QueryResponse } from "../types";
 import * as path from "path";
 import { unlink } from "fs/promises";
 import { LLMChunker } from "../utils/LlmChunks";
+import { extractMetadata, createHash } from "../utils/bookUtils";
+import fs from "fs/promises";
 
 export class EPUBProcessor {
-    // Define services
-    private s3Service: S3Service;
-    private chromaService: ChromaService;
-    private openAIService: OpenAIService;
-    private localFilePath: string;
+  private chromaService: ChromaService;
+  private openAIService: OpenAIService;
 
-    constructor(bucketName: string) {
-        // Initialize services
-        this.s3Service = new S3Service(bucketName);
-        this.chromaService = new ChromaService();
-        this.openAIService = new OpenAIService();
-        this.localFilePath = path.join(__dirname, "../../temp_epub_file.epub");
-    }
+  constructor(bucketName: string) {
+    // Initialize services
+    this.chromaService = new ChromaService();
+    this.openAIService = new OpenAIService();
+  }
 
-    private async extractTextFromEpub(): Promise<string[]> {
-        console.log("[extractTextFromEpub] Starting EPUB text extraction");
-        return new Promise((resolve, reject) => {
-            const epub = new EPub(this.localFilePath);
-            const llmChunker = new LLMChunker();
+  private async extractTextFromEpub(buffer: Buffer): Promise<string[]> {
+    console.log("[extractTextFromEpub] Starting EPUB text extraction");
 
-            epub.on("end", async () => {
-                try {
-                    console.log(
-                        `[extractTextFromEpub] EPUB parsed, found ${epub.flow.length} chapters`
-                    );
-                    const allChapters: string[] = [];
+    // Create temporary file
+    const tempPath = path.join(__dirname, `temp_${Date.now()}.epub`);
+    await fs.writeFile(tempPath, buffer);
 
-                    for (let i = 0; i < epub.flow.length; i++) {
-                        console.log(
-                            `[extractTextFromEpub] Processing chapter ${i + 1}/${epub.flow.length}`
-                        );
+    return new Promise((resolve, reject) => {
+      const epub = new EPub(tempPath); // Use filepath instead of buffer
+      const llmChunker = new LLMChunker();
 
-                        const chapter = await new Promise<string>(
-                            (resolveChapter) => {
-                                epub.getChapter(
-                                    epub.flow[i].id,
-                                    async (error: Error, text: string) => {
-                                        if (error) {
-                                            console.error(
-                                                `[extractTextFromEpub] Error reading chapter ${i}:`,
-                                                error
-                                            );
-                                            resolveChapter("");
-                                        } else {
-                                            try {
-                                                console.log(
-                                                    `[extractTextFromEpub] Successfully read chapter ${i + 1}, length: ${text.length}`
-                                                );
-                                                const dom = new JSDOM(text);
-                                                const textContent =
-                                                    dom.window.document.body
-                                                        .textContent || "";
-                                                const cleanContent = textContent
-                                                    .replace(/\s+/g, " ")
-                                                    .trim();
-                                                console.log(
-                                                    `[extractTextFromEpub] Cleaned chapter ${i + 1}, length: ${cleanContent.length}`
-                                                );
-                                                resolveChapter(cleanContent);
-                                            } catch (parseError) {
-                                                console.error(
-                                                    `[extractTextFromEpub] Error parsing chapter ${i}:`,
-                                                    parseError
-                                                );
-                                                resolveChapter("");
-                                            }
-                                        }
-                                    }
-                                );
-                            }
-                        );
-
-                        if (chapter.trim()) {
-                            try {
-                                console.log(
-                                    `[extractTextFromEpub] Starting chunking for chapter ${i + 1}`
-                                );
-                                const chunks =
-                                    await llmChunker.chunkText(chapter);
-                                console.log(
-                                    `[extractTextFromEpub] Chapter ${i + 1} chunked into ${chunks.length} parts`
-                                );
-                                allChapters.push(...chunks);
-                            } catch (chunkError) {
-                                console.error(
-                                    `[extractTextFromEpub] Error chunking chapter ${i}:`,
-                                    chunkError
-                                );
-                                if (chapter.length <= 8000) {
-                                    allChapters.push(chapter);
-                                    console.log(
-                                        `[extractTextFromEpub] Added chapter ${i + 1} as single chunk`
-                                    );
-                                }
-                            }
-                        }
-                    }
-
-                    console.log(
-                        `[extractTextFromEpub] Completed. Total chunks: ${allChapters.length}`
-                    );
-                    resolve(allChapters);
-                } catch (error) {
-                    console.error("[extractTextFromEpub] Fatal error:", error);
-                    reject(error);
-                }
-            });
-
-            epub.parse();
-            console.log("[extractTextFromEpub] Started EPUB parsing");
-        });
-    }
-
-    // Process EPUB file and add to ChromaDB collection
-    private async processEpub(collectionName: string): Promise<boolean> {
-        console.log("[processEpub] Starting EPUB processing");
+      epub.on("end", async () => {
         try {
-            console.log("[processEpub] Extracting text from EPUB");
-            const chunks = await this.extractTextFromEpub();
+          console.log(
+            `[extractTextFromEpub] EPUB parsed, found ${epub.flow.length} chapters`
+          );
+          const allChapters: string[] = [];
+
+          for (let i = 0; i < epub.flow.length; i++) {
             console.log(
-                `[processEpub] Extracted ${chunks.length} initial chunks`
+              `[extractTextFromEpub] Processing chapter ${i + 1}/${
+                epub.flow.length
+              }`
             );
 
-            const validChunks = chunks
-                .filter((chunk) => chunk && chunk.length > 0)
-                .map((chunk) => chunk.slice(0, 8000));
+            const chapter = await new Promise<string>((resolveChapter) => {
+              epub.getChapter(
+                epub.flow[i].id,
+                async (error: Error, text: string) => {
+                  if (error) {
+                    console.error(
+                      `[extractTextFromEpub] Error reading chapter ${i}:`,
+                      error
+                    );
+                    resolveChapter("");
+                    return;
+                  }
 
-            console.log({
-                stage: "processEpub",
-                totalChunks: chunks.length,
-                validChunks: validChunks.length,
-                averageChunkLength:
-                    validChunks.reduce((acc, chunk) => acc + chunk.length, 0) /
-                    validChunks.length,
-                smallestChunk: Math.min(...validChunks.map((c) => c.length)),
-                largestChunk: Math.max(...validChunks.map((c) => c.length)),
+                  try {
+                    console.log(
+                      `[extractTextFromEpub] Successfully read chapter ${
+                        i + 1
+                      }, length: ${text.length}`
+                    );
+                    const dom = new JSDOM(text);
+                    const textContent =
+                      dom.window.document.body.textContent || "";
+                    const cleanContent = textContent
+                      .replace(/\s+/g, " ")
+                      .trim();
+                    console.log(
+                      `[extractTextFromEpub] Cleaned chapter ${
+                        i + 1
+                      }, length: ${cleanContent.length}`
+                    );
+                    resolveChapter(cleanContent);
+                  } catch (parseError) {
+                    console.error(
+                      `[extractTextFromEpub] Error parsing chapter ${i}:`,
+                      parseError
+                    );
+                    resolveChapter("");
+                  }
+                }
+              );
             });
 
-            if (!validChunks.length) {
-                console.error("[processEpub] No valid chunks extracted");
-                throw new Error("No valid text chunks extracted");
-            }
-
-            console.log("[processEpub] Adding chunks to ChromaDB");
-            await this.chromaService.addDocuments(collectionName, validChunks);
-            console.log("[processEpub] Successfully added chunks to ChromaDB");
-            return true;
-        } catch (error) {
-            console.error("[processEpub] Error:", error);
-            return false;
-        }
-    }
-
-    //using chroma service to delete
-    async deleteCollection(name: string): Promise<boolean> {
-        try {
-            await this.chromaService.deleteCollection(name);
-            return true;
-        } catch (error) {
-            console.error("Delete collection error:", error);
-            return false;
-        }
-    }
-
-    // Process EPUB file and query ChromaDB collection
-    async processAndQuery(
-        epubKey: string,
-        collectionName: string,
-        query: string
-    ): Promise<QueryResponse> {
-        try {
-            // Check if collection exists by trying to query it
-            try {
-                // Query collection to check if it exists and has documents
-                const results = await this.chromaService.queryCollection(
-                    collectionName,
-                    query
-                );
-                if (results.documents[0]?.length) {
-                    // Collection exists and has documents, proceed with query
-                    const context = results.documents[0].join("\n\n");
-                    // Generate response using OpenAI
-                    const answer = await this.openAIService.generateResponse(
-                        context,
-                        query
-                    );
-
-                    // Return response and source documents
-                    return {
-                        answer,
-                        source_documents: results.documents[0].filter(
-                            (doc): doc is string => doc !== null
-                        ),
-                    };
-                }
-            } catch (error) {
-                // Collection doesn't exist or is empty, proceed with processing
+            if (chapter.trim()) {
+              try {
+                const chunks = await llmChunker.chunkText(chapter);
                 console.log(
-                    "Collection not found or empty, processing EPUB..."
+                  `[extractTextFromEpub] Chapter ${i + 1} chunked into ${
+                    chunks.length
+                  } parts`
                 );
+                allChapters.push(...chunks);
+              } catch (chunkError) {
+                console.error(
+                  `[extractTextFromEpub] Error chunking chapter ${i}:`,
+                  chunkError
+                );
+                if (chapter.length <= 8000) {
+                  allChapters.push(chapter);
+                  console.log(
+                    `[extractTextFromEpub] Added chapter ${
+                      i + 1
+                    } as single chunk`
+                  );
+                }
+              }
             }
+          }
 
-            // Download and process EPUB
-            const downloaded = await this.s3Service.downloadFile(
-                epubKey,
-                this.localFilePath
-            );
-            if (!downloaded) {
-                return { error: "Failed to download EPUB file" };
-            } else {
-                console.log("Downloaded EPUB file");
-            }
-
-            // Process EPUB file and add to collection
-            const processed = await this.processEpub(collectionName);
-            if (!processed) {
-                return { error: "Failed to process EPUB file" };
-            }
-
-            // Query the newly processed collection
-            const results = await this.chromaService.queryCollection(
-                collectionName,
-                query
-            );
-            const context = results.documents[0].join("\n\n");
-            const answer = await this.openAIService.generateResponse(
-                context,
-                query
-            );
-
-            // Cleanup temporary file
-            try {
-                await unlink(this.localFilePath);
-            } catch (error) {
-                console.error("Error deleting temporary file:", error);
-            }
-
-            // Return response and source documents
-            return {
-                answer,
-                source_documents: results.documents[0].filter(
-                    (doc): doc is string => doc !== null
-                ),
-            };
+          console.log(
+            `[extractTextFromEpub] Completed. Total chunks: ${allChapters.length}`
+          );
+          resolve(allChapters);
+          await fs.unlink(tempPath);
         } catch (error) {
-            console.error("Error in processAndQuery:", error);
-            if (error instanceof Error) {
-                return {
-                    error:
-                        error.message || "An error occurred during processing",
-                };
-            } else {
-                return { error: "An unknown error occurred during processing" };
-            }
+          console.error("[extractTextFromEpub] Fatal error:", error);
+          reject(error);
+          await fs.unlink(tempPath);
         }
+      });
+      epub.on("error", async (error) => {
+        await fs.unlink(tempPath).catch(console.error);
+        reject(error);
+      });
+
+      epub.parse();
+      console.log("[extractTextFromEpub] Started EPUB parsing");
+    });
+  }
+
+  // Process EPUB file and add to ChromaDB collection
+  private async processEpub(
+    collectionName: string,
+    file: Buffer
+  ): Promise<boolean> {
+    console.log("[processEpub] Starting EPUB processing");
+    try {
+      console.log("[processEpub] Extracting text from EPUB");
+      const chunks = await this.extractTextFromEpub(file);
+      console.log(`[processEpub] Extracted ${chunks.length} initial chunks`);
+
+      const validChunks = chunks
+        .filter((chunk) => chunk && chunk.length > 0)
+        .map((chunk) => chunk.slice(0, 8000));
+
+      console.log({
+        stage: "processEpub",
+        totalChunks: chunks.length,
+        validChunks: validChunks.length,
+        averageChunkLength:
+          validChunks.reduce((acc, chunk) => acc + chunk.length, 0) /
+          validChunks.length,
+        smallestChunk: Math.min(...validChunks.map((c) => c.length)),
+        largestChunk: Math.max(...validChunks.map((c) => c.length)),
+      });
+
+      if (!validChunks.length) {
+        console.error("[processEpub] No valid chunks extracted");
+        throw new Error("No valid text chunks extracted");
+      }
+
+      console.log("[processEpub] Adding chunks to ChromaDB");
+      await this.chromaService.addDocuments(collectionName, validChunks);
+      console.log("[processEpub] Successfully added chunks to ChromaDB");
+      return true;
+    } catch (error) {
+      console.error("[processEpub] Error:", error);
+      return false;
     }
-}
+  }
+
+  async deleteCollection(name: string): Promise<boolean> {
+    try {
+      await this.chromaService.deleteCollection(name);
+      return true;
+    } catch (error) {
+      console.error("Delete collection error:", error);
+      return false;
+    }
+  }
+
+  async getCollectionNameFromEpub(fileBuffer: Buffer): Promise<string> {
+    try {
+      const metadata = await extractMetadata(fileBuffer);
+      const collectionHash = createHash(metadata);
+      const collectionName = `book_${collectionHash.slice(0, 12)}`;
+      console.log(`Collection name generated from metadata: ${collectionName}`);
+      return collectionName;
+    } catch (error) {
+      console.error("Error getting collection name from EPUB:", error);
+      throw error;
+    }
+  }
+
+  async processBook(
+    fileBuffer: Buffer
+  ): Promise<{ collectionName: string; error?: string }> {
+    try {
+      const collectionName = await this.getCollectionNameFromEpub(fileBuffer);
+
+      // Check if collection exists
+      let collection = await this.chromaService.getCollection(collectionName);
+
+      if (!collection) {
+        // Collection doesn't exist, create and process it
+        try {
+          collection = await this.chromaService.createCollection(
+            collectionName
+          );
+          const processed = await this.processEpub(collectionName, fileBuffer);
+          if (!processed) {
+            return { collectionName: "", error: "Error processing EPUB" };
+          }
+        } catch (err) {
+          console.error("Error creating/processing collection:", err);
+          return { collectionName: "", error: "Error creating collection" };
+        }
+      }
+
+      return { collectionName };
+    } catch (err) {
+      console.error("Error processing book:", err);
+      return { collectionName: "", error: "Error processing book" };
+    }
+  }
+  //query ChromaDB collection
+  async queryCollection(
+    collectionName: string,
+    query: string
+  ): Promise<QueryResponse> {
+    try {
+      try {
+        await this.chromaService.getOrCreateCollection(collectionName);
+      } catch (err) {
+        console.error("Error getting collection:", err);
+        return { error: "Error getting collection" };
+      }
+      const results = await this.chromaService.queryCollection(
+        collectionName,
+        query
+      );
+      if (!results.documents[0]?.length) {
+        return { error: "No results found for query" };
+      }
+      const context = results.documents[0].join("\n\n");
+      const answer = await this.openAIService.generateResponse(context, query);
+
+      return {
+        answer,
+        source_documents: results.documents[0].filter(
+          (doc): doc is string => doc !== null
+        ),
+      };
+    } catch (err) {
+      console.error("Error querying collection:", err);
+      return { error: "Error querying collection" };
+    }
+  }
