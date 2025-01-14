@@ -5,6 +5,52 @@ import { Users } from "../db/schema";
 import { eq } from "drizzle-orm";
 const router: Router = express.Router();
 
+/**
+ * @swagger
+ * /auth/google:
+ *   post:
+ *     tags:
+ *       - Auth
+ *     summary: Authenticate user with Google OAuth token
+ *     description: Validates Google OAuth token and creates/updates user in database
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               token:
+ *                 type: string
+ *                 description: Google OAuth token
+ *             required:
+ *               - token
+ *     responses:
+ *       200:
+ *         description: Authentication successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 token:
+ *                   type: string
+ *                   description: JWT token for authenticated user
+ *                 user:
+ *                   type: object
+ *                   description: User details
+ *       401:
+ *         description: Authentication failed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Authentication failed
+ */
+
 router.post("/google", async (req, res) => {
 	try {
 		const { token } = req.body;
