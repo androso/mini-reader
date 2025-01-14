@@ -30,7 +30,7 @@ app.use(logger);
 app.get("/", (req, res) => {
   res.send("Hello World");
 });
-app.post("/process", (req, res) => queryController.handleProcess(req, res));
+
 app.post("/query", (req, res) => queryController.handleQuery(req, res));
 app.delete(
   "/collection/:collectionName",
