@@ -23,25 +23,40 @@ export class ChromaService {
     });
   }
 
-  async getOrCreateCollection(name: string) {
+  async getCollection(name: string) {
     try {
-      let collection;
-      try {
-        collection = await this.client.getCollection({
-          name,
-          embeddingFunction: this.embeddingFunction,
-        });
-        console.log(`Found collection: ${name} with ID: ${collection.id}`);
-      } catch (error) {
-        collection = await this.client.createCollection({
-          name,
-          embeddingFunction: this.embeddingFunction,
-        });
-        console.log(`Created collection: ${name} with ID: ${collection.id}`);
-      }
-      // Cache collection ID for future use (avoiding repeated API calls)
+      const collection = await this.client.getCollection({
+        name,
+        embeddingFunction: this.embeddingFunction,
+      });
+      console.log(`Found collection: ${name} with ID: ${collection.id}`);
       this.collections.set(name, collection.id);
       return collection;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  async createCollection(name: string) {
+    try {
+      const collection = await this.client.createCollection({
+        name,
+        embeddingFunction: this.embeddingFunction,
+      });
+      console.log(`Created collection: ${name} with ID: ${collection.id}`);
+      this.collections.set(name, collection.id);
+      return collection;
+    } catch (error) {
+      console.error("Error creating collection:", error);
+      throw error;
+    }
+  }
+
+  async getOrCreateCollection(name: string) {
+    try {
+      const existingCollection = await this.getCollection(name);
+      if (existingCollection) return existingCollection;
+      return await this.createCollection(name);
     } catch (error) {
       console.error("Error in getOrCreateCollection:", error);
       throw error;

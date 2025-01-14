@@ -13,30 +13,30 @@ export class QueryController {
   }
 
   // Define query handler function for Express route handler
-  async handleProcess(fileBuffer: Buffer){
+  async handleProcess(fileBuffer: Buffer) {
     if (!fileBuffer || fileBuffer.length === 0) {
       return { error: "Invalid or empty file buffer" };
     }
     try {
       const result = await this.epubProcessor.processBook(fileBuffer);
-      
+
       if (result.error) {
         console.error(`Book processing error: ${result.error}`);
         return { error: result.error };
       }
-      
+
       if (!result.collectionName) {
         return { error: "No collection name returned from processing" };
       }
 
       return {
         collectionName: result.collectionName,
-        message: "Book processed successfully"
+        message: "Book processed successfully",
       };
     } catch (error) {
-      console.error('Book processing error:', error);
+      console.error("Book processing error:", error);
       return {
-        error: error instanceof Error ? error.message : "Error processing book"
+        error: error instanceof Error ? error.message : "Error processing book",
       };
     }
   }
