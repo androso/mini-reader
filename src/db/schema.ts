@@ -17,6 +17,7 @@ export const Books = pgTable("books", {
     title: text("title").notNull(),
     userId: uuid("user_id").references(() => Users.id).notNull(),
     fileKey: text("file_key").notNull(),
+	collectionName: text("collection_name"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
