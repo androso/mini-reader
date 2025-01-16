@@ -153,7 +153,6 @@ router.post("/", authenticate, upload.single("file"), async (req, res) => {
                 .returning();
             
             // create embeddings from file process in backgroung
-            console.log("Processing in background");
             processInBackground(fileBuffer, book.id)
                 .catch(error => console.error("Error processing in background", error));
 

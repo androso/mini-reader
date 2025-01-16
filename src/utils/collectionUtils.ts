@@ -15,7 +15,6 @@ export async function processInBackground(file:Buffer, bookId: string) {
             .update(Books)
             .set({collectionName : collection.collectionName})
             .where(eq(Books.id, bookId));
-        console.log(`Background processing completed for book ${bookId}`);
 
     } catch (error) {
         console.error(`Background processing failed for book ${bookId}:`, error);
