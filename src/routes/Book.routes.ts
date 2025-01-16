@@ -7,6 +7,8 @@ import { db } from "../db";
 import { Books } from "../db/schema";
 import { eq, sql } from "drizzle-orm";
 import { queryController } from "../controllers/QueryControllers";
+import { processInBackground } from "../utils/collectionUtils";
+import { error } from "console";
 
 const upload = multer({
     storage: multer.memoryStorage(),
@@ -140,15 +142,6 @@ router.post("/", authenticate, upload.single("file"), async (req, res) => {
             const fileBuffer = req.file.buffer;
             const fileName = `${req.user.id}-${Date.now()}-${req?.file.originalname}`;
             await uploadFile(fileName, fileBuffer);
-            const collection = await queryController.handleProcess(fileBuffer);
-            if (collection.error) {
-                res.status(500).json({
-                    error: "Error processing file to generate a collection",
-                });
-                return;
-            }
-
-            // create embeddings from file
 
             const [book] = await db
                 .insert(Books)
@@ -156,14 +149,17 @@ router.post("/", authenticate, upload.single("file"), async (req, res) => {
                     title: req.file.originalname,
                     userId: req.user.id,
                     fileKey: fileName,
-                    collectionName: collection.collectionName as string,
                 })
                 .returning();
+            
+            // create embeddings from file process in backgroung
+            processInBackground(fileBuffer, book.id)
+                .catch(error => console.error("Error processing in background", error));
 
             return res.json({
                 message: "File upload succesfull",
                 book,
-                collection: collection.collectionName,
+                processStatus: "started"
             });
         }
     } catch (e) {
