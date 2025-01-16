@@ -53,7 +53,9 @@ export class QueryController {
       res.status(500).json({ error: "Error querying collection" });
     }
   }
-
+  async deleteCollection(collectionName: string) {
+     return this.epubProcessor.deleteCollection(collectionName);
+  }
   async handleDelete(req: Request, res: Response) {
     try {
       const { collectionName } = req.params;

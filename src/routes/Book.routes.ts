@@ -1,12 +1,15 @@
 import { Router } from "express";
 const router = Router();
 import multer from "multer";
-import { getFile, uploadFile } from "../utils/storage";
+import { deleteFile, getFile, uploadFile } from "../utils/storage";
 import { authenticate } from "../middleware/auth";
 import { db } from "../db";
 import { books } from "../../migrations/schema";
-import { eq } from "drizzle-orm";
-import { queryController, QueryController } from "../controllers/QueryControllers";
+import { eq, sql } from "drizzle-orm";
+import {
+    queryController,
+    QueryController,
+} from "../controllers/QueryControllers";
 
 const upload = multer({
     storage: multer.memoryStorage(),
@@ -141,26 +144,29 @@ router.post("/", authenticate, upload.single("file"), async (req, res) => {
             const fileName = `${req.user.id}-${Date.now()}-${req?.file.originalname}`;
             await uploadFile(fileName, fileBuffer);
             const collection = await queryController.handleProcess(fileBuffer);
-            if(collection.error) {
-                res.status(500).json({ error: "Error processing file to generate a collection" });
+            if (collection.error) {
+                res.status(500).json({
+                    error: "Error processing file to generate a collection",
+                });
                 return;
             }
 
-            // create embeddings from file 
-             
+            // create embeddings from file
+
             const [book] = await db
                 .insert(books)
                 .values({
                     title: req.file.originalname,
                     userId: req.user.id,
                     fileKey: fileName,
+                    collectionName: collection.collectionName as string,
                 })
                 .returning();
 
             return res.json({
                 message: "File upload succesfull",
                 book,
-                collection: collection.collectionName
+                collection: collection.collectionName,
             });
         }
     } catch (e) {
@@ -172,7 +178,7 @@ router.post("/", authenticate, upload.single("file"), async (req, res) => {
             },
             {
                 status: 500,
-            },
+            }
         );
     }
 });
@@ -182,7 +188,7 @@ router.post("/", authenticate, upload.single("file"), async (req, res) => {
  * tags:
  *   - name: Books
  *     description: Book management endpoints
- * 
+ *
  * /api/books:
  *   get:
  *     tags: [Books]
@@ -242,7 +248,7 @@ router.get("/", authenticate, async (req, res) => {
  * tags:
  *   - name: Books
  *     description: Book management endpoints
- * 
+ *
  * /api/books/{id}:
  *   get:
  *     tags: [Books]
@@ -291,14 +297,57 @@ router.get("/:id", authenticate, async (req, res) => {
     const id = req.params.id;
 
     try {
-        const fileBuffer = await getFile(id) 
-        res.type('application/octet-stream');
-        res.send(fileBuffer)
-        
-    } catch(er) {
-        console.error("Error fetching file", er) 
-        res.status(500).json({ error: "Internal server error"});
+        const fileBuffer = await getFile(id);
+        res.type("application/octet-stream");
+        res.send(fileBuffer);
+    } catch (er) {
+        console.error("Error fetching file", er);
+        res.status(500).json({ error: "Internal server error" });
     }
 });
+// working
+router.delete("/:id", authenticate, async (req, res) => {
+    const bookId = req.params.id;
 
+    try {
+        const [book] = await db
+            .select()
+            .from(books)
+            .where(eq(books.id, bookId));
+        if (!book) {
+            return res.status(404).json({
+                error: "Book was not found",
+            });
+        }
+        if (book.userId !== req.user.id) {
+            return res.status(403).json({
+                error: "Not authorized",
+            });
+        }
+        await db.delete(books).where(eq(books.id, bookId));
+
+        const [remaining] = await db
+            .select({ count: sql`count(*)`.mapWith(Number) })
+            .from(books)
+            .where(eq(books.fileKey, book.fileKey));
+        if (remaining.count === 0) {
+            // delete file
+            await deleteFile(book.fileKey);
+
+            const deleted = await queryController.deleteCollection(
+                book.collectionName!
+            );
+            if (deleted) {
+                return res.status(204).json({
+                    message: "Collection deleted successfully",
+                });
+            }
+        }
+    } catch (e) {
+        console.error("Error deleting the file", e);
+        return res.status(500).json({
+            error: "Failed to delete the file",
+        });
+    }
+});
 export default router;
