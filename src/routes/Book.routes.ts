@@ -4,12 +4,9 @@ import multer from "multer";
 import { deleteFile, getFile, uploadFile } from "../utils/storage";
 import { authenticate } from "../middleware/auth";
 import { db } from "../db";
-import { books } from "../../migrations/schema";
+import { Books } from "../db/schema";
 import { eq, sql } from "drizzle-orm";
-import {
-    queryController,
-    QueryController,
-} from "../controllers/QueryControllers";
+import { queryController } from "../controllers/QueryControllers";
 
 const upload = multer({
     storage: multer.memoryStorage(),
@@ -154,7 +151,7 @@ router.post("/", authenticate, upload.single("file"), async (req, res) => {
             // create embeddings from file
 
             const [book] = await db
-                .insert(books)
+                .insert(Books)
                 .values({
                     title: req.file.originalname,
                     userId: req.user.id,
@@ -235,8 +232,8 @@ router.post("/", authenticate, upload.single("file"), async (req, res) => {
 router.get("/", authenticate, async (req, res) => {
     const booksList = await db
         .select()
-        .from(books)
-        .where(eq(books.userId, req.user.id));
+        .from(Books)
+        .where(eq(Books.userId, req.user.id));
 
     return res.json({
         books: booksList,
@@ -312,8 +309,8 @@ router.delete("/:id", authenticate, async (req, res) => {
     try {
         const [book] = await db
             .select()
-            .from(books)
-            .where(eq(books.id, bookId));
+            .from(Books)
+            .where(eq(Books.id, bookId));
         if (!book) {
             return res.status(404).json({
                 error: "Book was not found",
@@ -324,12 +321,12 @@ router.delete("/:id", authenticate, async (req, res) => {
                 error: "Not authorized",
             });
         }
-        await db.delete(books).where(eq(books.id, bookId));
+        await db.delete(Books).where(eq(Books.id, bookId));
 
         const [remaining] = await db
             .select({ count: sql`count(*)`.mapWith(Number) })
-            .from(books)
-            .where(eq(books.fileKey, book.fileKey));
+            .from(Books)
+            .where(eq(Books.fileKey, book.fileKey));
         if (remaining.count === 0) {
             // delete file
             await deleteFile(book.fileKey);
