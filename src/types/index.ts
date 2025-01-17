@@ -27,9 +27,10 @@ export interface User {
   id: string;
   email: string;
   name: string;
-  image?: string;
-  googleId?: string;
-  username?: string;
+  image?: string | null;
+  googleId: string | null;
+  username?: string | null;
+  password?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
