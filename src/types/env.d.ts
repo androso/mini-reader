@@ -1,3 +1,4 @@
+import { User } from "../types";
 declare namespace NodeJS{
     interface ProcessEnv{
         DO_SPACES_KEY : string;
@@ -8,5 +9,13 @@ declare namespace NodeJS{
         CHROMA_URL : string;
         CHROMA_CLIENT_AUTH_CREDENTIALS : string;
         DATABASE_URL : string;
+    }
+}
+
+declare global {
+    namespace Express {
+        interface Request {
+            user: any;
+        }
     }
 }

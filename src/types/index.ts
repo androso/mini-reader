@@ -22,3 +22,14 @@ export interface Metadata {
   identifier?: string;
   //size: number;
 }
+
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  image?: string;
+  googleId?: string;
+  username?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
