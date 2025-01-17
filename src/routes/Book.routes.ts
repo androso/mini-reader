@@ -137,7 +137,8 @@ const upload = multer({
 router.post("/", authenticate, upload.single("file"), async (req, res) => {
     try {
         if (!req.file) {
-            return res.status(400).json({ error: "No file uploaded" });
+            res.status(400).json({ error: "No file uploaded" });
+            return
         } else {
             const fileBuffer = req.file.buffer;
             const fileName = `${req.user.id}-${Date.now()}-${req?.file.originalname}`;
@@ -156,7 +157,7 @@ router.post("/", authenticate, upload.single("file"), async (req, res) => {
             processInBackground(fileBuffer, book.id)
                 .catch(error => console.error("Error processing in background", error));
 
-            return res.json({
+            res.json({
                 message: "File upload succesfull",
                 book,
                 processStatus: "started"
@@ -164,13 +165,9 @@ router.post("/", authenticate, upload.single("file"), async (req, res) => {
         }
     } catch (e) {
         console.error("Upload Error", e);
-
-        return Response.json(
+        res.status(500).json(
             {
                 error: "Upload failed",
-            },
-            {
-                status: 500,
             }
         );
     }
@@ -231,7 +228,7 @@ router.get("/", authenticate, async (req, res) => {
         .from(Books)
         .where(eq(Books.userId, req.user.id));
 
-    return res.json({
+    res.json({
         books: booksList,
     });
 });
@@ -308,14 +305,16 @@ router.delete("/:id", authenticate, async (req, res) => {
             .from(Books)
             .where(eq(Books.id, bookId));
         if (!book) {
-            return res.status(404).json({
+            res.status(404).json({
                 error: "Book was not found",
             });
+            return
         }
         if (book.userId !== req.user.id) {
-            return res.status(403).json({
+            res.status(403).json({
                 error: "Not authorized",
             });
+            return
         }
         await db.delete(Books).where(eq(Books.id, bookId));
 
@@ -331,14 +330,14 @@ router.delete("/:id", authenticate, async (req, res) => {
                 book.collectionName!
             );
             if (deleted) {
-                return res.status(204).json({
+                res.status(204).json({
                     message: "Collection deleted successfully",
                 });
             }
         }
     } catch (e) {
         console.error("Error deleting the file", e);
-        return res.status(500).json({
+        res.status(500).json({
             error: "Failed to delete the file",
         });
     }
