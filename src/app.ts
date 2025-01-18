@@ -3,6 +3,7 @@ import dotenv from "dotenv";
 import authRoutes from "./routes/Auth.routes";
 import userRoutes from "./routes/User.routes";
 import bookRoutes from "./routes/Book.routes";
+import chatRoutes from "./routes/Chat.routes";
 import cors from "cors";
 import { logger } from "./middleware/logger";
 import { queryController } from "./controllers/QueryControllers";
@@ -40,4 +41,5 @@ app.delete(
 app.use("/api/auth", authRoutes);
 app.use("/api/user", userRoutes);
 app.use("/api/books", bookRoutes);
+app.use("api/chats", chatRoutes);
 export default app;
