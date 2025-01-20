@@ -41,5 +41,5 @@ app.delete(
 app.use("/api/auth", authRoutes);
 app.use("/api/user", userRoutes);
 app.use("/api/books", bookRoutes);
-app.use("api/chats", chatRoutes);
+app.use("/api", chatRoutes);
 export default app;

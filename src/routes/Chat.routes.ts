@@ -5,17 +5,28 @@ const router = Router();
 
 /**
  * @swagger
- * /api/chats:
+ * /api/{resourceType}/{id}/threads:
  *  get:
  *    tags:
  *      - Chat
+ *    parameters:
+ *      - in: path
+ *        name: resourceType
+ *        required: true
+ *        schema:
+ *          type: string
+ *      - in: path
+ *        name: id
+ *        required: true
+ *        schema:
+ *          type: string
  *    summary: Get chat history of a book
  *    description: Get chat history of a book
  *    security:
  *      - bearerAuth: []
  *    responses:
  *      200:
- *        description: Chat history of a book
+ *        description: Chat thread of a book
  *        content:
  *          application/json:
  *            schema:
@@ -23,21 +34,18 @@ const router = Router();
  *              items:
  *                type: object
  *                properties:
- *                  id:
+ *                  threadId:
  *                    type: string
  *                    example: "123"
- *                  userId:
+ *                  threadName:
  *                    type: string
- *                    example: "user123"
- *                  bookId:
+ *                    example: "Book chat"
+ *                  fileKey:
  *                    type: string
  *                    example: "book123"
- *                  query:
- *                    type: string
- *                    example: "What is this book about?"
- *                  response:
- *                    type: string
- *                    example: "This book is about..."
+ *                  userId:
+ *                   type: string
+ *                   example: "123"
  *                  createdAt:
  *                    type: string
  *                    format: date-time
@@ -62,21 +70,32 @@ const router = Router();
  *                  type: string
  *                  example: "Internal server error"
  */
-//this is the chat history of a book
-router.get("/", authenticate, (req, res) => {
-    res.json({ message: "Chat history created successfully" });  
+// when a user pick some file to read, retrieve all threads (id) of that book and user id
+//return array with all threads of a book and user id
+router.get("/:resourceType/:id/threads", authenticate, (req, res) => {
+    res.json({ message: "Chat created successfully" });  
 })
 
 /**
  * @swagger
- * /api/chats/{id}:
+ * /api/{resourceType}/{id}/threads/{threadId}:
  *  get:
  *    tags:
  *      - Chat
- *    summary: Get specific chat by ID
+ *    summary: Get messages for a specific thread
  *    parameters:
  *      - in: path
+ *        name: resourceType
+ *        required: true
+ *        schema:
+ *          type: string
+ *      - in: path
  *        name: id
+ *        required: true
+ *        schema:
+ *          type: string
+ *      - in: path
+ *        name: threadId
  *        required: true
  *        schema:
  *          type: string
@@ -84,31 +103,37 @@ router.get("/", authenticate, (req, res) => {
  *      - bearerAuth: []
  *    responses:
  *      200:
- *        description: Chat details
+ *        description: Array of messages for the thread
  *        content:
  *          application/json:
  *            schema:
- *              type: object
- *              properties:
- *                id:
- *                  type: string
- *                userId:
- *                  type: string
- *                bookId:
- *                  type: string
- *                query:
- *                  type: string
- *                response:
- *                  type: string
- *                createdAt:
- *                  type: string
- *                  format: date-time
+ *              type: array
+ *              items:
+ *                type: object
+ *                properties:
+ *                  messageId:
+ *                    type: string
+ *                    example: "msg123"
+ *                  threadId:
+ *                    type: string
+ *                    example: "thread123"
+ *                  query:
+ *                    type: string
+ *                    example: "query content"
+ *                  response: 
+ *                    type: string
+ *                    example: "response content"
+ *                  createdAt:
+ *                    type: string
+ *                    format: date-time
+ *      401:
+ *        description: Unauthorized
  *      404:
- *        description: Chat not found
+ *        description: Thread not found
  */
-//specific chat in chat history of a book
-router.get("/:id", authenticate, (req, res) => {
-    res.json({ message: "Chat created successfully" });  
+//return data info of specific thread and messages of that thread
+router.get("/:resourceType/:id/threads/:id", authenticate, (req, res) => {
+    res.json({ message: "returns data info of specific thread and messages" });  
 })
 
 export default router
