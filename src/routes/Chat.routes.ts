@@ -6,6 +6,76 @@ const router = Router();
 /**
  * @swagger
  * /api/{resourceType}/{id}/threads:
+ *   post:
+ *     tags:
+ *       - Chat
+ *     summary: Create a new thread
+ *     description: Create a new thread
+ *     parameters:
+ *       - in: path
+ *         name: resourceType
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               threadName:
+ *                 type: string
+ *                 example: "Book chat"
+ *               fileKey:
+ *                 type: string
+ *                 example: "book123"
+ *               userId:
+ *                 type: string
+ *                 example: "123"
+ *     responses:
+ *       200:
+ *         description: Thread created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Thread created successfully"
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "No token provided or invalid token"
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Internal server error"
+ */
+router.post("/:resourceType/:id/threads", authenticate, (req, res) => {
+    res.json({ message: "Thread created successfully" });  
+})
+/**
+ * @swagger
+ * /api/{resourceType}/{id}/threads:
  *  get:
  *    tags:
  *      - Chat
@@ -73,7 +143,7 @@ const router = Router();
 // when a user pick some file to read, retrieve all threads (id) of that book and user id
 //return array with all threads of a book and user id
 router.get("/:resourceType/:id/threads", authenticate, (req, res) => {
-    res.json({ message: "Chat created successfully" });  
+    res.json({ message: "Get Threads successfully" });  
 })
 
 /**
@@ -117,12 +187,12 @@ router.get("/:resourceType/:id/threads", authenticate, (req, res) => {
  *                  threadId:
  *                    type: string
  *                    example: "thread123"
- *                  query:
+ *                  role:
  *                    type: string
- *                    example: "query content"
- *                  response: 
+ *                    example: "User | Assistant"
+ *                  message: 
  *                    type: string
- *                    example: "response content"
+ *                    example: "message content"
  *                  createdAt:
  *                    type: string
  *                    format: date-time
@@ -134,6 +204,81 @@ router.get("/:resourceType/:id/threads", authenticate, (req, res) => {
 //return data info of specific thread and messages of that thread
 router.get("/:resourceType/:id/threads/:id", authenticate, (req, res) => {
     res.json({ message: "returns data info of specific thread and messages" });  
+})
+/**
+ * @swagger
+ * /api/{resourceType}/{id}/threads/{threadId}/messages:
+ *   post:
+ *     tags:
+ *       - Chat
+ *     summary: Create a new message
+ *     description: Create a new message
+ *     parameters:
+ *       - in: path
+ *         name: resourceType
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: threadId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               message:
+ *                 type: string
+ *                 example: "message content"
+ *               role:
+ *                 type: string
+ *                 example: "User | Assistant"
+ *               userId:
+ *                 type: string
+ *                 example: "123"
+ *     responses:
+ *       200:
+ *         description: Message created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Message created successfully"
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "No token provided or invalid token"
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Internal server error"
+ */
+router.post("/:resourceType/:id/threads/:id/messages", authenticate, (req, res) => {
+    res.json({ message: "user and assitant messages" });  
 })
 
 export default router
