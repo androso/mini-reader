@@ -29,15 +29,9 @@ const router = Router();
  *           schema:
  *             type: object
  *             properties:
- *               threadName:
- *                 type: string
- *                 example: "Book chat"
- *               fileKey:
+ *               ResourceId:
  *                 type: string
  *                 example: "book123"
- *               userId:
- *                 type: string
- *                 example: "123"
  *     responses:
  *       200:
  *         description: Thread created successfully
