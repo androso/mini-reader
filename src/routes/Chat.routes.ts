@@ -22,16 +22,6 @@ const router = Router();
  *         required: true
  *         schema:
  *           type: string
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               ResourceId:
- *                 type: string
- *                 example: "book123"
  *     responses:
  *       200:
  *         description: Thread created successfully
@@ -104,7 +94,7 @@ router.post("/:resourceType/:id/threads", authenticate, (req, res) => {
  *                  threadName:
  *                    type: string
  *                    example: "Book chat"
- *                  fileKey:
+ *                  resourceId:
  *                    type: string
  *                    example: "book123"
  *                  userId:
@@ -236,9 +226,6 @@ router.get("/:resourceType/:id/threads/:id", authenticate, (req, res) => {
  *               role:
  *                 type: string
  *                 example: "User | Assistant"
- *               userId:
- *                 type: string
- *                 example: "123"
  *     responses:
  *       200:
  *         description: Message created successfully
