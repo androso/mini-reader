@@ -9,6 +9,7 @@ import {
 
 export const messageRoleEnum = pgEnum("message_role", ["user", "assistant"]);
 export const resourceTypeEnum = pgEnum("resource_type", ["book", "article"]);
+export const fileTypeEnum = pgEnum("file_type", ["epub", "pdf"]);
 
 export const Users = pgTable("users", {
     id: uuid("id").defaultRandom().primaryKey(),
@@ -30,11 +31,11 @@ export const Books = pgTable("books", {
         .references(() => Users.id)
         .notNull(),
     fileKey: text("file_key").notNull(),
+    fileType: fileTypeEnum("file_type"),
     collectionName: text("collection_name"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-// todo : consider token usage
 export const Conversations = pgTable("conversations", {
     id: uuid("id").defaultRandom().primaryKey(),
     userId: uuid("user_id")
@@ -53,7 +54,6 @@ export const Messages = pgTable("messages", {
         .references(() => Conversations.id, { onDelete: "cascade" })
         .notNull(),
     role: messageRoleEnum("role").notNull(),
-    content: text("content").notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
