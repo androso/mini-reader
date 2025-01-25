@@ -1,11 +1,4 @@
-import {
-    pgTable,
-    text,
-    timestamp,
-    uuid,
-    pgEnum,
-    integer,
-} from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, pgEnum } from "drizzle-orm/pg-core";
 
 export const messageRoleEnum = pgEnum("message_role", ["user", "assistant"]);
 export const resourceTypeEnum = pgEnum("resource_type", ["book", "article"]);

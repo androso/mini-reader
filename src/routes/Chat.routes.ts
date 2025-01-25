@@ -5,12 +5,12 @@ const router = Router();
 
 /**
  * @swagger
- * /api/{resourceType}/{id}/threads:
+ * /api/{resourceType}/{id}/conversations:
  *   post:
  *     tags:
  *       - Chat
- *     summary: Create a new thread
- *     description: Create a new thread
+ *     summary: Create a new conversation
+ *     description: Create a new conversation
  *     parameters:
  *       - in: path
  *         name: resourceType
@@ -24,7 +24,7 @@ const router = Router();
  *           type: string
  *     responses:
  *       200:
- *         description: Thread created successfully
+ *         description: Conversation created successfully
  *         content:
  *           application/json:
  *             schema:
@@ -32,7 +32,7 @@ const router = Router();
  *               properties:
  *                 message:
  *                   type: string
- *                   example: "Thread created successfully"
+ *                   example: "Conversation created successfully"
  *       401:
  *         description: Unauthorized
  *         content:
@@ -54,12 +54,13 @@ const router = Router();
  *                   type: string
  *                   example: "Internal server error"
  */
-router.post("/:resourceType/:id/threads", authenticate, (req, res) => {
-    res.json({ message: "Thread created successfully" });  
-})
+router.post("/:resourceType/:id/conversations", authenticate, (req, res) => {
+    res.json({ message: "Conversation created successfully" });
+});
+
 /**
  * @swagger
- * /api/{resourceType}/{id}/threads:
+ * /api/{resourceType}/{id}/conversations:
  *  get:
  *    tags:
  *      - Chat
@@ -80,7 +81,7 @@ router.post("/:resourceType/:id/threads", authenticate, (req, res) => {
  *      - bearerAuth: []
  *    responses:
  *      200:
- *        description: Chat thread of a book
+ *        description: Chat conversations of a book
  *        content:
  *          application/json:
  *            schema:
@@ -88,10 +89,10 @@ router.post("/:resourceType/:id/threads", authenticate, (req, res) => {
  *              items:
  *                type: object
  *                properties:
- *                  threadId:
+ *                  conversationId:
  *                    type: string
  *                    example: "123"
- *                  threadName:
+ *                  conversationName:
  *                    type: string
  *                    example: "Book chat"
  *                  resourceId:
@@ -124,19 +125,17 @@ router.post("/:resourceType/:id/threads", authenticate, (req, res) => {
  *                  type: string
  *                  example: "Internal server error"
  */
-// when a user pick some file to read, retrieve all threads (id) of that book and user id
-//return array with all threads of a book and user id
-router.get("/:resourceType/:id/threads", authenticate, (req, res) => {
-    res.json({ message: "Get Threads successfully" });  
-})
+router.get("/:resourceType/:id/conversations", authenticate, (req, res) => {
+    res.json({ message: "Get Conversations successfully" });
+});
 
 /**
  * @swagger
- * /api/{resourceType}/{id}/threads/{threadId}:
+ * /api/{resourceType}/{id}/conversations/{conversationId}:
  *  get:
  *    tags:
  *      - Chat
- *    summary: Get messages for a specific thread
+ *    summary: Get messages for a specific conversation
  *    parameters:
  *      - in: path
  *        name: resourceType
@@ -149,7 +148,7 @@ router.get("/:resourceType/:id/threads", authenticate, (req, res) => {
  *        schema:
  *          type: string
  *      - in: path
- *        name: threadId
+ *        name: conversationId
  *        required: true
  *        schema:
  *          type: string
@@ -157,7 +156,7 @@ router.get("/:resourceType/:id/threads", authenticate, (req, res) => {
  *      - bearerAuth: []
  *    responses:
  *      200:
- *        description: Array of messages for the thread
+ *        description: Array of messages for the conversation
  *        content:
  *          application/json:
  *            schema:
@@ -168,13 +167,13 @@ router.get("/:resourceType/:id/threads", authenticate, (req, res) => {
  *                  messageId:
  *                    type: string
  *                    example: "msg123"
- *                  threadId:
+ *                  conversationId:
  *                    type: string
- *                    example: "thread123"
+ *                    example: "conv123"
  *                  role:
  *                    type: string
  *                    example: "User | Assistant"
- *                  message: 
+ *                  message:
  *                    type: string
  *                    example: "message content"
  *                  createdAt:
@@ -183,15 +182,17 @@ router.get("/:resourceType/:id/threads", authenticate, (req, res) => {
  *      401:
  *        description: Unauthorized
  *      404:
- *        description: Thread not found
+ *        description: Conversation not found
  */
-//return data info of specific thread and messages of that thread
-router.get("/:resourceType/:id/threads/:id", authenticate, (req, res) => {
-    res.json({ message: "returns data info of specific thread and messages" });  
-})
+router.get("/:resourceType/:id/conversations/:id", authenticate, (req, res) => {
+    res.json({
+        message: "returns data info of specific conversation and messages",
+    });
+});
+
 /**
  * @swagger
- * /api/{resourceType}/{id}/threads/{threadId}/messages:
+ * /api/{resourceType}/{id}/conversations/{conversationId}/messages:
  *   post:
  *     tags:
  *       - Chat
@@ -209,7 +210,7 @@ router.get("/:resourceType/:id/threads/:id", authenticate, (req, res) => {
  *         schema:
  *           type: string
  *       - in: path
- *         name: threadId
+ *         name: conversationId
  *         required: true
  *         schema:
  *           type: string
@@ -258,8 +259,12 @@ router.get("/:resourceType/:id/threads/:id", authenticate, (req, res) => {
  *                   type: string
  *                   example: "Internal server error"
  */
-router.post("/:resourceType/:id/threads/:id/messages", authenticate, (req, res) => {
-    res.json({ message: "user and assitant messages" });  
-})
+router.post(
+    "/:resourceType/:id/conversations/:id/messages",
+    authenticate,
+    (req, res) => {
+        res.json({ message: "user and assistant messages" });
+    }
+);
 
-export default router
+export default router;
