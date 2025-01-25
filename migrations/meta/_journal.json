@@ -43,6 +43,13 @@
       "when": 1737778352758,
       "tag": "0005_hot_bushwacker",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1737845517182,
+      "tag": "0006_superb_quicksilver",
+      "breakpoints": true
     }
   ]
 }

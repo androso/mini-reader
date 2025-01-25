@@ -47,6 +47,7 @@ export const Messages = pgTable("messages", {
         .references(() => Conversations.id, { onDelete: "cascade" })
         .notNull(),
     role: messageRoleEnum("role").notNull(),
+    content: text("content").notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
