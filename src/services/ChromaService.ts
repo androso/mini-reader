@@ -166,4 +166,23 @@ export class ChromaService {
       throw error;
     }
   }
+
+  async createEmbedding(text: string): Promise<number[]> {
+    const response = await this.embeddingFunction.generate([text]);
+    return response[0];
+  }
+
+  async storeDocumentsChunks(pdfId:string, chunks:string[], embeddings: number[][]){
+    const collection = await this.getOrCreateCollection(pdfId);
+    const ids = chunks.map((_, i) => `${pdfId}_${i}`);
+    const metadatas = chunks.map(() => ({ pdfId }));
+
+    await collection.add({
+      ids,
+      embeddings,
+      metadatas,
+      documents: chunks
+    });
+  }
+
 }
