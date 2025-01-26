@@ -184,5 +184,16 @@ export class ChromaService {
       documents: chunks
     });
   }
+  async searchSimilarChunks(pdfId: string, embedding: number[], topK = 5) {
+    const collection = await this.client.getCollection({
+      name: pdfId,
+      embeddingFunction: this.embeddingFunction
+    });
 
+    return collection.query({
+      queryEmbeddings: [embedding],
+      nResults: topK,
+      where: { pdfId }
+    });
+  }
 }
