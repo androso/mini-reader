@@ -13,36 +13,37 @@ export class PDFService {
         this.openAIService = new OpenAIService();
     }
 
-    async processInBackground(file: Buffer, pdfId: string) {
+    async processInBackground(file: Buffer) {
         try {
             const text = await this.pdfUtils.extractTextFromPDF(file);
             const chunks = this.pdfUtils.chunkText(text);
+            const collection = await this.pdfUtils.pdfMetadata(file);
 
             const embeddings = await Promise.all(
                 chunks.map((chunk) => this.chromaService.createEmbedding(chunk))
             );
             await this.chromaService.storeDocumentsChunks(
-                pdfId,
+                collection,
                 chunks,
                 embeddings
             );
-            console.log(`Background processing completed for PDF ${pdfId}`);
-            return { pdfId, chunks: chunks.length };
+            console.log(`Background processing completed for PDF ${collection}`);
+            return { collection, chunks: chunks.length };
         } catch (error) {
-            console.error(`Background processing failed for PDF ${pdfId}:`, error);
+            console.error(`Background processing failed for PDF`, error);
             throw error;
         }
     }
-    async queryPdf(question: string, pdfId: string){
+    async queryPdf(question: string, collection: string){
         try {
             const embeddingQuestion = await this.chromaService.createEmbedding(question);
 
-            const results = await this.chromaService.searchSimilarChunks(pdfId, embeddingQuestion);
+            const results = await this.chromaService.searchSimilarChunks(collection, embeddingQuestion);
             const context = results.documents.join("\n\n");
             const answer = await this.openAIService.generateResponse(context, question);
             return answer;
         } catch (error) {
-            console.error(`Error querying PDF ${pdfId}:`, error);
+            console.error(`Error querying PDF ${collection}:`, error);
             throw error;
             
         }
