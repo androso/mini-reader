@@ -1,4 +1,5 @@
 import pdf from 'pdf-parse'
+import crypto from 'crypto'
 
 export class PDFUtils{
     async extractTextFromPDF(fileBuffer: Buffer): Promise<string> {
@@ -23,5 +24,19 @@ export class PDFUtils{
         }
         
         return chunks;
+    }
+
+    async pdfMetadata(fileBuffer: Buffer): Promise<any> {
+        try {
+            const data = await pdf(fileBuffer)
+            const metadata = data.metadata
+            const hash = crypto.createHash("sha256")
+            hash.update(JSON.stringify(metadata))
+            return hash.digest("hex")
+        } catch (error) {
+            console.error("Error extracting metadata from PDF:", error)
+            throw error
+            
+        }
     }
 }
