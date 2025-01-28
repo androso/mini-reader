@@ -13,7 +13,7 @@ export class PDFService {
         this.openAIService = new OpenAIService();
     }
     // should be a pdf file buffer
-    async processInBackground(file: Buffer) {
+    async processPDF(file: Buffer) {
         try {
             const text = await this.pdfUtils.extractTextFromPDF(file);
             const chunks = this.pdfUtils.chunkText(text);
