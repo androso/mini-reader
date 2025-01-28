@@ -12,40 +12,38 @@ export class PDFService {
         this.pdfUtils = new PDFUtils();
         this.openAIService = new OpenAIService();
     }
-
+    // should be a pdf file buffer
     async processInBackground(file: Buffer) {
         try {
             const text = await this.pdfUtils.extractTextFromPDF(file);
             const chunks = this.pdfUtils.chunkText(text);
-            const collection = await this.pdfUtils.pdfMetadata(file);
+            const collection: string = await this.pdfUtils.pdfMetadata(file);
 
-            const embeddings = await Promise.all(
-                chunks.map((chunk) => this.chromaService.createEmbedding(chunk))
+            await this.chromaService.addDocuments(collection, chunks);
+            console.log(
+                `Background processing completed for PDF ${collection}`
             );
-            await this.chromaService.storeDocumentsChunks(
-                collection,
-                chunks,
-                embeddings
-            );
-            console.log(`Background processing completed for PDF ${collection}`);
             return { collection, chunks: chunks.length };
         } catch (error) {
             console.error(`Background processing failed for PDF`, error);
             throw error;
         }
     }
-    async queryPdf(question: string, collection: string){
+    async queryPdf(collection: string, question: string) {
         try {
-            const embeddingQuestion = await this.chromaService.createEmbedding(question);
-
-            const results = await this.chromaService.searchSimilarChunks(collection, embeddingQuestion);
+            const results = await this.chromaService.queryCollection(
+                collection,
+                question
+            );
             const context = results.documents.join("\n\n");
-            const answer = await this.openAIService.generateResponse(context, question);
+            const answer = await this.openAIService.generateResponse(
+                context,
+                question
+            );
             return answer;
         } catch (error) {
             console.error(`Error querying PDF ${collection}:`, error);
             throw error;
-            
         }
     }
 }
