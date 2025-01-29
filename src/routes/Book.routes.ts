@@ -8,6 +8,9 @@ import { Books } from "../db/schema";
 import { eq, sql } from "drizzle-orm";
 import { queryController } from "../controllers/QueryControllers";
 import { processEpub, processPDF } from "../utils/collectionUtils";
+import { createHash, extractMetadata } from "../utils/bookUtils";
+import { PDFUtils } from "../utils/pdfUtils";
+import { file } from "jszip";
 
 const upload = multer({
     storage: multer.memoryStorage(),
@@ -139,10 +142,20 @@ router.post("/", authenticate, upload.single("file"), async (req, res) => {
             res.status(400).json({ error: "No file uploaded" });
             return;
         }
-
+        let fileName;
         const mimeType = req.file.mimetype;
         const fileBuffer = req.file.buffer;
-        const fileName = `${req.user.id}-${Date.now()}-${req?.file.originalname}`;
+        //const fileName = `${req.user.id}-${Date.now()}-${req?.file.originalname}`;
+        if (mimeType === "application/pdf") {
+            const pdfUtils = new PDFUtils();
+            const hash = await pdfUtils.pdfMetadata(fileBuffer);
+            if (!hash) throw new Error("Could not generate hash for PDF");
+            fileName = `pdf-${hash.slice(0, 12)}`;
+        } else {
+            const metadata = await extractMetadata(fileBuffer);
+            if (!metadata) throw new Error("Could not extract EPUB metadata");
+            fileName = `epub-${createHash(metadata).slice(0, 12)}`;
+        }
 
         // Validate file type
         if (!["application/pdf", "application/epub+zip"].includes(mimeType)) {
@@ -174,7 +187,7 @@ router.post("/", authenticate, upload.single("file"), async (req, res) => {
                 console.error("Error processing EPUB in background", error)
             );
         }
-
+        console.log("filename:", fileName);
         res.json({
             message: "File upload successful",
             book,
