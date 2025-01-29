@@ -173,7 +173,6 @@ router.post("/", authenticate, upload.single("file"), async (req, res) => {
                 title: req.file.originalname,
                 userId: req.user.id,
                 fileKey: fileName,
-                //fileType: mimeType // Consider adding this field to your Books table
             })
             .returning();
 
