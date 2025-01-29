@@ -69,7 +69,7 @@ export class ChromaService {
         try {
             const collection = await this.getOrCreateCollection(collectionName);
             console.log(
-                `Using collection: ${collectionName} with ID: ${collection.id}`
+                `[ChromaService]Using collection: ${collectionName} with ID: ${collection.id}`
             );
 
             // Pre-filter all documents
