@@ -145,7 +145,13 @@ router.post("/", authenticate, upload.single("file"), async (req, res) => {
         let fileName;
         const mimeType = req.file.mimetype;
         const fileBuffer = req.file.buffer;
-        //const fileName = `${req.user.id}-${Date.now()}-${req?.file.originalname}`;
+        // Validate file type
+        if (!["application/pdf", "application/epub+zip"].includes(mimeType)) {
+            res.status(400).json({
+                error: "Unsupported file type. Only PDF and EPUB are supported.",
+            });
+            return;
+        }
         if (mimeType === "application/pdf") {
             const pdfUtils = new PDFUtils();
             const hash = await pdfUtils.pdfMetadata(fileBuffer);
@@ -155,14 +161,6 @@ router.post("/", authenticate, upload.single("file"), async (req, res) => {
             const metadata = await extractMetadata(fileBuffer);
             if (!metadata) throw new Error("Could not extract EPUB metadata");
             fileName = `epub-${createHash(metadata).slice(0, 12)}`;
-        }
-
-        // Validate file type
-        if (!["application/pdf", "application/epub+zip"].includes(mimeType)) {
-            res.status(400).json({
-                error: "Unsupported file type. Only PDF and EPUB are supported.",
-            });
-            return;
         }
 
         await uploadFile(fileName, fileBuffer);
