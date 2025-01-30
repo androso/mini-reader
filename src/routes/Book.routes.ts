@@ -12,6 +12,7 @@ import { createHash, extractMetadata } from "../utils/bookUtils";
 import { PDFUtils } from "../utils/pdfUtils";
 import { file } from "jszip";
 
+
 const upload = multer({
     storage: multer.memoryStorage(),
     limits: {
@@ -145,7 +146,6 @@ router.post("/", authenticate, upload.single("file"), async (req, res) => {
         let fileName;
         const mimeType = req.file.mimetype;
         const fileBuffer = req.file.buffer;
-        //const fileName = `${req.user.id}-${Date.now()}-${req?.file.originalname}`;
         if (mimeType === "application/pdf") {
             const pdfUtils = new PDFUtils();
             const hash = await pdfUtils.pdfMetadata(fileBuffer);
