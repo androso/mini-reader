@@ -7,7 +7,10 @@ import { db } from "../db";
 import { Books } from "../db/schema";
 import { eq, sql } from "drizzle-orm";
 import { queryController } from "../controllers/QueryControllers";
-import { processInBackground } from "../utils/collectionUtils";
+import { processEpub, processPDF } from "../utils/collectionUtils";
+import { createHash, extractMetadata } from "../utils/bookUtils";
+import { PDFUtils } from "../utils/pdfUtils";
+import { file } from "jszip";
 
 const upload = multer({
     storage: multer.memoryStorage(),
@@ -138,36 +141,59 @@ router.post("/", authenticate, upload.single("file"), async (req, res) => {
         if (!req.file) {
             res.status(400).json({ error: "No file uploaded" });
             return;
-        } else {
-            const fileBuffer = req.file.buffer;
-            const fileName = `${req.user.id}-${Date.now()}-${req?.file.originalname}`;
-            await uploadFile(fileName, fileBuffer);
-
-            const [book] = await db
-                .insert(Books)
-                .values({
-                    title: req.file.originalname,
-                    userId: req.user.id,
-                    fileKey: fileName,
-                })
-                .returning();
-
-            // create embeddings from file process in backgroung
-            processInBackground(fileBuffer, book.id).catch((error) =>
-                console.error("Error processing in background", error)
-            );
-
-            res.json({
-                message: "File upload succesfull",
-                book,
-                processStatus: "started",
-            });
         }
+        let fileName;
+        const mimeType = req.file.mimetype;
+        const fileBuffer = req.file.buffer;
+        // Validate file type
+        if (!["application/pdf", "application/epub+zip"].includes(mimeType)) {
+            res.status(400).json({
+                error: "Unsupported file type. Only PDF and EPUB are supported.",
+            });
+            return;
+        }
+        if (mimeType === "application/pdf") {
+            const pdfUtils = new PDFUtils();
+            const hash = await pdfUtils.pdfMetadata(fileBuffer);
+            if (!hash) throw new Error("Could not generate hash for PDF");
+            fileName = `pdf-${hash.slice(0, 12)}`;
+        } else {
+            const metadata = await extractMetadata(fileBuffer);
+            if (!metadata) throw new Error("Could not extract EPUB metadata");
+            fileName = `epub-${createHash(metadata).slice(0, 12)}`;
+        }
+
+        await uploadFile(fileName, fileBuffer);
+
+        const [book] = await db
+            .insert(Books)
+            .values({
+                title: req.file.originalname,
+                userId: req.user.id,
+                fileKey: fileName,
+            })
+            .returning();
+
+        // Process based on file type
+        if (mimeType === "application/pdf") {
+            processPDF(fileBuffer, book.id).catch((error) =>
+                console.error("Error processing PDF in background", error)
+            );
+        } else if (mimeType === "application/epub+zip") {
+            processEpub(fileBuffer, book.id).catch((error) =>
+                console.error("Error processing EPUB in background", error)
+            );
+        }
+        console.log("filename:", fileName);
+        res.json({
+            message: "File upload successful",
+            book,
+            processStatus: "started",
+            fileType: mimeType,
+        });
     } catch (e) {
         console.error("Upload Error", e);
-        res.status(500).json({
-            error: "Upload failed",
-        });
+        res.status(500).json({ error: "Upload failed" });
     }
 });
 
