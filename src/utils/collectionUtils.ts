@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { queryController } from "../controllers/QueryControllers";
 import { db } from "../db";
 import { Books } from "../db/schema";
-import { PDFService } from "../services/PDFServices";
+import { PDFService } from "../services/PDFProcessor";
 
 export async function processEpub(file: Buffer, bookId: string) {
     try {
