@@ -6,7 +6,11 @@ dotenv.config();
 export class ChromaService {
     private client: ChromaClient;
     private embeddingFunction: OpenAIEmbeddingFunction;
-    private collections: Map<string, string> = new Map();
+    private collections: Map<
+        string,
+        { name: string; collection: any; lastAccessed: number }
+    > = new Map();
+    private static instance: ChromaService;
 
     constructor() {
         this.client = new ChromaClient({
@@ -21,16 +25,54 @@ export class ChromaService {
             openai_api_key: process.env.OPENAI_API_KEY || "",
             openai_model: "text-embedding-ada-002",
         });
+        this.collections = new Map();
+
+        setInterval(() => this.cleanUpCache(), 1800000);
+    }
+
+    public static getInstance() {
+        if (!ChromaService.instance) {
+            ChromaService.instance = new ChromaService();
+        }
+        return ChromaService.instance;
+    }
+    private cleanUpCache(): void {
+        const now = Date.now();
+        const CACHETTL = 3600000;
+        for (const [name, data] of this.collections.entries()) {
+            if (now - data.lastAccessed > CACHETTL) {
+                this.collections.delete(name);
+                console.log(`Collection ${name} removed from cache`);
+            }
+        }
     }
 
     async getCollection(name: string) {
         try {
+            // Check cache first
+            const cachedCollection = this.collections.get(name);
+            if (cachedCollection) {
+                console.log(`Cache hit for collection: ${name}`);
+                // Update last accessed time
+                cachedCollection.lastAccessed = Date.now();
+                return cachedCollection.collection;
+            }
+
+            console.log(
+                `Cache miss for collection: ${name}, fetching from ChromaDB`
+            );
             const collection = await this.client.getCollection({
                 name,
                 embeddingFunction: this.embeddingFunction,
             });
-            console.log(`Found collection: ${name} with ID: ${collection.id}`);
-            this.collections.set(name, collection.id);
+
+            // Store in cache
+            this.collections.set(name, {
+                name: name,
+                collection: collection,
+                lastAccessed: Date.now(),
+            });
+
             return collection;
         } catch (error) {
             return null;
@@ -46,7 +88,12 @@ export class ChromaService {
             console.log(
                 `Created collection: ${name} with ID: ${collection.id}`
             );
-            this.collections.set(name, collection.id);
+
+            this.collections.set(name, {
+                name: name,
+                collection: collection,
+                lastAccessed: Date.now(),
+            });
             return collection;
         } catch (error) {
             console.error("Error creating collection:", error);
@@ -183,3 +230,4 @@ export class ChromaService {
         }
     }
 }
+export const chromaService = ChromaService.getInstance();
