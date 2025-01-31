@@ -1,5 +1,5 @@
 // src/services/EPUBProcessor.ts
-import { ChromaService } from "./ChromaService";
+import { chromaService } from "./ChromaService";
 import { OpenAIService } from "./OpenAIServices";
 import EPub from "epub";
 import { JSDOM } from "jsdom";
@@ -10,12 +10,12 @@ import { extractMetadata, createHash } from "../utils/bookUtils";
 import fs from "fs/promises";
 
 export class EPUBProcessor {
-    private chromaService: ChromaService;
+    //private chromaService: ChromaService;
     private openAIService: OpenAIService;
 
     constructor() {
         // Initialize services
-        this.chromaService = new ChromaService();
+        //this.chromaService = new ChromaService();
         this.openAIService = new OpenAIService();
     }
 
@@ -171,7 +171,7 @@ export class EPUBProcessor {
             }
 
             console.log("[processEpub] Adding chunks to ChromaDB");
-            await this.chromaService.addDocuments(collectionName, validChunks);
+            await chromaService.addDocuments(collectionName, validChunks);
             console.log("[processEpub] Successfully added chunks to ChromaDB");
             return true;
         } catch (error) {
@@ -182,7 +182,7 @@ export class EPUBProcessor {
 
     async deleteCollection(name: string): Promise<boolean> {
         try {
-            await this.chromaService.deleteCollection(name);
+            await chromaService.deleteCollection(name);
             return true;
         } catch (error) {
             console.error("Delete collection error:", error);
@@ -213,16 +213,13 @@ export class EPUBProcessor {
                 await this.getCollectionNameFromEpub(fileBuffer);
 
             // Check if collection exists
-            let collection =
-                await this.chromaService.getCollection(collectionName);
+            let collection = await chromaService.getCollection(collectionName);
 
             if (!collection) {
                 // Collection doesn't exist, create and process it
                 try {
                     collection =
-                        await this.chromaService.createCollection(
-                            collectionName
-                        );
+                        await chromaService.createCollection(collectionName);
                     const processed = await this.processEpub(
                         collectionName,
                         fileBuffer
@@ -255,12 +252,12 @@ export class EPUBProcessor {
     ): Promise<QueryResponse> {
         try {
             try {
-                await this.chromaService.getOrCreateCollection(collectionName);
+                await chromaService.getOrCreateCollection(collectionName);
             } catch (err) {
                 console.error("Error getting collection:", err);
                 return { error: "Error getting collection" };
             }
-            const results = await this.chromaService.queryCollection(
+            const results = await chromaService.queryCollection(
                 collectionName,
                 query
             );
@@ -276,7 +273,7 @@ export class EPUBProcessor {
             return {
                 answer,
                 source_documents: results.documents[0].filter(
-                    (doc): doc is string => doc !== null
+                    (doc: any): doc is string => doc !== null
                 ),
             };
         } catch (err) {
