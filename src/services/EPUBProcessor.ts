@@ -10,12 +10,10 @@ import { extractMetadata, createHash } from "../utils/bookUtils";
 import fs from "fs/promises";
 
 export class EPUBProcessor {
-    //private chromaService: ChromaService;
     private openAIService: OpenAIService;
 
     constructor() {
         // Initialize services
-        //this.chromaService = new ChromaService();
         this.openAIService = new OpenAIService();
     }
 
@@ -59,11 +57,6 @@ export class EPUBProcessor {
                                         }
 
                                         try {
-                                            console.log(
-                                                `[extractTextFromEpub] Successfully read chapter ${
-                                                    i + 1
-                                                }, length: ${text.length}`
-                                            );
                                             const dom = new JSDOM(text);
                                             const textContent =
                                                 dom.window.document.body
@@ -158,11 +151,6 @@ export class EPUBProcessor {
                 stage: "processEpub",
                 totalChunks: chunks.length,
                 validChunks: validChunks.length,
-                averageChunkLength:
-                    validChunks.reduce((acc, chunk) => acc + chunk.length, 0) /
-                    validChunks.length,
-                smallestChunk: Math.min(...validChunks.map((c) => c.length)),
-                largestChunk: Math.max(...validChunks.map((c) => c.length)),
             });
 
             if (!validChunks.length) {
