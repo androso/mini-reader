@@ -1,4 +1,12 @@
-import { pgTable, text, timestamp, uuid, pgEnum } from "drizzle-orm/pg-core";
+import {
+    pgTable,
+    text,
+    timestamp,
+    uuid,
+    pgEnum,
+    primaryKey,
+    foreignKey,
+} from "drizzle-orm/pg-core";
 
 export const messageRoleEnum = pgEnum("message_role", ["user", "assistant"]);
 export const resourceTypeEnum = pgEnum("resource_type", ["book", "article"]);
@@ -50,6 +58,39 @@ export const Messages = pgTable("messages", {
     content: text("content").notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+export const Progress = pgTable(
+    "progress",
+    {
+        userId: uuid("user_id").notNull(),
+        bookId: text("book_id").notNull(),
+        progressPosition: text("progress_position").notNull(),
+        lastReadAt: timestamp("last_read_at", { withTimezone: true })
+            .defaultNow()
+            .notNull(),
+        createdAt: timestamp("created_at", { withTimezone: true })
+            .defaultNow()
+            .notNull(),
+        updatedAt: timestamp("updated_at", { withTimezone: true })
+            .defaultNow()
+            .notNull(),
+    },
+    (table) => [
+        {
+            pk: primaryKey({ columns: [table.userId, table.bookId] }),
+            bookRef: foreignKey({
+                columns: [table.bookId],
+                foreignColumns: [Books.id],
+                name: "progress_book_id_books_id_fk",
+            }).onDelete("cascade"),
+            userRef: foreignKey({
+                columns: [table.userId],
+                foreignColumns: [Users.id],
+                name: "progress_user_id_users_id_fk",
+            }),
+        },
+    ]
+);
 
 export type InsertUser = typeof Users.$inferInsert;
 export type SelectUser = typeof Users.$inferSelect;
