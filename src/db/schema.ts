@@ -4,8 +4,10 @@ import {
     timestamp,
     uuid,
     pgEnum,
+    integer,
     primaryKey,
     foreignKey,
+    ForeignKey,
 } from "drizzle-orm/pg-core";
 
 export const messageRoleEnum = pgEnum("message_role", ["user", "assistant"]);
