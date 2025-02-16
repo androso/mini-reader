@@ -67,6 +67,7 @@ export const Progress = pgTable(
         userId: uuid("user_id").notNull(),
         bookId: text("book_id").notNull(),
         progressPosition: text("progress_position").notNull(),
+        progressChapter: text("progress_chapter").notNull(),
         lastReadAt: timestamp("last_read_at", { withTimezone: true })
             .defaultNow()
             .notNull(),
