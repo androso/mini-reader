@@ -50,9 +50,10 @@ router.get(
                 res.status(404).json({ message: "No progress found" });
                 return;
             }
-
+            console.log(progress.progressPosition);
             res.status(200).json({
                 progressPosition: progress.progressPosition,
+                progressChapter: progress.progressChapter,
             });
         } catch (error) {
             console.error("Error fetching progress:", error);
@@ -68,7 +69,9 @@ router.post(
         try {
             const user_id = req.user.id;
             const file_key = req.params.rid;
-            const progress_block = req.body;
+            const { progress_block, progress_chapter } = req.body;
+
+            console.log(req.body);
 
             if (!progress_block) {
                 res.status(400).json({ message: "Progress Block is required" });
@@ -103,6 +106,7 @@ router.post(
                     .update(Progress)
                     .set({
                         progressPosition: progress_block,
+                        progressChapter: progress_chapter,
                         updatedAt: new Date(),
                     })
                     .where(
@@ -119,11 +123,12 @@ router.post(
                         userId: user_id,
                         bookId: book.id,
                         progressPosition: progress_block,
+                        progressChapter: progress_chapter,
                         createdAt: new Date(),
                     })
                     .returning();
             }
-
+            console.log("data", progress);
             res.status(201).json({ message: "Progress saved", data: progress });
         } catch (error) {
             console.error("Progress can't be tracked", error);
