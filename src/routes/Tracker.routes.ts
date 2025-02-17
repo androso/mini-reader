@@ -46,8 +46,11 @@ router.get(
                     )
                 );
 
+            // If no progress exists, return initial state
             if (!progress) {
-                res.status(404).json({ message: "No progress found" });
+                res.status(200).json({
+                    progressPosition: null,
+                });
                 return;
             }
 
@@ -68,8 +71,7 @@ router.post(
         try {
             const user_id = req.user.id;
             const file_key = req.params.rid;
-            const progress_block = req.body;
-
+            const progress_block = req.body.progress_block;
             if (!progress_block) {
                 res.status(400).json({ message: "Progress Block is required" });
                 return;
