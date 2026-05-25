@@ -10,7 +10,7 @@ export default {
     theme: {
         extend: {
             colors: {
-                background: "hsl(var(--background))",
+                // Shadcn CSS variable tokens (kept for component compatibility)
                 foreground: "hsl(var(--foreground))",
                 card: {
                     DEFAULT: "hsl(var(--card))",
@@ -19,14 +19,6 @@ export default {
                 popover: {
                     DEFAULT: "hsl(var(--popover))",
                     foreground: "hsl(var(--popover-foreground))",
-                },
-                primary: {
-                    DEFAULT: "hsl(var(--primary))",
-                    foreground: "hsl(var(--primary-foreground))",
-                },
-                secondary: {
-                    DEFAULT: "hsl(var(--secondary))",
-                    foreground: "hsl(var(--secondary-foreground))",
                 },
                 muted: {
                     DEFAULT: "hsl(var(--muted))",
@@ -50,11 +42,78 @@ export default {
                     "4": "hsl(var(--chart-4))",
                     "5": "hsl(var(--chart-5))",
                 },
+
+                // Mentarie design tokens
+                background: "#f9f9f9",
+                surface: "#f9f9f9",
+                "surface-bright": "#f9f9f9",
+                "surface-dim": "#dadada",
+                "surface-variant": "#e2e2e2",
+                "surface-container-lowest": "#ffffff",
+                "surface-container-low": "#f3f3f3",
+                "surface-container": "#eeeeee",
+                "surface-container-high": "#e8e8e8",
+                "surface-container-highest": "#e2e2e2",
+                "surface-tint": "#5d5d6b",
+                "inverse-surface": "#2f3131",
+                "inverse-on-surface": "#f1f1f1",
+
+                primary: {
+                    DEFAULT: "#1f202b",
+                    foreground: "#ffffff",
+                },
+                "primary-container": "#343541",
+                "primary-fixed": "#e2e1f1",
+                "primary-fixed-dim": "#c6c5d4",
+                "inverse-primary": "#c6c5d4",
+                "on-primary": "#ffffff",
+                "on-primary-container": "#9e9dac",
+                "on-primary-fixed": "#1a1b26",
+                "on-primary-fixed-variant": "#454652",
+
+                secondary: {
+                    DEFAULT: "#5d5f5f",
+                    foreground: "#ffffff",
+                },
+                "secondary-container": "#dfe0e0",
+                "secondary-fixed": "#e2e2e2",
+                "secondary-fixed-dim": "#c6c6c7",
+                "on-secondary": "#ffffff",
+                "on-secondary-container": "#616363",
+                "on-secondary-fixed": "#1a1c1c",
+                "on-secondary-fixed-variant": "#454747",
+
+                tertiary: "#1e2124",
+                "tertiary-container": "#333639",
+                "tertiary-fixed": "#e0e2e6",
+                "tertiary-fixed-dim": "#c4c7ca",
+                "on-tertiary": "#ffffff",
+                "on-tertiary-container": "#9c9fa2",
+                "on-tertiary-fixed": "#191c1f",
+                "on-tertiary-fixed-variant": "#44474a",
+
+                error: "#ba1a1a",
+                "error-container": "#ffdad6",
+                "on-error": "#ffffff",
+                "on-error-container": "#93000a",
+
+                outline: "#77767c",
+                "outline-variant": "#c8c5cc",
+
+                "on-background": "#1a1c1c",
+                "on-surface": "#1a1c1c",
+                "on-surface-variant": "#47464c",
             },
             borderRadius: {
                 lg: "var(--radius)",
                 md: "calc(var(--radius) - 2px)",
                 sm: "calc(var(--radius) - 4px)",
+                xl: "0.75rem",
+                full: "9999px",
+            },
+            fontFamily: {
+                sans: ["Plus Jakarta Sans", "Arial", "Helvetica", "sans-serif"],
+                serif: ["Literata", "Georgia", "serif"],
             },
         },
     },
