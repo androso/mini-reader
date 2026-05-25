@@ -63,22 +63,22 @@ const TextBlock = memo(
             return (
                 <div className="absolute left-0 top-0 h-full flex flex-col items-center justify-center gap-2 pl-4">
                     <button
-                        className="p-2 bg-blue-100 rounded-full hover:bg-blue-200 transition-all transform"
+                        className="rounded-full bg-[#e2e1f1] p-2 transition-all hover:bg-[#c6c5d4]"
                         style={{ opacity, transform: `scale(${scale})` }}
                     >
-                        <MessageCircle className="h-5 w-5 text-blue-600" />
+                        <MessageCircle className="h-5 w-5 text-[#454652]" />
                     </button>
                     <button
-                        className="p-2 bg-blue-100 rounded-full hover:bg-blue-200 transition-all transform"
+                        className="rounded-full bg-[#e2e1f1] p-2 transition-all hover:bg-[#c6c5d4]"
                         style={{ opacity, transform: `scale(${scale})` }}
                     >
-                        <Bookmark className="h-5 w-5 text-blue-600" />
+                        <Bookmark className="h-5 w-5 text-[#454652]" />
                     </button>
                     <button
-                        className="p-2 bg-blue-100 rounded-full hover:bg-blue-200 transition-all transform"
+                        className="rounded-full bg-[#e2e1f1] p-2 transition-all hover:bg-[#c6c5d4]"
                         style={{ opacity, transform: `scale(${scale})` }}
                     >
-                        <Share2 className="h-5 w-5 text-blue-600" />
+                        <Share2 className="h-5 w-5 text-[#454652]" />
                     </button>
                 </div>
             );
@@ -120,11 +120,11 @@ const TextBlock = memo(
                 <div className="relative">
                     {renderActionIcons()}
                     <div
-                        className={`mb-4 p-4 relative z-10 ${
+                        className={`reader-text-block relative z-10 mb-6 rounded-lg px-4 py-1 ${
                             isActive
-                                ? "border-l-4 border-blue-500 bg-blue-50"
+                                ? "border-l-4 border-[#5d5d6b] bg-[#eeeeee]"
                                 : "border-l-4 border-transparent"
-                        } ${isDragging || isLocked ? "shadow-lg" : "shadow-sm"} ${
+                        } ${isDragging || isLocked ? "shadow-lg" : ""} ${
                             isLocked ? "cursor-pointer" : ""
                         }`}
                         onClick={handleParagraphClick}

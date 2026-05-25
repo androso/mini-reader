@@ -18,18 +18,20 @@ export default function Reader() {
     const bookUrl = `${process.env.NEXT_PUBLIC_API_URL}/api/books/${bookFileKey}`;
 
     return (
-        <div className="h-[100dvh] bg-[#D7D7D7] ">
+        <div className="min-h-[100dvh] bg-[#2b2b31] p-0 text-[#1a1c1c] md:flex md:items-center md:justify-center md:p-8">
             <div
-                className={`h-[100dvh] w-full rounded-lg relative flex justify-center ${!isMobile && "p-8"}`}
+                className={`relative flex h-[100dvh] w-full overflow-hidden bg-transparent shadow-2xl md:h-[90vh] md:max-w-[1400px] md:gap-3 md:rounded-xl ${
+                    isMobile ? "flex-col" : "justify-center"
+                }`}
             >
                 {!isMobile && (
-                    <div className="w-[40%] bg-[#FCFCFC] mr-4 rounded-lg">
+                    <div className="w-[40%] min-w-[360px] overflow-hidden rounded-xl bg-[#343541]">
                         <ChatInterface isMobile={false} bookId={bookId ?? ""} />
                     </div>
                 )}
                 {isMobile ? (
                     <div
-                        className={`w-full relative overflow-hidden bg-[#FCFCFC] rounded-lg`}
+                        className="relative h-full w-full overflow-hidden bg-[#f9f9f9]"
                     >
                         {isPdf ? (
                             <PdfReader url={bookUrl} />
@@ -40,7 +42,7 @@ export default function Reader() {
                     </div>
                 ) : (
                     <div
-                        className={`w-[60%] relative overflow-hidden bg-[#FCFCFC] rounded-lg`}
+                        className="relative w-[60%] overflow-hidden rounded-xl bg-[#f9f9f9]"
                     >
                         {isPdf ? (
                             <PdfReader url={bookUrl} />

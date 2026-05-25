@@ -65,7 +65,7 @@ const Sidebar: React.FC<SidebarProps> = memo(
             return (
                 <div key={`${entry.id}-${index}`}>
                     <div
-                        className={`toc-item level-${entry.level} flex items-center cursor-pointer hover:bg-gray-100 px-2 py-1 ${entry.href === activeHref ? "bg-blue-100" : ""}`}
+                        className={`toc-item level-${entry.level} flex cursor-pointer items-center rounded-lg px-3 py-2 transition-colors hover:bg-[#eeeeee] ${entry.href === activeHref ? "bg-[#e2e1f1] text-[#1a1b26]" : "text-[#47464c]"}`}
                         style={{
                             paddingLeft: `${entry.level * 1.5}rem`,
                         }}
@@ -81,14 +81,14 @@ const Sidebar: React.FC<SidebarProps> = memo(
                                     e.stopPropagation();
                                     handleToggle(index);
                                 }}
-                                className="bg-none border-none p-1 cursor-pointer mr-1 text-gray-600"
+                                className="mr-1 cursor-pointer border-none bg-transparent p-1 text-[#616363]"
                             >
                                 {isExpanded ? "▼" : "▶"}
                             </button>
                         )}
                         <a
                             href={`#${entry.href}`}
-                            className={`text-decoration-none flex-1 py-1 ${entry.isPage ? "text-gray-600 text-sm" : ""}`}
+                            className="flex-1 py-1 no-underline"
                             onClick={(e) => {
                                 if (hasChildrenItems) {
                                     e.preventDefault();
@@ -104,16 +104,16 @@ const Sidebar: React.FC<SidebarProps> = memo(
 
         return (
             <div
-                className={`absolute h-full overflow-x-hidden left-0 bg-white border-r shadow-lg transition-transform duration-300 ease-in-out transform z-30 ${
+                className={`absolute left-0 z-30 h-full overflow-x-hidden border-r border-[#c8c5cc] bg-white shadow-lg transition-transform duration-300 ease-in-out ${
                     isOpen ? "translate-x-0" : "-translate-x-full"
                 }`}
             >
-                <div className="w-64 h-full p-4 pt-[4rem]">
+                <div className="h-full w-72 p-5 pt-[5rem]">
                     <div className="">
-                        <h3 className="text-lg font-semibold">
+                        <h3 className="font-sans text-lg font-semibold leading-tight text-[#1a1c1c]">
                             {epubContent.metadata.title}
                         </h3>
-                        <p className="text-gray-600 italic mt-2 mb-4">
+                        <p className="mb-4 mt-2 font-serif text-sm italic text-[#616363]">
                             {epubContent.metadata.creator}
                         </p>
                     </div>

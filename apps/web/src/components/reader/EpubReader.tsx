@@ -164,30 +164,17 @@ const EpubReader: React.FC<EpubReaderProps> = memo(({ url }) => {
                 activeHref={activeHref}
             />
 
-            <div className="h-full relative overflow-x-hidden">
-                <div className="sticky top-0 left-0 right-0 p-4 bg-white z-50 h-[8%]">
+            <div className="relative h-full overflow-x-hidden bg-[#f9f9f9]">
+                <div className="sticky left-0 right-0 top-0 z-50 flex h-[72px] items-center bg-[#f9f9f9] px-6 md:px-10">
                     <button
-                        className="bg-transparent border-none cursor-pointer z-40 hover:bg-gray-100 transition-colors duration-200 rounded"
+                        className="z-40 cursor-pointer rounded-lg border-none bg-transparent p-2 text-[#47464c] opacity-80 transition-colors duration-200 hover:bg-[#eeeeee] hover:text-[#1f202b]"
                         onClick={() => setIsSidebarOpen(!isSidebarOpen)}
                     >
                         <Menu className="h-6 w-6" />
                     </button>
                 </div>
-                <div className="max-w-3xl mx-auto px-6 max-h-[92%] overflow-y-auto overflow-x-hidden">
+                <div className="mx-auto max-h-[calc(100%-72px)] max-w-[720px] overflow-y-auto overflow-x-hidden px-5 md:px-10">
                     <div className="pb-32" ref={contentRef}>
-                        {/* Tooltip */}
-                        {/* <div
-                            ref={tooltipRef}
-                            className={`fixed bg-gray-800 text-white px-3 py-2 rounded shadow-lg transition-opacity duration-200 pointer-events-none ${
-                                isVisible ? "opacity-100" : "opacity-0"
-                            }`}
-                            style={{
-                                left: `${tooltipPosition.x}px`,
-                                top: `${tooltipPosition.y}px`,
-                            }}
-                        >
-                            hello
-                        </div> */}
                         {isLoading || textBlockIsLoading || !activeChapter ? (
                             <LoadingSpinner />
                         ) : (

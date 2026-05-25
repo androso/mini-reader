@@ -1,7 +1,7 @@
 "use client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { SendHorizontal, Maximize2, History } from "lucide-react";
+import { SendHorizontal, Maximize2, History, X } from "lucide-react";
 import { useMemo } from "react";
 import MessageList, { Message } from "./MessageList";
 import ChatHistory from "./ChatHistory";
@@ -24,13 +24,13 @@ const ChatLayout = ({
     children: React.ReactNode;
 }) => {
     const layoutClasses = useMemo(() => {
-        const baseClasses = `flex flex-col ${!isMobile && "flex-1 justify-end"} rounded-md`;
+        const baseClasses = `flex flex-col ${!isMobile && "h-full flex-1"} overflow-hidden`;
         const mobileClasses = isMobile
-            ? `absolute bottom-2 w-11/12 left-1/2 -translate-x-1/2 shadow-lg shadow-blue-500/50 border-2 border-slate-300 ${
-                  isExpanded ? "h-[80dvh]" : ""
+            ? `absolute bottom-4 w-[calc(100%-2rem)] left-1/2 -translate-x-1/2 rounded-2xl shadow-[0px_18px_50px_rgba(0,0,0,0.28)] ${
+                  isExpanded ? "h-[80dvh] bg-[#343541]" : "bg-transparent"
               }`
             : "";
-        return `${baseClasses} ${mobileClasses} shadow-lg bg-white`;
+        return `${baseClasses} ${mobileClasses} ${!isMobile ? "bg-[#343541]" : ""}`;
     }, [isMobile, isExpanded]);
 
     return <div className={layoutClasses}>{children}</div>;
@@ -59,9 +59,9 @@ export function ChatInterface({
     } = useChat(bookId);
 
     return (
-        <div className={`flex ${!isMobile && "h-full"} relative`}>
+        <div className={`relative flex ${!isMobile && "h-full w-full"}`}>
             {!isMobile && chatState.isHistoryOpen && (
-                <div className="overflow-x-hidden max-w-[40%]">
+                <div className="max-w-[44%] overflow-x-hidden">
                     <ChatHistory
                         conversations={conversationsData?.conversations}
                         onSelectConversation={handleSelectConversation}
@@ -122,7 +122,7 @@ const ChatHeader = ({
     setChatState: React.Dispatch<React.SetStateAction<ChatState>>;
 }) => (
     <div
-        className={`flex ${chatState.isHistoryOpen ? "justify-end" : "justify-between"} p-2 border-b`}
+        className={`flex ${chatState.isHistoryOpen ? "justify-end" : "justify-between"} border-b border-white/10 p-3`}
     >
         {!chatState.isHistoryOpen && (
             <button
@@ -132,29 +132,16 @@ const ChatHeader = ({
                         isExpanded: !prev.isExpanded,
                     }))
                 }
-                className="text-gray-500 hover:text-gray-700"
+                className="rounded-lg p-2 text-[#c6c5d4] transition-colors hover:bg-white/10 hover:text-white"
             >
                 <Maximize2 className="h-5 w-5" />
             </button>
         )}
         <button
             onClick={() => setChatState(initialChatState)}
-            className="text-gray-500 hover:text-gray-700"
+            className="rounded-lg p-2 text-[#c6c5d4] transition-colors hover:bg-white/10 hover:text-white"
         >
-            <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-            >
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
+            <X className="h-5 w-5" />
         </button>
     </div>
 );
@@ -168,13 +155,13 @@ const ChatMessages = ({
     isMobile: boolean;
     isExpanded: boolean;
 }) => (
-    <>
+    <div className="min-h-0 flex-1">
         <MessageList
             messages={messages}
             isMobile={isMobile}
             isExpanded={isExpanded}
         />
-    </>
+    </div>
 );
 
 const ChatInput = ({
@@ -194,7 +181,7 @@ const ChatInput = ({
     processingError: string | null;
     onHistoryClick: () => void;
 }) => (
-    <form onSubmit={handleSubmit} className="border-t border-gray-200 p-4">
+    <form onSubmit={handleSubmit} className="mt-auto shrink-0 p-6 md:p-8">
         {!isDocumentReady && (
             <div
                 className={`mb-2 rounded-md border px-3 py-2 text-sm ${
@@ -209,12 +196,13 @@ const ChatInput = ({
                         : "Document context is still processing. You can ask questions once it is ready.")}
             </div>
         )}
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2 rounded-full bg-white py-2 pl-2 pr-3 shadow-[0px_10px_30px_rgba(0,0,0,0.15)]">
             <Button
                 type="button"
                 size="icon"
                 variant="ghost"
                 onClick={onHistoryClick}
+                className="h-10 w-10 rounded-full text-[#616363] hover:bg-[#eeeeee] hover:text-[#1a1c1c]"
             >
                 <History className="h-5 w-5" />
             </Button>
@@ -228,14 +216,15 @@ const ChatInput = ({
                           ? "Document text processing failed"
                           : "Document context is processing..."
                 }
-                className="flex-1"
+                className="h-11 flex-1 border-0 bg-transparent px-2 font-sans text-sm font-semibold text-[#1a1c1c] shadow-none ring-0 placeholder:text-[#9ea3a8] focus-visible:ring-0 focus-visible:ring-offset-0"
                 disabled={!isDocumentReady}
             />
             <Button
                 type="submit"
                 size="icon"
-                variant="ghost"
+                variant="default"
                 disabled={!isDocumentReady}
+                className="h-10 w-10 rounded-full bg-[#5c5d66] text-white hover:bg-[#4f5058] disabled:bg-[#c6c6c7]"
             >
                 <SendHorizontal className="h-5 w-5" />
             </Button>

@@ -31,13 +31,14 @@ function ChatHistory({
     };
 
     return (
-        <div className="border-r border-gray-200 bg-gray-50">
-            <div className="p-4 border-b border-gray-200">
+        <div className="h-full border-r border-white/10 bg-[#2f3039] text-white">
+            <div className="border-b border-white/10 p-4">
                 <div className="flex justify-between items-center">
                     <Button
                         onClick={handleNewThread}
                         size="sm"
                         variant="outline"
+                        className="border-white/15 bg-transparent text-[#f1f1f1] hover:bg-white/10 hover:text-white"
                     >
                         Start new thread
                     </Button>
@@ -48,16 +49,17 @@ function ChatHistory({
                     <button
                         key={conversation.id}
                         onClick={() => onSelectConversation(conversation)}
-                        className="w-full p-4 text-left hover:bg-gray-100 border-b border-gray-200"
+                        className="w-full border-b border-white/10 p-4 text-left transition-colors hover:bg-white/10"
                     >
                         <div className="flex items-center gap-2 mb-1">
-                            <MessageSquareText className="h-4 w-4 text-gray-500" />
-                            <span className="text-sm font-medium">
+                            <MessageSquareText className="h-4 w-4 text-[#c6c5d4]" />
+                            <span className="text-sm font-medium text-[#f1f1f1]">
                                 {conversation.title}
                             </span>
                         </div>
-                        <span className="text-xs text-gray-500">
-                            {conversation.date}
+                        <span className="text-xs text-[#9e9dac]">
+                            {conversation.lastMessageAt ??
+                                conversation.createdAt}
                         </span>
                     </button>
                 ))}
