@@ -1,12 +1,14 @@
 "use client";
 
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import EpubReader from "@/components/reader/EpubReader";
 import PdfReader from "@/components/reader/PdfReader";
 import { useWindowSize } from "@/hooks/useWindowSize";
 import { ChatInterface } from "@/components/reader/ChatInterface";
+import { ArrowLeft } from "lucide-react";
 
 export default function Reader() {
+    const router = useRouter();
     const params = useParams();
     const bookFileKey = params.id as string | null;
     const { width } = useWindowSize();
@@ -16,6 +18,14 @@ export default function Reader() {
     const fileType = searchParams.get("type");
     const isPdf = fileType === "pdf" || bookFileKey?.startsWith("pdf-");
     const bookUrl = `${process.env.NEXT_PUBLIC_API_URL}/api/books/${bookFileKey}`;
+    const handleBack = () => {
+        if (window.history.length > 1) {
+            router.back();
+            return;
+        }
+
+        router.push("/");
+    };
 
     return (
         <div className="min-h-[100dvh] bg-[#2b2b31] p-0 text-[#1a1c1c] md:flex md:items-center md:justify-center md:p-8">
@@ -26,13 +36,25 @@ export default function Reader() {
             >
                 {!isMobile && (
                     <div className="w-[40%] min-w-[360px] overflow-hidden rounded-xl bg-[#343541]">
-                        <ChatInterface isMobile={false} bookId={bookId ?? ""} />
+                        <ChatInterface
+                            isMobile={false}
+                            bookId={bookId ?? ""}
+                            onBack={handleBack}
+                        />
                     </div>
                 )}
                 {isMobile ? (
                     <div
                         className="relative h-full w-full overflow-hidden bg-[#f9f9f9]"
                     >
+                        <button
+                            type="button"
+                            onClick={handleBack}
+                            className="absolute left-4 top-4 z-[70] flex h-11 w-11 items-center justify-center rounded-full bg-[#343541]/90 text-white shadow-lg transition-colors hover:bg-[#343541]"
+                            aria-label="Back to library"
+                        >
+                            <ArrowLeft className="h-5 w-5" />
+                        </button>
                         {isPdf ? (
                             <PdfReader url={bookUrl} />
                         ) : (

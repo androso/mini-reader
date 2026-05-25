@@ -1,17 +1,18 @@
 "use client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { SendHorizontal, Maximize2, History, X } from "lucide-react";
+import { ArrowLeft, SendHorizontal, History } from "lucide-react";
 import { useMemo } from "react";
 import MessageList, { Message } from "./MessageList";
 import ChatHistory from "./ChatHistory";
 import useConversations from "@/hooks/chat/useConversations";
-import { ChatState, initialChatState, useChat } from "@/hooks/chat/useChat";
+import { useChat } from "@/hooks/chat/useChat";
 import { useBookProcessingStatus } from "@/hooks/useBookProcessingStatus";
 
 interface ChatInterfaceProps {
     isMobile?: boolean;
     bookId: string;
+    onBack?: () => void;
 }
 
 const ChatLayout = ({
@@ -39,6 +40,7 @@ const ChatLayout = ({
 export function ChatInterface({
     isMobile = false,
     bookId,
+    onBack,
 }: ChatInterfaceProps) {
     const { data: conversationsData, refetch: refetchConversations } =
         useConversations(bookId);
@@ -69,11 +71,17 @@ export function ChatInterface({
                 </div>
             )}
             <ChatLayout isMobile={isMobile} isExpanded={chatState.isExpanded}>
-                {chatState.isChatOpen && (
-                    <ChatHeader
-                        chatState={chatState}
-                        setChatState={setChatState}
-                    />
+                {!isMobile && onBack && (
+                    <div className="shrink-0 px-6 pt-6 md:px-8 md:pt-8">
+                        <button
+                            type="button"
+                            onClick={onBack}
+                            className="group flex items-center gap-2 rounded-lg p-2 pr-3 text-sm font-semibold text-[#f1f1f1] transition-colors hover:bg-white/10 hover:text-white"
+                        >
+                            <ArrowLeft className="h-5 w-5 transition-transform group-hover:-translate-x-1" />
+                            <span>Back</span>
+                        </button>
+                    </div>
                 )}
                 {isMobile &&
                     chatState.isChatOpen &&
@@ -113,38 +121,6 @@ export function ChatInterface({
         </div>
     );
 }
-
-const ChatHeader = ({
-    chatState,
-    setChatState,
-}: {
-    chatState: ChatState;
-    setChatState: React.Dispatch<React.SetStateAction<ChatState>>;
-}) => (
-    <div
-        className={`flex ${chatState.isHistoryOpen ? "justify-end" : "justify-between"} border-b border-white/10 p-3`}
-    >
-        {!chatState.isHistoryOpen && (
-            <button
-                onClick={() =>
-                    setChatState((prev) => ({
-                        ...prev,
-                        isExpanded: !prev.isExpanded,
-                    }))
-                }
-                className="rounded-lg p-2 text-[#c6c5d4] transition-colors hover:bg-white/10 hover:text-white"
-            >
-                <Maximize2 className="h-5 w-5" />
-            </button>
-        )}
-        <button
-            onClick={() => setChatState(initialChatState)}
-            className="rounded-lg p-2 text-[#c6c5d4] transition-colors hover:bg-white/10 hover:text-white"
-        >
-            <X className="h-5 w-5" />
-        </button>
-    </div>
-);
 
 const ChatMessages = ({
     messages,
