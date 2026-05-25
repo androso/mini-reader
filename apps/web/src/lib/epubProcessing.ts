@@ -4,7 +4,12 @@ import {
     type TocEntry,
     type EpubMetadata,
     type ManifestItem,
-} from "@/types/EpubReader";
+} from "../types/EpubReader";
+import {
+    normalizeEpubHref,
+    splitEpubHref,
+    stripEpubFileExtension,
+} from "./epubNavigation";
 
 const CONTAINER_PATH = "META-INF/container.xml";
 
@@ -14,17 +19,11 @@ export const getBasePath = (opfPath: string): string => {
 };
 
 export const cleanHref = (href: string): string => {
-    return href.includes(".") ? href.substring(0, href.lastIndexOf(".")) : href;
+    return normalizeEpubHref(href, { preserveFragment: true });
 };
 
 export const extractId = (src: string): string => {
-    return (
-        src
-            .split("#")[0]
-            .split("/")
-            .pop()
-            ?.replace(/\.x?html?$/, "") || ""
-    );
+    return stripEpubFileExtension(splitEpubHref(src).path.split("/").pop() || "");
 };
 
 const processNavPoint = (navPoint: Element, level: number): TocEntry => {
@@ -47,10 +46,15 @@ const processNavPoint = (navPoint: Element, level: number): TocEntry => {
 const processEpub3Nav = (navElement: Element): TocEntry[] => {
     const entries: TocEntry[] = [];
 
+    const getElementName = (element: Element) =>
+        element.localName || element.tagName.toLowerCase();
+
     const processListItems = (element: Element, level: number): void => {
         Array.from(element.children).forEach((item) => {
-            if (item.tagName.toLowerCase() === "li") {
-                const anchor = item.querySelector("a");
+            if (getElementName(item) === "li") {
+                const anchor = Array.from(item.children).find(
+                    (child) => getElementName(child) === "a"
+                );
                 if (anchor) {
                     const href = cleanHref(anchor.getAttribute("href") || "");
                     const id = extractId(href);
@@ -64,7 +68,9 @@ const processEpub3Nav = (navElement: Element): TocEntry[] => {
                     });
                 }
 
-                const nestedList = item.querySelector("ol");
+                const nestedList = Array.from(item.children).find(
+                    (child) => getElementName(child) === "ol"
+                );
                 if (nestedList) {
                     processListItems(nestedList, level + 1);
                 }
@@ -72,7 +78,9 @@ const processEpub3Nav = (navElement: Element): TocEntry[] => {
         });
     };
 
-    const rootList = navElement.querySelector("ol");
+    const rootList = Array.from(navElement.children).find(
+        (child) => getElementName(child) === "ol"
+    );
     if (rootList) {
         processListItems(rootList, 0);
     }
@@ -104,19 +112,39 @@ const processEpub2Ncx = (navPoints: HTMLCollectionOf<Element>): TocEntry[] => {
     return entries;
 };
 
+const findEpub3TocNav = (doc: Document): Element | null => {
+    const navElements = Array.from(doc.getElementsByTagName("*")).filter(
+        (element) => element.localName === "nav"
+    );
+    return (
+        navElements.find((nav) => {
+            const type =
+                nav.getAttribute("epub:type") ||
+                nav.getAttributeNS("http://www.idpf.org/2007/ops", "type") ||
+                nav.getAttribute("type") ||
+                "";
+            return type.split(/\s+/).includes("toc");
+        }) || null
+    );
+};
+
 const processToc = async (
-    tocFile: JSZip.JSZipObject,
+    tocFile: JSZip.JSZipObject | null,
     manifest: Record<string, ManifestItem>,
     basePath: string,
     zipData: JSZip
 ): Promise<TocEntry[]> => {
+    if (!tocFile) {
+        return [];
+    }
+
     const tocContent = await tocFile.async("text");
     const tocDoc = new DOMParser().parseFromString(
         tocContent,
         "application/xml"
     );
 
-    const navElement = tocDoc.querySelector('nav[*|type="toc"]');
+    const navElement = findEpub3TocNav(tocDoc);
     if (navElement) {
         return processEpub3Nav(navElement);
     }
@@ -126,7 +154,11 @@ const processToc = async (
         return processEpub2Ncx(navPoints);
     }
 
-    const ncxItem = manifest["ncx"];
+    const ncxItem =
+        manifest["ncx"] ||
+        Object.values(manifest).find(
+            (item) => item.mediaType === "application/x-dtbncx+xml"
+        );
     if (ncxItem) {
         const ncxPath = `${basePath}${ncxItem.href}`;
         const ncxFile = zipData?.file(ncxPath);
@@ -206,15 +238,19 @@ export const processEpubFile = async (
     }
 
     if (!tocFile) {
-        const ncxFile = manifest["ncx"];
-        tocFile = zipData.file(`${basePath}${ncxFile?.href}`);
+        const ncxFile =
+            manifest["ncx"] ||
+            Object.values(manifest).find(
+                (item) => item.mediaType === "application/x-dtbncx+xml"
+            );
+        tocFile = ncxFile ? zipData.file(`${basePath}${ncxFile.href}`) : null;
     }
 
     const spine = Array.from(opfDoc.querySelectorAll("spine itemref"))
         .map((item) => item.getAttribute("idref") || "")
         .filter(Boolean);
 
-    const toc = await processToc(tocFile!, manifest, basePath, zipData);
+    const toc = await processToc(tocFile, manifest, basePath, zipData);
 
     return [
         {

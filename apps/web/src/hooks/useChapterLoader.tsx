@@ -3,6 +3,7 @@ import JSZip from "jszip";
 import { TextBlock, type EpubContent } from "@/types/EpubReader";
 import { useImageLoader } from "@/hooks/useImageLoader";
 import { resolveRelativePath } from "@/lib/utils";
+import { buildTextBlocksFromDocument } from "@/lib/epubChapterProcessing";
 
 export interface Chapter {
     id: string;
@@ -93,16 +94,20 @@ export const useChapterLoader = (
                     if (cssFile) {
                         const content = await cssFile.async("text");
                         // Process @import statements
-                        const processedContent = await content.replace(
-                            /@import\s+['"](.*?)['"]/g,
-                            async (_, importPath) => {
-                                const importedCss = await loadCssContent(
-                                    importPath,
-                                    path
-                                );
-                                return importedCss || "";
-                            }
+                        let processedContent = content;
+                        const imports = Array.from(
+                            content.matchAll(/@import\s+['"](.*?)['"]/g)
                         );
+                        for (const importMatch of imports) {
+                            const importedCss = await loadCssContent(
+                                importMatch[1],
+                                path
+                            );
+                            processedContent = processedContent.replace(
+                                importMatch[0],
+                                importedCss || ""
+                            );
+                        }
                         // Process relative URLs in CSS
                         return processedContent.replace(
                             /url\(['"]?([^'")]+)['"]?\)/g,
@@ -219,24 +224,7 @@ export const useChapterLoader = (
             // Remove images instead of loading them
             doc.querySelectorAll("script").forEach((script) => script.remove());
 
-            const textBlocks: TextBlock[] = [];
-            Array.from(doc.body.children).forEach((child, idx) => {
-                // Only skip if element is truly empty (no text and no meaningful elements)
-                const hasText = child.textContent?.trim();
-                const hasImages = child.querySelector("img");
-                const hasSvg = child.querySelector("svg");
-                if (!hasText && !hasImages && !hasSvg) return;
-
-                const blockElement = document.createElement("div");
-                blockElement.innerHTML = child.outerHTML;
-                textBlocks.push({
-                    id: `${chapterId}-block-${idx}`,
-                    content: child.outerHTML,
-                    element: blockElement,
-                });
-            });
-
-            return textBlocks;
+            return buildTextBlocksFromDocument(doc, chapterId);
         },
         [epubContent, loadImage, loadCssContent]
     );
