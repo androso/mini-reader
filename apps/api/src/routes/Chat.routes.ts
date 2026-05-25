@@ -20,17 +20,29 @@ const buildRagMessages = async (
     userId: string,
     messages: ChatMessage[],
     query: string
-) => {
-    if (resourceType !== "book") return messages;
+): Promise<{
+    messages: ChatMessage[];
+    status: "ready" | "processing" | "failed";
+    error?: string | null;
+}> => {
+    if (resourceType !== "book") return { messages, status: "ready" };
 
     const [book] = await db
         .select()
         .from(Books)
         .where(and(eq(Books.id, resourceId), eq(Books.userId, userId)));
 
+    if (book?.processingStatus === "failed") {
+        return {
+            messages,
+            status: "failed",
+            error: book.processingError,
+        };
+    }
+
     if (!book?.collectionName) {
         console.warn(`Book ${resourceId} has no Chroma collection yet`);
-        return messages;
+        return { messages, status: "processing" };
     }
 
     try {
@@ -41,19 +53,22 @@ const buildRagMessages = async (
         );
         const documents = results.documents?.[0]?.filter(Boolean) || [];
 
-        if (!documents.length) return messages;
+        if (!documents.length) return { messages, status: "ready" };
 
         const context = documents.join("\n\n---\n\n");
-        return [
-            {
-                role: "system" as const,
-                content: `Use the following retrieved book excerpts as the primary context for the user's question. If the excerpts do not contain the answer, say that the book context does not provide enough information.\n\nBook context:\n${context}`,
-            },
-            ...messages,
-        ];
+        return {
+            status: "ready",
+            messages: [
+                {
+                    role: "system" as const,
+                    content: `Use the following retrieved book excerpts as the primary context for the user's question. If the excerpts do not contain the answer, say that the book context does not provide enough information.\n\nBook context:\n${context}`,
+                },
+                ...messages,
+            ],
+        };
     } catch (error) {
         console.error("Error retrieving book context from ChromaDB", error);
-        return messages;
+        return { messages, status: "ready" };
     }
 };
 
@@ -104,15 +119,40 @@ router.post(
                 content: message,
             });
 
-            const ragMessages = await buildRagMessages(
+            const ragResult = await buildRagMessages(
                 req.params.resourceType,
                 req.params.id,
                 req.user.id,
                 messages,
                 message
             );
+            if (ragResult.status === "processing") {
+                res.write(
+                    `data: ${JSON.stringify({
+                        error: "Document context is still processing. Please try again shortly.",
+                        status: "processing",
+                    })}\n\n`
+                );
+                res.write("data: [DONE]\n\n");
+                res.end();
+                return;
+            }
+            if (ragResult.status === "failed") {
+                res.write(
+                    `data: ${JSON.stringify({
+                        error:
+                            ragResult.error ||
+                            "Document text processing failed.",
+                        status: "failed",
+                    })}\n\n`
+                );
+                res.write("data: [DONE]\n\n");
+                res.end();
+                return;
+            }
+
             const textStream =
-                await oaiService.generateStreamResponse(ragMessages);
+                await oaiService.generateStreamResponse(ragResult.messages);
 
             let accumulatedResponse = "";
             for await (const chunk of textStream) {
@@ -211,15 +251,40 @@ router.post(
             });
             console.log("Last message inserted into database:", lastMessage);
 
-            const ragMessages = await buildRagMessages(
+            const ragResult = await buildRagMessages(
                 resourceType,
                 resourceId,
                 req.user.id,
                 messages,
                 lastMessage.content
             );
+            if (ragResult.status === "processing") {
+                res.write(
+                    `data: ${JSON.stringify({
+                        error: "Document context is still processing. Please try again shortly.",
+                        status: "processing",
+                    })}\n\n`
+                );
+                res.write("data: [DONE]\n\n");
+                res.end();
+                return;
+            }
+            if (ragResult.status === "failed") {
+                res.write(
+                    `data: ${JSON.stringify({
+                        error:
+                            ragResult.error ||
+                            "Document text processing failed.",
+                        status: "failed",
+                    })}\n\n`
+                );
+                res.write("data: [DONE]\n\n");
+                res.end();
+                return;
+            }
+
             const textStream =
-                await oaiService.generateStreamResponse(ragMessages);
+                await oaiService.generateStreamResponse(ragResult.messages);
             let accumulatedResponse = "";
             console.log("Stream response generation initiated.");
 

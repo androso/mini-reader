@@ -36,6 +36,8 @@ export const Books = pgTable("books", {
     fileKey: text("file_key").notNull(),
     fileType: fileTypeEnum("file_type"),
     collectionName: text("collection_name"),
+    processingStatus: text("processing_status").default("processing").notNull(),
+    processingError: text("processing_error"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

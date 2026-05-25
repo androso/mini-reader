@@ -6,10 +6,68 @@ import { useChapterLoader } from "@/hooks/useChapterLoader";
 import { useTextBlockNavigation } from "@/hooks/useTextBlockNavigation";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import Chapter from "./Chapter";
+import type { Chapter as EpubChapter } from "@/hooks/useChapterLoader";
 
 interface EpubReaderProps {
     url: string;
 }
+
+const normalizeHref = (href: string | null | undefined) => {
+    if (!href) return "";
+
+    const withoutHash = href.split("#")[0].split("?")[0];
+    const decodedHref = (() => {
+        try {
+            return decodeURIComponent(withoutHash);
+        } catch {
+            return withoutHash;
+        }
+    })();
+
+    const normalizedParts = decodedHref
+        .replace(/^\/+/, "")
+        .split("/")
+        .filter(Boolean)
+        .reduce<string[]>((parts, part) => {
+            if (part === ".") return parts;
+            if (part === "..") {
+                parts.pop();
+                return parts;
+            }
+            parts.push(part);
+            return parts;
+        }, []);
+
+    return normalizedParts
+        .join("/")
+        .replace(/\.(xhtml|html|htm)$/i, "");
+};
+
+const getHrefMatchKeys = (href: string | null | undefined) => {
+    const normalizedHref = normalizeHref(href);
+    const basename = normalizedHref.split("/").pop() ?? "";
+
+    return new Set([normalizedHref, basename].filter(Boolean));
+};
+
+const findChapterByHref = (chapters: EpubChapter[], href: string) => {
+    const tocKeys = getHrefMatchKeys(href);
+
+    const exactMatch = chapters.find((chapter) =>
+        [chapter.hrefId, chapter.id].some((value) =>
+            tocKeys.has(normalizeHref(value))
+        )
+    );
+
+    if (exactMatch) return exactMatch;
+
+    return chapters.find((chapter) =>
+        [chapter.hrefId, chapter.id].some((value) => {
+            const chapterKeys = getHrefMatchKeys(value);
+            return [...tocKeys].some((key) => chapterKeys.has(key));
+        })
+    );
+};
 
 const EpubReader: React.FC<EpubReaderProps> = memo(({ url }) => {
     const { processEpub, isLoading, error, epubContent, zipData } =
@@ -19,17 +77,28 @@ const EpubReader: React.FC<EpubReaderProps> = memo(({ url }) => {
         epubContent,
         zipData
     );
-    const [activeChapter, setActiveChapter] = React.useState<any>(null);
+    const [activeChapter, setActiveChapter] =
+        React.useState<EpubChapter | null>(null);
     const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
     const [activeHref, setActiveHref] = React.useState<string | null>(null);
     const { activeTextBlockId, isLoading: textBlockIsLoading } =
         useTextBlockNavigation(flatTextBlocks, contentRef);
 
     const handleTocItemClick = (hrefId: string) => {
-        const targetChapter = chapters.find((chapter) =>
-            chapter.hrefId.includes(hrefId)
-        );
+        const targetChapter = findChapterByHref(chapters, hrefId);
+        if (!targetChapter) {
+            console.warn(`No chapter found for TOC href: ${hrefId}`);
+            return;
+        }
+
         setActiveChapter(targetChapter);
+        setActiveHref(hrefId);
+        setTimeout(() => {
+            contentRef.current?.parentElement?.scrollTo({
+                top: 0,
+                behavior: "smooth",
+            });
+        }, 100);
     };
 
     useEffect(() => {

@@ -7,6 +7,7 @@ import MessageList, { Message } from "./MessageList";
 import ChatHistory from "./ChatHistory";
 import useConversations from "@/hooks/chat/useConversations";
 import { ChatState, initialChatState, useChat } from "@/hooks/chat/useChat";
+import { useBookProcessingStatus } from "@/hooks/useBookProcessingStatus";
 
 interface ChatInterfaceProps {
     isMobile?: boolean;
@@ -41,6 +42,13 @@ export function ChatInterface({
 }: ChatInterfaceProps) {
     const { data: conversationsData, refetch: refetchConversations } =
         useConversations(bookId);
+    const { data: processingStatus } = useBookProcessingStatus(bookId);
+    const isDocumentReady = processingStatus?.ready ?? false;
+    const processingError =
+        processingStatus?.status === "failed"
+            ? processingStatus.error ||
+              "Document text processing failed. This PDF may be scanned or image-only, and OCR is not enabled yet."
+            : null;
     const {
         chatState,
         handleSelectConversation,
@@ -88,6 +96,9 @@ export function ChatInterface({
                     input={input}
                     setInput={setInput}
                     handleSubmit={handleSubmit}
+                    isDocumentReady={isDocumentReady}
+                    isCheckingStatus={!processingStatus}
+                    processingError={processingError}
                     onHistoryClick={() => {
                         refetchConversations();
                         setChatState((prev) => ({
@@ -170,14 +181,34 @@ const ChatInput = ({
     input,
     setInput,
     handleSubmit,
+    isDocumentReady,
+    isCheckingStatus,
+    processingError,
     onHistoryClick,
 }: {
     input: string;
     setInput: (value: string) => void;
     handleSubmit: (e: React.FormEvent) => void;
+    isDocumentReady: boolean;
+    isCheckingStatus: boolean;
+    processingError: string | null;
     onHistoryClick: () => void;
 }) => (
     <form onSubmit={handleSubmit} className="border-t border-gray-200 p-4">
+        {!isDocumentReady && (
+            <div
+                className={`mb-2 rounded-md border px-3 py-2 text-sm ${
+                    processingError
+                        ? "border-red-200 bg-red-50 text-red-700"
+                        : "border-amber-200 bg-amber-50 text-amber-800"
+                }`}
+            >
+                {processingError ||
+                    (isCheckingStatus
+                        ? "Checking document processing status..."
+                        : "Document context is still processing. You can ask questions once it is ready.")}
+            </div>
+        )}
         <div className="flex gap-2">
             <Button
                 type="button"
@@ -190,10 +221,22 @@ const ChatInput = ({
             <Input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask about this book..."
+                placeholder={
+                    isDocumentReady
+                        ? "Ask about this document..."
+                        : processingError
+                          ? "Document text processing failed"
+                          : "Document context is processing..."
+                }
                 className="flex-1"
+                disabled={!isDocumentReady}
             />
-            <Button type="submit" size="icon" variant="ghost">
+            <Button
+                type="submit"
+                size="icon"
+                variant="ghost"
+                disabled={!isDocumentReady}
+            >
                 <SendHorizontal className="h-5 w-5" />
             </Button>
         </div>

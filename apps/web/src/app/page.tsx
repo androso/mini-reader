@@ -56,7 +56,7 @@ function Home() {
             }
             return response.json();
         },
-        onSuccess: (data) => {
+        onSuccess: () => {
             queryClient.invalidateQueries({
                 queryKey: [`${process.env.NEXT_PUBLIC_API_URL}/api/books`],
             });
@@ -133,7 +133,7 @@ function Home() {
                             className="relative transition-colors hover:bg-slate-200 p-5 cursor-pointer"
                             onClick={() =>
                                 router.push(
-                                    `/read/${book.fileKey}?bookId=${book.id}`
+                                    `/read/${book.fileKey}?bookId=${book.id}&type=${book.fileType ?? ""}`
                                 )
                             }
                             onMouseEnter={() => setHoveredBookId(book.id)}

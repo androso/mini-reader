@@ -14,7 +14,9 @@ export class PDFService {
         try {
             const chunks = await this.pdfUtils.extractTextFromPDF(file);
             if (!chunks.length) {
-                throw new Error("No text found in PDF");
+                throw new Error(
+                    "No selectable text found in PDF. This PDF may be scanned or image-only, and OCR is not enabled yet."
+                );
             }
             const collection: string = await this.pdfUtils.pdfMetadata(file);
             if (!collection) {

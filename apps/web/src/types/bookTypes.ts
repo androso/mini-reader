@@ -3,6 +3,7 @@ export interface Book {
     title: string;
     userId: string;
     fileKey: string;
+    fileType?: "epub" | "pdf" | null;
     createdAt: Date;
 }
 

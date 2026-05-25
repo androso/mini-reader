@@ -10,7 +10,6 @@ import { queryController } from "../controllers/QueryControllers";
 import { processEpub, processPDF } from "../utils/collectionUtils";
 import { createHash, extractMetadata } from "../utils/bookUtils";
 import { PDFUtils } from "../utils/pdfUtils";
-import { file } from "jszip";
 
 const upload = multer({
     storage: multer.memoryStorage(),
@@ -164,6 +163,7 @@ router.post("/", authenticate, upload.single("file"), async (req, res) => {
         }
 
         await uploadFile(fileName, fileBuffer);
+        const fileType = mimeType === "application/pdf" ? "pdf" : "epub";
 
         const [book] = await db
             .insert(Books)
@@ -171,6 +171,9 @@ router.post("/", authenticate, upload.single("file"), async (req, res) => {
                 title: req.file.originalname,
                 userId: req.user.id,
                 fileKey: fileName,
+                fileType,
+                processingStatus: "processing",
+                processingError: null,
             })
             .returning();
 
@@ -257,6 +260,38 @@ router.get("/", authenticate, async (req, res) => {
     });
 });
 
+router.get("/:id/status", authenticate, async (req, res) => {
+    try {
+        const [book] = await db
+            .select()
+            .from(Books)
+            .where(eq(Books.id, req.params.id));
+
+        if (!book) {
+            res.status(404).json({ error: "Book was not found" });
+            return;
+        }
+
+        if (book.userId !== req.user.id) {
+            res.status(403).json({ error: "Not authorized" });
+            return;
+        }
+
+        res.json({
+            bookId: book.id,
+            fileType: book.fileType,
+            ready:
+                book.processingStatus === "ready" &&
+                Boolean(book.collectionName),
+            status: book.processingStatus,
+            error: book.processingError,
+        });
+    } catch (error) {
+        console.error("Error fetching book processing status", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
+
 /**
  * @swagger
  * tags:
@@ -312,7 +347,13 @@ router.get("/:id", authenticate, async (req, res) => {
 
     try {
         const fileBuffer = await getFile(id);
-        res.type("application/octet-stream");
+        if (id.startsWith("pdf-")) {
+            res.type("application/pdf");
+        } else if (id.startsWith("epub-")) {
+            res.type("application/epub+zip");
+        } else {
+            res.type("application/octet-stream");
+        }
         res.send(fileBuffer);
     } catch (er) {
         console.error("Error fetching file", er);

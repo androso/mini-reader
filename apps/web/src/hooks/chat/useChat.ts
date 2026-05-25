@@ -88,6 +88,27 @@ export const useChat = (bookId: string) => {
                             continue;
                         }
 
+                        if (jsonData.error !== undefined) {
+                            setChatState((prev) => {
+                                const messages = [...prev.messages];
+                                const lastMessage =
+                                    messages[messages.length - 1];
+
+                                if (lastMessage?.role === "assistant") {
+                                    messages[messages.length - 1] = {
+                                        ...lastMessage,
+                                        content: jsonData.error,
+                                    };
+                                }
+
+                                return {
+                                    ...prev,
+                                    messages,
+                                };
+                            });
+                            continue;
+                        }
+
                         if (jsonData.content !== undefined) {
                             setChatState((prev) => {
                                 const messages = [...prev.messages];
