@@ -1,12 +1,61 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db } from "../db";
-import { Conversations, Messages } from "../db/schema";
+import { Books, Conversations, Messages } from "../db/schema";
 import { authenticate } from "../middleware/auth";
 import { OpenAIService } from "../services/OpenAIServices";
 import { Router, Request } from "express";
+import { chromaService } from "../services/ChromaService";
 
 const router = Router();
 const oaiService = new OpenAIService();
+
+type ChatMessage = {
+    role: "user" | "assistant" | "system";
+    content: string;
+};
+
+const buildRagMessages = async (
+    resourceType: string,
+    resourceId: string,
+    userId: string,
+    messages: ChatMessage[],
+    query: string
+) => {
+    if (resourceType !== "book") return messages;
+
+    const [book] = await db
+        .select()
+        .from(Books)
+        .where(and(eq(Books.id, resourceId), eq(Books.userId, userId)));
+
+    if (!book?.collectionName) {
+        console.warn(`Book ${resourceId} has no Chroma collection yet`);
+        return messages;
+    }
+
+    try {
+        const results = await chromaService.queryCollection(
+            book.collectionName,
+            query,
+            5
+        );
+        const documents = results.documents?.[0]?.filter(Boolean) || [];
+
+        if (!documents.length) return messages;
+
+        const context = documents.join("\n\n---\n\n");
+        return [
+            {
+                role: "system" as const,
+                content: `Use the following retrieved book excerpts as the primary context for the user's question. If the excerpts do not contain the answer, say that the book context does not provide enough information.\n\nBook context:\n${context}`,
+            },
+            ...messages,
+        ];
+    } catch (error) {
+        console.error("Error retrieving book context from ChromaDB", error);
+        return messages;
+    }
+};
 
 router.post(
     "/:resourceType/:id/conversations",
@@ -24,6 +73,13 @@ router.post(
 
         try {
             const { message, messages } = req.body;
+            if (!message || !Array.isArray(messages)) {
+                res.status(400).send({
+                    error: "Message and messages array are required",
+                });
+                return;
+            }
+
             res.setHeader("Content-Type", "text/event-stream");
             res.setHeader("Cache-Control", "no-cache");
             res.setHeader("Connection", "keep-alive");
@@ -48,8 +104,15 @@ router.post(
                 content: message,
             });
 
+            const ragMessages = await buildRagMessages(
+                req.params.resourceType,
+                req.params.id,
+                req.user.id,
+                messages,
+                message
+            );
             const textStream =
-                await oaiService.generateStreamResponse(messages);
+                await oaiService.generateStreamResponse(ragMessages);
 
             let accumulatedResponse = "";
             for await (const chunk of textStream) {
@@ -148,8 +211,15 @@ router.post(
             });
             console.log("Last message inserted into database:", lastMessage);
 
+            const ragMessages = await buildRagMessages(
+                resourceType,
+                resourceId,
+                req.user.id,
+                messages,
+                lastMessage.content
+            );
             const textStream =
-                await oaiService.generateStreamResponse(messages);
+                await oaiService.generateStreamResponse(ragMessages);
             let accumulatedResponse = "";
             console.log("Stream response generation initiated.");
 

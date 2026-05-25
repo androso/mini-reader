@@ -12,14 +12,17 @@ export class OpenAIService {
         });
     }
 
-    async generateStreamResponse(userMessages: any): Promise<any> {
+    async generateStreamResponse(
+        userMessages: any,
+        systemPrompt = "You are a helpful assistant."
+    ): Promise<any> {
         console.log({ userMessages });
         const response = await this.client.chat.completions.create({
             model: "gpt-4o-mini",
             messages: [
                 {
                     role: "system",
-                    content: "You are a helpful assistant.",
+                    content: systemPrompt,
                     name: "system",
                 },
                 ...userMessages,
