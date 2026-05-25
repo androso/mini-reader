@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-    /* config options here */
+    transpilePackages: ["@reader/epub"],
 };
 
 export default nextConfig;

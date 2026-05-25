@@ -3,13 +3,16 @@
     "version": "0.1.0",
     "private": true,
     "scripts": {
+        "predev": "pnpm --filter @reader/epub build",
+        "prebuild": "pnpm --filter @reader/epub build",
         "dev": "next dev --turbopack -p 3001",
         "build": "next build",
         "start": "next start",
         "lint": "next lint",
-        "test:epub": "tsc -p tsconfig.epub-test.json && NODE_PATH=./node_modules node --test ../../.tmp/web-epub-tests/test/epub-fixtures.test.js"
+        "test:epub": "pnpm --filter @reader/epub test"
     },
     "dependencies": {
+        "@reader/epub": "workspace:*",
         "@ai-sdk/openai": "^1.0.11",
         "@aws-sdk/client-s3": "^3.715.0",
         "@fontsource/literata": "^5.1.0",

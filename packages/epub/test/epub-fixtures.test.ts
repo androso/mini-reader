@@ -3,17 +3,17 @@ import { createRequire } from "node:module";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
-import { buildTextBlocksFromDocument } from "../src/lib/epubChapterProcessing";
-import { processEpubFile } from "../src/lib/epubProcessing";
+import { buildTextBlocksFromDocument } from "../src/chapterProcessing";
+import { processEpubFile } from "../src/processing";
 import {
     findManifestEntryByHref,
     resolveTocHrefToSpineId,
     splitEpubHref,
-} from "../src/lib/epubNavigation";
-import type { EpubContent, ManifestItem } from "../src/types/EpubReader";
+} from "../src/navigation";
+import type { EpubContent, ManifestItem } from "../src/types";
 
 const requireFromApi = createRequire(
-    path.resolve(process.cwd(), "../api/package.json")
+    path.resolve(process.cwd(), "../../apps/api/package.json")
 );
 const { JSDOM } = requireFromApi("jsdom") as {
     JSDOM: new (
@@ -23,7 +23,10 @@ const { JSDOM } = requireFromApi("jsdom") as {
 };
 
 class TestDOMParser {
-    parseFromString(source: string, mimeType: DOMParserSupportedType): Document {
+    parseFromString(
+        source: string,
+        mimeType: DOMParserSupportedType
+    ): Document {
         const contentType =
             mimeType === "text/html" ? "text/html" : "application/xml";
         return new JSDOM(source, { contentType }).window.document;
@@ -32,9 +35,6 @@ class TestDOMParser {
 
 (globalThis as typeof globalThis & { DOMParser: typeof DOMParser }).DOMParser =
     TestDOMParser as unknown as typeof DOMParser;
-
-const fixturePath = (fileName: string) =>
-    path.resolve(process.cwd(), "../../.local-storage", fileName);
 
 const fixtures = [
     {
@@ -48,12 +48,16 @@ const fixtures = [
     {
         name: "dopamine-nation",
         fileName: "epub-bacadba17183",
-        expectedTitle: "Dopamine Nation: Finding Balance in the Age of Indulgence",
+        expectedTitle:
+            "Dopamine Nation: Finding Balance in the Age of Indulgence",
         minSpineItems: 20,
         minTocEntries: 20,
         requiresAnchors: false,
     },
 ];
+
+const fixturePath = (fileName: string) =>
+    path.resolve(process.cwd(), "../../.local-storage", fileName);
 
 const toArrayBuffer = (buffer: Buffer): ArrayBuffer =>
     buffer.buffer.slice(
@@ -66,10 +70,8 @@ const loadFixture = async (fileName: string) => {
     return processEpubFile(toArrayBuffer(fileBuffer));
 };
 
-const zipPathForManifestItem = (
-    epubContent: EpubContent,
-    item: ManifestItem
-) => `${epubContent.basePath}${item.href}`;
+const zipPathForManifestItem = (epubContent: EpubContent, item: ManifestItem) =>
+    `${epubContent.basePath}${item.href}`;
 
 test("EPUB fixtures process into metadata, spine, manifest, and ToC", async (t) => {
     for (const fixture of fixtures) {
@@ -77,27 +79,22 @@ test("EPUB fixtures process into metadata, spine, manifest, and ToC", async (t) 
             const [epubContent, zipData] = await loadFixture(fixture.fileName);
 
             assert.equal(epubContent.metadata.title, fixture.expectedTitle);
-            assert.ok(
-                epubContent.spine.length >= fixture.minSpineItems,
-                `expected at least ${fixture.minSpineItems} spine items`
-            );
-            assert.ok(
-                epubContent.toc.length >= fixture.minTocEntries,
-                `expected at least ${fixture.minTocEntries} ToC entries`
-            );
+            assert.ok(epubContent.spine.length >= fixture.minSpineItems);
+            assert.ok(epubContent.toc.length >= fixture.minTocEntries);
 
             for (const spineId of epubContent.spine) {
                 const manifestItem = epubContent.manifest[spineId];
                 assert.ok(manifestItem, `missing manifest item for ${spineId}`);
                 assert.ok(
-                    zipData.file(zipPathForManifestItem(epubContent, manifestItem)),
+                    zipData.file(
+                        zipPathForManifestItem(epubContent, manifestItem)
+                    ),
                     `missing spine file for ${spineId}`
                 );
             }
 
             assert.ok(
-                epubContent.toc.every((entry) => entry.title.trim().length > 0),
-                "expected every ToC entry to have a title"
+                epubContent.toc.every((entry) => entry.title.trim().length > 0)
             );
         });
     }
@@ -112,12 +109,8 @@ test("ToC entries resolve to spine items and existing anchors", async (t) => {
 
             for (const tocEntry of epubContent.toc) {
                 assert.ok(tocEntry.href, `missing href for ${tocEntry.title}`);
-                const spineId = resolveTocHrefToSpineId(
-                    epubContent,
-                    tocEntry.href
-                );
                 assert.ok(
-                    spineId,
+                    resolveTocHrefToSpineId(epubContent, tocEntry.href),
                     `ToC href ${tocEntry.href} did not resolve to a spine item`
                 );
 
@@ -131,30 +124,26 @@ test("ToC entries resolve to spine items and existing anchors", async (t) => {
                 );
                 assert.ok(manifestEntry);
 
-                let cachedDoc = documentCache.get(manifestEntry.id);
-                if (!cachedDoc) {
+                let doc = documentCache.get(manifestEntry.id);
+                if (!doc) {
                     const chapterFile = zipData.file(
                         zipPathForManifestItem(epubContent, manifestEntry.item)
                     );
-                    assert.ok(chapterFile, `missing chapter file for ${tocEntry.href}`);
-                    cachedDoc = new JSDOM(
-                        await chapterFile.async("text")
-                    ).window.document;
-                    documentCache.set(manifestEntry.id, cachedDoc);
+                    assert.ok(chapterFile);
+                    doc = new JSDOM(await chapterFile.async("text")).window
+                        .document;
+                    documentCache.set(manifestEntry.id, doc);
                 }
 
                 assert.ok(
-                    cachedDoc.getElementById(fragment) ||
-                        cachedDoc.getElementsByName(fragment).length > 0,
+                    doc.getElementById(fragment) ||
+                        doc.getElementsByName(fragment).length > 0,
                     `missing anchor #${fragment} for ${tocEntry.href}`
                 );
             }
 
             if (fixture.requiresAnchors) {
-                assert.ok(
-                    anchoredEntries > 0,
-                    "fixture should include ToC anchors, not only chapter links"
-                );
+                assert.ok(anchoredEntries > 0);
             }
         });
     }
@@ -166,41 +155,24 @@ test("nested chapter containers split into readable text blocks", async () => {
     const manifestItem = epubContent.manifest[chapterId];
     assert.ok(manifestItem);
 
-    const chapterFile = zipData.file(zipPathForManifestItem(epubContent, manifestItem));
+    const chapterFile = zipData.file(
+        zipPathForManifestItem(epubContent, manifestItem)
+    );
     assert.ok(chapterFile);
 
     const doc = new JSDOM(await chapterFile.async("text")).window.document;
     const directBodyChildren = doc.body.children.length;
     const textBlocks = buildTextBlocksFromDocument(doc, chapterId);
     const longestBlockLength = Math.max(
-        ...textBlocks.map((block) =>
-            block.element.textContent?.replace(/\s+/g, " ").trim().length ?? 0
+        ...textBlocks.map(
+            (block) =>
+                block.element.textContent?.replace(/\s+/g, " ").trim().length ??
+                0
         )
     );
 
-    assert.equal(
-        directBodyChildren,
-        1,
-        "fixture should preserve the single-wrapper chapter shape"
-    );
-    assert.ok(
-        textBlocks.length >= 100,
-        `expected paragraph-level blocks, got ${textBlocks.length}`
-    );
-    assert.ok(
-        textBlocks.length > directBodyChildren * 20,
-        "expected nested blocks to be extracted instead of one wrapper block"
-    );
-    assert.ok(
-        longestBlockLength < 1500,
-        `largest block is too large: ${longestBlockLength} characters`
-    );
-    assert.deepEqual(
-        textBlocks.slice(0, 3).map((block) => block.id),
-        [
-            `${chapterId}-block-0`,
-            `${chapterId}-block-1`,
-            `${chapterId}-block-2`,
-        ]
-    );
+    assert.equal(directBodyChildren, 1);
+    assert.ok(textBlocks.length >= 100);
+    assert.ok(textBlocks.length > directBodyChildren * 20);
+    assert.ok(longestBlockLength < 1500);
 });

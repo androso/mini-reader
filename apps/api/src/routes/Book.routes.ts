@@ -1,15 +1,15 @@
 import { Router } from "express";
 const router = Router();
 import multer from "multer";
-import { deleteFile, getFile, uploadFile } from "../utils/storage";
+import { deleteFile, getFile, uploadFile } from "@reader/providers";
 import { authenticate } from "../middleware/auth";
 import { db } from "../db";
 import { Books } from "../db/schema";
 import { eq, sql } from "drizzle-orm";
 import { queryController } from "../controllers/QueryControllers";
-import { processEpub, processPDF } from "../utils/collectionUtils";
 import { createHash, extractMetadata } from "../utils/bookUtils";
 import { PDFUtils } from "../utils/pdfUtils";
+import { enqueueBookProcessing } from "../services/BookProcessingQueue";
 
 const upload = multer({
     storage: multer.memoryStorage(),
@@ -177,15 +177,25 @@ router.post("/", authenticate, upload.single("file"), async (req, res) => {
             })
             .returning();
 
-        // Process based on file type
-        if (mimeType === "application/pdf") {
-            processPDF(fileBuffer, book.id).catch((error) =>
-                console.error("Error processing PDF in background", error)
-            );
-        } else if (mimeType === "application/epub+zip") {
-            processEpub(fileBuffer, book.id).catch((error) =>
-                console.error("Error processing EPUB in background", error)
-            );
+        try {
+            await enqueueBookProcessing({
+                bookId: book.id,
+                userId: book.userId,
+                fileKey: book.fileKey,
+                fileType,
+            });
+        } catch (error) {
+            await db
+                .update(Books)
+                .set({
+                    processingStatus: "failed",
+                    processingError:
+                        error instanceof Error
+                            ? error.message
+                            : "Failed to enqueue book processing",
+                })
+                .where(eq(Books.id, book.id));
+            throw error;
         }
         console.log("filename:", fileName);
         res.json({

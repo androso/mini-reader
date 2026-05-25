@@ -1,0 +1,11 @@
+{
+    "extends": "../../tsconfig.base.json",
+    "compilerOptions": {
+        "target": "es2019",
+        "lib": ["es2020", "dom", "dom.iterable"],
+        "rootDir": "src",
+        "outDir": "dist",
+        "declaration": true
+    },
+    "include": ["src/**/*"]
+}

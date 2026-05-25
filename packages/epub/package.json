@@ -1,0 +1,20 @@
+{
+    "name": "@reader/epub",
+    "version": "0.1.0",
+    "private": true,
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "scripts": {
+        "build": "tsc -p tsconfig.json",
+        "test": "tsc -p tsconfig.test.json && NODE_PATH=../../apps/api/node_modules:./node_modules node --test ../../.tmp/packages-epub-test/test/epub-fixtures.test.js"
+    },
+    "dependencies": {
+        "jsdom": "^25.0.1",
+        "jszip": "^3.10.1"
+    },
+    "devDependencies": {
+        "@types/jsdom": "^21.1.7",
+        "@types/node": "^22.10.2",
+        "typescript": "^5.7.2"
+    }
+}

@@ -4,12 +4,16 @@
     "private": true,
     "main": "build/index.js",
     "scripts": {
+        "predev": "pnpm --filter @reader/jobs --filter @reader/providers build",
+        "prebuild": "pnpm --filter @reader/jobs --filter @reader/providers build",
         "dev": "DOTENV_CONFIG_PATH=../../.env ts-node-dev -r dotenv/config --respawn --transpile-only src/index.ts",
         "build": "tsc -p tsconfig.json",
         "start": "DOTENV_CONFIG_PATH=../../.env node -r dotenv/config build/index.js",
         "test": "echo \"Error: no test specified\" && exit 1"
     },
     "dependencies": {
+        "@reader/jobs": "workspace:*",
+        "@reader/providers": "workspace:*",
         "@aws-sdk/client-s3": "^3.723.0",
         "@neondatabase/serverless": "^0.10.4",
         "@types/cors": "^2.8.17",
