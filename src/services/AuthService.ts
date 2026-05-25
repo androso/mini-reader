@@ -1,66 +1,99 @@
 import { OAuth2Client } from "google-auth-library";
-import jwt, { TokenExpiredError } from "jsonwebtoken";
+import jwt from "jsonwebtoken";
 import { db } from "../db";
 import { Users } from "../db/schema";
 import { eq } from "drizzle-orm";
 
+if (!process.env.JWT_SECRET) {
+    throw new Error("Missing required JWT_SECRET environment variable");
+}
+
 if (
-	!process.env.JWT_SECRET ||
-	!process.env.GOOGLE_CLIENT_ID ||
-	!process.env.GOOGLE_CLIENT_SECRET
+    process.env.NODE_ENV === "production" &&
+    (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET)
 ) {
-	throw new Error("Missing required environment variables for auth");
+    throw new Error("Missing required Google auth environment variables");
 }
 
 const client = new OAuth2Client({
-	clientId: process.env.GOOGLE_CLIENT_ID,
-	clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    clientId: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
 });
 
 export const verifyGoogleToken = async (token: string) => {
-	try {
-		const response = await fetch(
-			"https://www.googleapis.com/oauth2/v3/userinfo",
-			{
-				headers: { Authorization: `Bearer ${token}` },
-			}
-		);
+    try {
+        const response = await fetch(
+            "https://www.googleapis.com/oauth2/v3/userinfo",
+            {
+                headers: { Authorization: `Bearer ${token}` },
+            }
+        );
 
-		if (!response.ok) {
-			throw new Error("Failed to verify token");
-		}
+        if (!response.ok) {
+            throw new Error("Failed to verify token");
+        }
 
-		const data = await response.json();
+        const data = await response.json();
 
-		return {
-			sub: data.sub,
-			email: data.email,
-			name: data.name,
-			picture: data.picture,
-		};
-	} catch (e) {
-		console.error(e);
-		throw new Error("Failed to verify token");
-	}
+        return {
+            sub: data.sub,
+            email: data.email,
+            name: data.name,
+            picture: data.picture,
+        };
+    } catch (e) {
+        console.error(e);
+        throw new Error("Failed to verify token");
+    }
 };
 
 export const generateToken = (user: any) => {
-	const tk =  jwt.sign({ userId: user.id }, process.env.JWT_SECRET!, {
-		expiresIn: "7d",
-	});
-	return tk
+    const tk = jwt.sign({ userId: user.id }, process.env.JWT_SECRET!, {
+        expiresIn: "7d",
+    });
+    return tk;
+};
+
+export const getOrCreateDevUser = async () => {
+    if (process.env.NODE_ENV === "production") {
+        throw new Error("Dev auth is not available in production");
+    }
+
+    const email = process.env.DEV_USER_EMAIL || "dev@example.com";
+    const name = process.env.DEV_USER_NAME || "Dev User";
+
+    const [existingUser] = await db
+        .select()
+        .from(Users)
+        .where(eq(Users.email, email));
+
+    if (existingUser) return existingUser;
+
+    const [user] = await db
+        .insert(Users)
+        .values({
+            email,
+            name,
+            username: "dev",
+        })
+        .returning();
+
+    return user;
 };
 
 export const verifyToken = async (token: any) => {
-	try {
-		const decoded = jwt.verify(token, process.env.JWT_SECRET!) as {
-			userId: string;
-		};
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET!) as {
+            userId: string;
+        };
 
-        const [user] = await db.select().from(Users).where(eq(Users.id, decoded.userId));
+        const [user] = await db
+            .select()
+            .from(Users)
+            .where(eq(Users.id, decoded.userId));
         return user;
-	} catch (e) {
-		console.error(e);
-		return null;
-	}
+    } catch (e) {
+        console.error(e);
+        return null;
+    }
 };

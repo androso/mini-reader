@@ -11,13 +11,32 @@ import { queryController } from "./controllers/QueryControllers";
 dotenv.config();
 
 const app = express();
-if (!process.env.FRONTEND_URL) {
-    console.warn("FRONTEND_URL not set, CORS is not enabled");
+const allowedOrigins = [
+    process.env.FRONTEND_URL,
+    ...(process.env.NODE_ENV === "production"
+        ? []
+        : [
+              "http://localhost:5173",
+              "http://127.0.0.1:5173",
+              "http://localhost:3001",
+              "http://127.0.0.1:3001",
+          ]),
+].filter(Boolean);
+
+if (allowedOrigins.length === 0) {
+    console.warn("No CORS origins configured");
 }
 
 app.use(
     cors({
-        origin: process.env.FRONTEND_URL || false,
+        origin: (origin, callback) => {
+            if (!origin || allowedOrigins.includes(origin)) {
+                callback(null, true);
+                return;
+            }
+
+            callback(new Error(`CORS origin not allowed: ${origin}`));
+        },
         methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
         allowedHeaders: ["Content-Type", "Authorization"],
         credentials: true,

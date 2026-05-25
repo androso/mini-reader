@@ -1,3 +1,5 @@
+CREATE TYPE "public"."message_role" AS ENUM('user', 'assistant');--> statement-breakpoint
+CREATE TYPE "public"."resource_type" AS ENUM('book', 'article');--> statement-breakpoint
 CREATE TABLE "conversations" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"user_id" uuid NOT NULL,
