@@ -4,7 +4,19 @@ import {
     type ProcessBookJobPayload,
 } from "@reader/jobs";
 
-const bookProcessingQueue = createBookProcessingQueue();
+let bookProcessingQueue: ReturnType<typeof createBookProcessingQueue> | null =
+    null;
+
+const getBookProcessingQueue = () => {
+    if (!bookProcessingQueue) {
+        bookProcessingQueue = createBookProcessingQueue();
+        bookProcessingQueue.on("error", (error) => {
+            console.error("[BookProcessingQueue] Redis/queue error:", error);
+        });
+    }
+
+    return bookProcessingQueue;
+};
 
 export const enqueueBookProcessing = async (payload: ProcessBookJobPayload) =>
-    enqueueProcessBookJob(bookProcessingQueue, payload);
+    enqueueProcessBookJob(getBookProcessingQueue(), payload);
