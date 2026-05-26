@@ -5,8 +5,7 @@ This directory is reserved for shared monorepo packages.
 Current packages:
 
 - `epub`: shared EPUB metadata, spine, ToC, href, and text-block processing.
-- `jobs`: BullMQ queue names, job payloads, Redis connection, and enqueue helpers.
-- `providers`: storage and vector search adapters shared by API and worker.
+- `providers`: storage and vector search adapters shared by backend packages.
 - `processing`: PDF/EPUB ingestion orchestration for search indexing.
 
 Deferred packages:
