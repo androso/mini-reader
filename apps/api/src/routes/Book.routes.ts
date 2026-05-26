@@ -9,7 +9,7 @@ import { eq, sql } from "drizzle-orm";
 import { queryController } from "../controllers/QueryControllers";
 import { createHash, extractMetadata } from "../utils/bookUtils";
 import { PDFUtils } from "../utils/pdfUtils";
-import { enqueueBookProcessing } from "../services/BookProcessingQueue";
+import { processUploadedBook } from "../services/BookProcessingService";
 
 const upload = multer({
     storage: multer.memoryStorage(),
@@ -177,31 +177,23 @@ router.post("/", authenticate, upload.single("file"), async (req, res) => {
             })
             .returning();
 
-        try {
-            await enqueueBookProcessing({
-                bookId: book.id,
-                userId: book.userId,
-                fileKey: book.fileKey,
-                fileType,
-            });
-        } catch (error) {
-            await db
-                .update(Books)
-                .set({
-                    processingStatus: "failed",
-                    processingError:
-                        error instanceof Error
-                            ? error.message
-                            : "Failed to enqueue book processing",
-                })
-                .where(eq(Books.id, book.id));
-            throw error;
-        }
+        const result = await processUploadedBook({
+            bookId: book.id,
+            userId: book.userId,
+            fileKey: book.fileKey,
+            fileType,
+        });
+        const [processedBook] = await db
+            .select()
+            .from(Books)
+            .where(eq(Books.id, book.id));
+
         console.log("filename:", fileName);
         res.json({
             message: "File upload successful",
-            book,
-            processStatus: "started",
+            book: processedBook ?? book,
+            collection: result.collectionName,
+            processStatus: "ready",
             fileType: mimeType,
         });
     } catch (e) {

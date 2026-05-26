@@ -2,8 +2,8 @@
     "extends": "./tsconfig.json",
     "compilerOptions": {
         "rootDir": ".",
-        "outDir": "../../.tmp/packages-jobs-test",
-        "types": ["node"]
+        "outDir": "../../.tmp/apps-api-test",
+        "noEmit": false
     },
     "include": ["src/**/*", "test/**/*"]
 }

@@ -1,16 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { ProcessBookJobPayload } from "@reader/jobs";
-import {
-    type BookProcessingRepository,
-    handleProcessBookJob,
-} from "../src/jobHandler";
+import type { BookProcessingRepository } from "../src/services/BookProcessingService";
+import { handleProcessUploadedBook } from "../src/services/BookProcessingService";
+import type { BookFileType } from "@reader/processing";
 
-const payload: ProcessBookJobPayload = {
+const payload = {
     bookId: "book-1",
     userId: "user-1",
     fileKey: "epub-key",
-    fileType: "epub",
+    fileType: "epub" as BookFileType,
 };
 
 const createRepository = (
@@ -43,10 +41,10 @@ const createRepository = (
     return { repository, calls };
 };
 
-test("successful job marks book ready", async () => {
+test("successful synchronous processing marks book ready", async () => {
     const { repository, calls } = createRepository();
 
-    const result = await handleProcessBookJob(
+    const result = await handleProcessUploadedBook(
         payload,
         repository,
         async () => ({
@@ -61,11 +59,11 @@ test("successful job marks book ready", async () => {
     assert.deepEqual(calls.failed, []);
 });
 
-test("failed job marks book failed", async () => {
+test("failed synchronous processing marks book failed", async () => {
     const { repository, calls } = createRepository();
 
     await assert.rejects(
-        handleProcessBookJob(payload, repository, async () => {
+        handleProcessUploadedBook(payload, repository, async () => {
             throw new Error("extract failed");
         }),
         /extract failed/
@@ -81,7 +79,7 @@ test("duplicate upload reuses ready collection", async () => {
     });
     let seenExistingCollection: string | null | undefined;
 
-    const result = await handleProcessBookJob(
+    const result = await handleProcessUploadedBook(
         payload,
         repository,
         async (input) => {
@@ -100,20 +98,28 @@ test("duplicate upload reuses ready collection", async () => {
     assert.deepEqual(calls.ready, ["book_existing"]);
 });
 
-test("retry path delegates non-duplicate processing to deterministic processor", async () => {
-    const { repository } = createRepository();
-    let processorCalls = 0;
-
-    await handleProcessBookJob(payload, repository, async (input) => {
-        processorCalls += 1;
-        assert.equal(input.existingReadyCollectionName, null);
-        assert.equal(input.hasReadyBookForCollection, false);
-        return {
-            collectionName: "book_retry",
-            chunks: 1,
-            reusedCollection: false,
-        };
+test("file type mismatch fails safely", async () => {
+    const { repository, calls } = createRepository({
+        findBookForProcessing: async () => ({
+            id: "book-1",
+            userId: "user-1",
+            fileKey: "epub-key",
+            fileType: "pdf",
+            collectionName: null,
+            processingStatus: "processing",
+            processingError: null,
+        }),
     });
 
-    assert.equal(processorCalls, 1);
+    await assert.rejects(
+        handleProcessUploadedBook(payload, repository, async () => ({
+            collectionName: "unexpected",
+            chunks: 1,
+            reusedCollection: false,
+        })),
+        /file type changed/
+    );
+
+    assert.deepEqual(calls.ready, []);
+    assert.equal(calls.failed.length, 1);
 });

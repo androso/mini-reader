@@ -1,8 +1,9 @@
 import type { StorageProvider, VectorStoreProvider } from "@reader/providers";
 import { storageProvider, vectorStore } from "@reader/providers";
-import type { BookFileType } from "@reader/jobs";
 import { createEpubCollectionName, extractEpubChunks } from "./epubIngestion";
 import { createPdfCollectionName, extractPdfChunks } from "./pdfIngestion";
+
+export type BookFileType = "epub" | "pdf";
 
 export interface ProcessBookInput {
     fileKey: string;

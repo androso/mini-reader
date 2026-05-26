@@ -4,15 +4,15 @@
     "private": true,
     "main": "build/index.js",
     "scripts": {
-        "predev": "pnpm --filter @reader/jobs --filter @reader/providers build",
-        "prebuild": "pnpm --filter @reader/jobs --filter @reader/providers build",
+        "predev": "pnpm --filter @reader/processing --filter @reader/providers build",
+        "prebuild": "pnpm --filter @reader/processing --filter @reader/providers build",
         "dev": "DOTENV_CONFIG_PATH=../../.env ts-node-dev -r dotenv/config --respawn --transpile-only --ignore-watch ../../packages src/index.ts",
         "build": "tsc -p tsconfig.json",
         "start": "DOTENV_CONFIG_PATH=../../.env node -r dotenv/config build/index.js",
-        "test": "echo \"Error: no test specified\" && exit 1"
+        "test": "tsc -p tsconfig.test.json && NODE_PATH=./node_modules:../../packages/processing/node_modules node --test ../../.tmp/apps-api-test/test/bookProcessingService.test.js"
     },
     "dependencies": {
-        "@reader/jobs": "workspace:*",
+        "@reader/processing": "workspace:*",
         "@reader/providers": "workspace:*",
         "@aws-sdk/client-s3": "^3.723.0",
         "@neondatabase/serverless": "^0.10.4",

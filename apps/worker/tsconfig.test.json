@@ -1,9 +1,0 @@
-{
-    "extends": "./tsconfig.json",
-    "include": ["src/jobHandler.ts", "test/**/*"],
-    "compilerOptions": {
-        "rootDir": ".",
-        "outDir": "../../.tmp/apps-worker-test",
-        "types": ["node"]
-    }
-}
