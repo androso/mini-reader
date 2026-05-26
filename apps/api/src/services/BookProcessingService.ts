@@ -4,8 +4,11 @@ import {
     type BookFileType,
     type ProcessBookResult,
 } from "@reader/processing";
+import { storageProvider, vectorStore } from "@reader/providers";
 import { db } from "../db";
 import { Books } from "../db/schema";
+import { bookSearchChunkStore } from "./BookSearchChunkStore";
+import { hybridBookSearchService } from "./HybridBookSearchService";
 
 export interface ProcessUploadedBookPayload {
     bookId: string;
@@ -128,9 +131,17 @@ export const handleProcessUploadedBook = async (
 
 export const processUploadedBook = async (
     payload: ProcessUploadedBookPayload
-): Promise<ProcessBookResult> =>
-    handleProcessUploadedBook(
+): Promise<ProcessBookResult> => {
+    const result = await handleProcessUploadedBook(
         payload,
         bookProcessingRepository,
-        processBookForSearch
+        (input) =>
+            processBookForSearch(input, {
+                storage: storageProvider,
+                vectorStore,
+                searchIndexStore: bookSearchChunkStore,
+            })
     );
+    hybridBookSearchService.clearCollectionCache(result.collectionName);
+    return result;
+};

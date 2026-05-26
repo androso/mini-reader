@@ -4,7 +4,7 @@ import { Books, Conversations, Messages } from "../db/schema";
 import { authenticate } from "../middleware/auth";
 import { OpenAIService } from "../services/OpenAIServices";
 import { Router, Request } from "express";
-import { chromaService } from "../services/ChromaService";
+import { hybridBookSearchService } from "../services/HybridBookSearchService";
 
 const router = Router();
 const oaiService = new OpenAIService();
@@ -46,12 +46,9 @@ const buildRagMessages = async (
     }
 
     try {
-        const results = await chromaService.queryCollection(
-            book.collectionName,
-            query,
-            5
-        );
-        const documents = results.documents?.[0]?.filter(Boolean) || [];
+        const documents = (
+            await hybridBookSearchService.search(book.collectionName, query)
+        ).map((result) => result.content);
 
         if (!documents.length) return { messages, status: "ready" };
 

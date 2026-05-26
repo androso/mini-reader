@@ -9,9 +9,21 @@ export interface VectorStoreProvider {
         query: string,
         nResults?: number
     ): Promise<any>;
+    searchDocuments(
+        collectionName: string,
+        query: string,
+        nResults?: number
+    ): Promise<VectorSearchResult[]>;
     deleteCollection(name: string): Promise<boolean>;
     resetCollection(name: string): Promise<void>;
     getCollection(name: string): Promise<any | null>;
+}
+
+export interface VectorSearchResult {
+    id: string;
+    content: string;
+    rank: number;
+    distance?: number;
 }
 
 export class ChromaVectorStore implements VectorStoreProvider {
@@ -140,6 +152,33 @@ export class ChromaVectorStore implements VectorStoreProvider {
             queryTexts: [query],
             nResults,
         });
+    }
+
+    async searchDocuments(
+        collectionName: string,
+        query: string,
+        nResults = 20
+    ): Promise<VectorSearchResult[]> {
+        const results = await this.queryCollection(
+            collectionName,
+            query,
+            nResults
+        );
+        const ids = results.ids?.[0] || [];
+        const documents = results.documents?.[0] || [];
+        const distances = results.distances?.[0] || [];
+
+        return documents
+            .map((content: string | null, index: number) => {
+                if (!content) return null;
+                return {
+                    id: ids[index] || `${collectionName}_${index}`,
+                    content,
+                    rank: index + 1,
+                    distance: distances[index],
+                };
+            })
+            .filter(Boolean) as VectorSearchResult[];
     }
 
     async deleteCollection(name: string): Promise<boolean> {

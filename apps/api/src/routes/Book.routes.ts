@@ -10,6 +10,8 @@ import { queryController } from "../controllers/QueryControllers";
 import { createHash, extractMetadata } from "../utils/bookUtils";
 import { PDFUtils } from "../utils/pdfUtils";
 import { processUploadedBook } from "../services/BookProcessingService";
+import { bookSearchChunkStore } from "../services/BookSearchChunkStore";
+import { hybridBookSearchService } from "../services/HybridBookSearchService";
 
 const upload = multer({
     storage: multer.memoryStorage(),
@@ -396,6 +398,10 @@ router.delete("/:id", authenticate, async (req, res) => {
             const deleted = await queryController.deleteCollection(
                 book.collectionName!
             );
+            await bookSearchChunkStore.deleteCollectionChunks(
+                book.collectionName!
+            );
+            hybridBookSearchService.clearCollectionCache(book.collectionName!);
             if (deleted) {
                 res.status(204).json({
                     message: "Collection deleted successfully",

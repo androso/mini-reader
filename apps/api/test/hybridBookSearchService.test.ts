@@ -1,0 +1,108 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { HybridBookSearchService } from "../src/services/HybridBookSearchService";
+import type { BookSearchChunk } from "../src/services/BookSearchChunkStore";
+import type { VectorSearchResult } from "@reader/providers";
+
+const chunks: BookSearchChunk[] = [
+    {
+        id: "book_test_0",
+        collectionName: "book_test",
+        chunkIndex: 0,
+        content: "Dragons guard the old mountain gate.",
+    },
+    {
+        id: "book_test_1",
+        collectionName: "book_test",
+        chunkIndex: 1,
+        content: "The ship crossed the western sea at dawn.",
+    },
+    {
+        id: "book_test_2",
+        collectionName: "book_test",
+        chunkIndex: 2,
+        content: "A quiet library held maps of every kingdom.",
+    },
+];
+
+const createService = (
+    semanticResults: VectorSearchResult[] = [],
+    indexedChunks = chunks
+) => {
+    let loadCount = 0;
+    const service = new HybridBookSearchService(
+        {
+            getCollectionChunks: async () => {
+                loadCount += 1;
+                return indexedChunks;
+            },
+        },
+        {
+            searchDocuments: async () => semanticResults,
+        }
+    );
+
+    return { service, getLoadCount: () => loadCount };
+};
+
+test("MiniSearch lexical match contributes to hybrid results", async () => {
+    const { service } = createService();
+
+    const results = await service.search("book_test", "dragons", {
+        vectorLimit: 0,
+        finalLimit: 2,
+    });
+
+    assert.equal(results[0].id, "book_test_0");
+    assert.match(results[0].content, /Dragons/);
+});
+
+test("RRF fuses semantic and lexical rankings by chunk id", async () => {
+    const { service } = createService([
+        {
+            id: "book_test_2",
+            content: chunks[2].content,
+            rank: 1,
+        },
+        {
+            id: "book_test_0",
+            content: chunks[0].content,
+            rank: 2,
+        },
+    ]);
+
+    const results = await service.search("book_test", "dragons", {
+        finalLimit: 3,
+    });
+
+    assert.equal(results[0].id, "book_test_0");
+    assert.ok(results.some((result) => result.id === "book_test_2"));
+});
+
+test("falls back to semantic results when MiniSearch chunks are missing", async () => {
+    const { service } = createService(
+        [
+            {
+                id: "book_test_1",
+                content: chunks[1].content,
+                rank: 1,
+            },
+        ],
+        []
+    );
+
+    const results = await service.search("book_test", "sea", {
+        finalLimit: 1,
+    });
+
+    assert.deepEqual(results.map((result) => result.id), ["book_test_1"]);
+});
+
+test("reuses the cached MiniSearch index for the same collection", async () => {
+    const { service, getLoadCount } = createService();
+
+    await service.search("book_test", "dragons", { vectorLimit: 0 });
+    await service.search("book_test", "library", { vectorLimit: 0 });
+
+    assert.equal(getLoadCount(), 1);
+});

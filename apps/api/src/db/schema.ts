@@ -8,6 +8,7 @@ import {
     primaryKey,
     foreignKey,
     ForeignKey,
+    uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 export const messageRoleEnum = pgEnum("message_role", ["user", "assistant"]);
@@ -40,6 +41,23 @@ export const Books = pgTable("books", {
     processingError: text("processing_error"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+export const BookSearchChunks = pgTable(
+    "book_search_chunks",
+    {
+        id: text("id").primaryKey(),
+        collectionName: text("collection_name").notNull(),
+        chunkIndex: integer("chunk_index").notNull(),
+        content: text("content").notNull(),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+    },
+    (table) => [
+        uniqueIndex("book_search_chunks_collection_chunk_idx").on(
+            table.collectionName,
+            table.chunkIndex
+        ),
+    ]
+);
 
 export const Conversations = pgTable("conversations", {
     id: uuid("id").defaultRandom().primaryKey(),

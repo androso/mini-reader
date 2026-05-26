@@ -15,10 +15,18 @@ export interface ProcessBookInput {
 export interface ProcessBookDependencies {
     storage: StorageProvider;
     vectorStore: VectorStoreProvider;
+    searchIndexStore?: SearchIndexStore;
     createEpubCollectionName?: (fileBuffer: Buffer) => Promise<string>;
     extractEpubChunks?: (fileBuffer: Buffer) => Promise<string[]>;
     createPdfCollectionName?: (fileBuffer: Buffer) => Promise<string>;
     extractPdfChunks?: (fileBuffer: Buffer) => Promise<string[]>;
+}
+
+export interface SearchIndexStore {
+    replaceCollectionChunks(
+        collectionName: string,
+        chunks: string[]
+    ): Promise<void>;
 }
 
 export interface ProcessBookResult {
@@ -57,6 +65,10 @@ export const processBookForSearch = async (
 
     if (!input.hasReadyBookForCollection) {
         await dependencies.vectorStore.resetCollection(collectionName);
+        await dependencies.searchIndexStore?.replaceCollectionChunks(
+            collectionName,
+            []
+        );
     }
 
     const chunks =
@@ -68,6 +80,10 @@ export const processBookForSearch = async (
         throw new Error("No valid text chunks extracted");
     }
 
+    await dependencies.searchIndexStore?.replaceCollectionChunks(
+        collectionName,
+        chunks
+    );
     await dependencies.vectorStore.addDocuments(collectionName, chunks);
 
     return {

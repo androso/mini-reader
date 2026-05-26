@@ -22,6 +22,7 @@ const createMockVectorStore = () => {
         getOrCreateCollection: async () => ({}),
         getCollection: async () => null,
         queryCollection: async () => ({}),
+        searchDocuments: async () => [],
         deleteCollection: async () => true,
         resetCollection: async (name) => {
             calls.resetCollection.push(name);
@@ -34,8 +35,33 @@ const createMockVectorStore = () => {
     return { provider, calls };
 };
 
+const createMockSearchIndexStore = () => {
+    const calls = {
+        replaceCollectionChunks: [] as Array<{
+            collectionName: string;
+            chunks: string[];
+        }>,
+    };
+
+    return {
+        provider: {
+            replaceCollectionChunks: async (
+                collectionName: string,
+                chunks: string[]
+            ) => {
+                calls.replaceCollectionChunks.push({
+                    collectionName,
+                    chunks,
+                });
+            },
+        },
+        calls,
+    };
+};
+
 test("processes EPUB with mocked storage and vector store", async () => {
     const vector = createMockVectorStore();
+    const searchIndex = createMockSearchIndexStore();
 
     const result = await processBookForSearch(
         {
@@ -46,6 +72,7 @@ test("processes EPUB with mocked storage and vector store", async () => {
         {
             storage: createMockStorage(),
             vectorStore: vector.provider,
+            searchIndexStore: searchIndex.provider,
             createEpubCollectionName: async () => "book_test",
             extractEpubChunks: async () => ["one", "two"],
         }
@@ -59,6 +86,10 @@ test("processes EPUB with mocked storage and vector store", async () => {
     assert.deepEqual(vector.calls.resetCollection, ["book_test"]);
     assert.deepEqual(vector.calls.addDocuments, [
         { collectionName: "book_test", documents: ["one", "two"] },
+    ]);
+    assert.deepEqual(searchIndex.calls.replaceCollectionChunks, [
+        { collectionName: "book_test", chunks: [] },
+        { collectionName: "book_test", chunks: ["one", "two"] },
     ]);
 });
 
@@ -87,6 +118,7 @@ test("processes PDF with mocked storage and vector store", async () => {
 test("reuses an existing ready collection without reading storage", async () => {
     let readCount = 0;
     const vector = createMockVectorStore();
+    const searchIndex = createMockSearchIndexStore();
 
     const result = await processBookForSearch(
         {
@@ -103,6 +135,7 @@ test("reuses an existing ready collection without reading storage", async () => 
                 },
             },
             vectorStore: vector.provider,
+            searchIndexStore: searchIndex.provider,
         }
     );
 
@@ -112,6 +145,7 @@ test("reuses an existing ready collection without reading storage", async () => 
         chunks: 0,
         reusedCollection: true,
     });
+    assert.deepEqual(searchIndex.calls.replaceCollectionChunks, []);
 });
 
 test("fails when processing extracts no chunks", async () => {
