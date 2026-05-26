@@ -1,12 +1,11 @@
 import { Router } from "express";
 const router = Router();
 import multer from "multer";
-import { deleteFile, getFile, uploadFile } from "@reader/providers";
+import { deleteFile, getFile, uploadFile, vectorStore } from "@reader/providers";
 import { authenticate } from "../middleware/auth";
 import { db } from "../db";
 import { Books } from "../db/schema";
 import { eq, sql } from "drizzle-orm";
-import { queryController } from "../controllers/QueryControllers";
 import { createHash, extractMetadata } from "../utils/bookUtils";
 import { PDFUtils } from "../utils/pdfUtils";
 import { processUploadedBook } from "../services/BookProcessingService";
@@ -395,7 +394,7 @@ router.delete("/:id", authenticate, async (req, res) => {
             // delete file
             await deleteFile(book.fileKey);
 
-            const deleted = await queryController.deleteCollection(
+            const deleted = await vectorStore.deleteCollection(
                 book.collectionName!
             );
             await bookSearchChunkStore.deleteCollectionChunks(

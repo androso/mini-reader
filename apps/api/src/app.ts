@@ -7,7 +7,6 @@ import chatRoutes from "./routes/Chat.routes";
 import tracker from "./routes/Tracker.routes";
 import cors from "cors";
 import { logger } from "./middleware/logger";
-import { queryController } from "./controllers/QueryControllers";
 dotenv.config();
 
 const app = express();
@@ -50,12 +49,6 @@ app.use(logger);
 app.get("/", (req, res) => {
     res.send("Hello World");
 });
-
-app.post("/query", (req, res) => queryController.handleQuery(req, res));
-app.delete(
-    "/collection/:collectionName",
-    queryController.handleDelete.bind(queryController)
-);
 
 // auth routes
 app.use("/api/auth", authRoutes);
