@@ -1,10 +1,16 @@
-import React, { useEffect, useRef, memo, useCallback } from "react";
+import React, { useEffect, useRef, memo } from "react";
 import { Menu } from "lucide-react";
-import Sidebar from "./Sidebar";
-import { useEpubJsProcessor, useEpubProcessor } from "@/hooks/useEpubProcessor";
-import { useChapterLoader } from "./useChapterLoader";
-import { useTextBlockNavigation } from "@/hooks/useTextBlockNavigation";
+import { useEpubJsProcessor } from "@/hooks/useEpubProcessor";
+import {
+    type ChapterBlock,
+    type TextBlock as TextBlockType,
+} from "@/types/EpubReader";
 import toast from "react-hot-toast";
+
+interface BookChapter {
+    id: string;
+    content: string;
+}
 
 interface EpubReaderProps {
     url: string;
@@ -41,11 +47,11 @@ const Chapter = memo(
         chapter,
         activeTextblockId,
     }: {
-        chapter: any;
+        chapter: ChapterBlock;
         activeTextblockId: string | null;
     }) => (
         <div id={chapter.hrefId}>
-            {chapter.textBlocks.map((textBlock: any) => (
+            {chapter.textBlocks.map((textBlock: TextBlockType) => (
                 <TextBlock
                     key={textBlock.id}
                     id={textBlock.id}
@@ -63,7 +69,7 @@ const EpubReader: React.FC<EpubReaderProps> = memo(({ url }) => {
     // const { processEpub, isLoading, error, epubContent, zipData } =
     // 	useEpubProcessor();
 
-    const { chaptersLoading, bookChapters, status } = useEpubJsProcessor(url);
+    const { chaptersLoading, bookChapters } = useEpubJsProcessor(url);
     const contentRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -133,7 +139,7 @@ const EpubReader: React.FC<EpubReaderProps> = memo(({ url }) => {
                 <div className="max-w-3xl mx-auto  px-6 max-h-[92%] overflow-y-auto">
                     <div className="" ref={contentRef}>
                         {bookChapters.length > 1 &&
-                            bookChapters?.map((chapter: any) => (
+                            bookChapters?.map((chapter: BookChapter) => (
                                 <div
                                     key={chapter.id}
                                     dangerouslySetInnerHTML={{

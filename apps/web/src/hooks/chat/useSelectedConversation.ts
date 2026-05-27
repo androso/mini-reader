@@ -1,4 +1,4 @@
-import { ChatState } from "@/components/reader/ChatInterface";
+import { type ChatState } from "@/hooks/chat/useChat";
 import { useQuery } from "@tanstack/react-query";
 
 const useSelectedConversation = (chatState: ChatState, bookId: string) => {

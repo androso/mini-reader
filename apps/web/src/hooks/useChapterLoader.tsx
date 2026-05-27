@@ -127,7 +127,7 @@ export const useChapterLoader = (
                         );
                     }
                 }
-            } catch (err) {
+            } catch (_err) {
                 console.warn("Error loading CSS:", href);
             }
             return null;
@@ -206,7 +206,7 @@ export const useChapterLoader = (
                                 manifestItem?.href as string
                             );
                             img.src = dataUrl;
-                        } catch (error) {
+                        } catch (_error) {
                             img.src =
                                 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"%3E%3Cpath fill="%23eee" d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/%3E%3C/svg%3E';
                             img.alt = "Failed to load image";

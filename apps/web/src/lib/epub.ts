@@ -8,7 +8,7 @@ export function initReader(element: HTMLElement, bookId: string) {
         height: "100%",
         spread: "none",
     });
-    rendition.themes.font;
+    // rendition.themes.font; // placeholder for future font theme access
     rendition.display();
 
     // Add keyboard navigation

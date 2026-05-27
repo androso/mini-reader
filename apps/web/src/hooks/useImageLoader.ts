@@ -13,7 +13,7 @@ export const useImageLoader = (zipData: JSZip | null, basePath: string) => {
 
     const createImageDataUrl = async (imagePath: string): Promise<string> => {
         if (!zipData) return "";
-        let imageFile =
+        const imageFile =
             zipData.file(imagePath) || zipData.file(`${basePath}${imagePath}`);
 
         if (!imageFile) {

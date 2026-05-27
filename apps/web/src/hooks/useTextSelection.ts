@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-const useTextSelection = (tooltipContent: string = "hello") => {
+export const useTextSelection = (_tooltipContent: string = "hello") => {
     const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
     const [isVisible, setIsVisible] = useState(false);
     const tooltipRef = useRef<HTMLDivElement>(null);

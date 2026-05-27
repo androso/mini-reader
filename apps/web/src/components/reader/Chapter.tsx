@@ -1,5 +1,9 @@
 import { memo } from "react";
 import TextBlock from "./TextBlock";
+import {
+    type ChapterBlock,
+    type TextBlock as TextBlockType,
+} from "@/types/EpubReader";
 
 const Chapter = memo(
     ({
@@ -8,13 +12,13 @@ const Chapter = memo(
         onNextChapter,
         isLastChapter,
     }: {
-        chapter: any;
+        chapter: ChapterBlock;
         activeTextblockId: string | null;
         onNextChapter: () => void;
         isLastChapter: boolean;
     }) => (
         <div id={chapter.hrefId}>
-            {chapter.textBlocks.map((textBlock: any) => (
+            {chapter.textBlocks.map((textBlock: TextBlockType) => (
                 <TextBlock
                     key={textBlock.id}
                     id={textBlock.id}

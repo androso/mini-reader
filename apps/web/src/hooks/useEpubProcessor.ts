@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import { processEpubFile } from "@/lib/epubProcessing";
 import { type EpubContent } from "@/types/EpubReader";
 import JSZip from "jszip";
-import ePub, { Rendition } from "epubjs";
+import ePub from "epubjs";
 import Section from "epubjs/types/section";
 
 export const useEpubProcessor = () => {
@@ -50,7 +50,9 @@ export const useEpubProcessor = () => {
 };
 
 export const useEpubJsProcessor = (url: string) => {
-    const [bookChapters, setBookChapters] = useState<any[]>([]);
+    const [bookChapters, setBookChapters] = useState<
+        { id: string; content: string }[]
+    >([]);
     const [chaptersLoading, setChaptersLoading] = useState(false);
     const [status, setStatus] = useState<
         "loading" | "error" | "idle" | "success"
@@ -68,19 +70,13 @@ export const useEpubJsProcessor = (url: string) => {
 
         await book.loaded.navigation;
         book = await book.opened;
-        book.spine.hooks.serialize.register((one, two) => {
-            console.log({ one, two });
-        });
-        book.spine.hooks.content.register((one) => {
-            console.log({ one });
-        });
-        let spineItems: Section[] = [];
+        const spineItems: Section[] = [];
         book.spine.each((spineItem: Section) => spineItems.push(spineItem));
         const chapters = [];
         for (const item of spineItems) {
-            const document = await book.load(item.href);
+            const document = (await book.load(item.href)) as Document;
             const images = document.body.getElementsByTagName("img");
-            const basePath = book.packaging.manifestPath || "";
+            const basePath = "";
 
             // Process all images in parallel
             await Promise.all(
