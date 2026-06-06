@@ -13,12 +13,18 @@
         "web:build": "pnpm --filter @reader/web build",
         "web:start": "pnpm --filter @reader/web start",
         "web:lint": "pnpm --filter @reader/web lint",
+        "db:generate": "DOTENV_CONFIG_PATH=.env NODE_OPTIONS='-r dotenv/config' drizzle-kit generate --config=drizzle.config.ts",
+        "db:migrate": "DOTENV_CONFIG_PATH=.env NODE_OPTIONS='-r dotenv/config' drizzle-kit migrate --config=drizzle.config.ts",
+        "db:push": "DOTENV_CONFIG_PATH=.env NODE_OPTIONS='-r dotenv/config' drizzle-kit push --config=drizzle.config.ts",
+        "db:studio": "DOTENV_CONFIG_PATH=.env NODE_OPTIONS='-r dotenv/config' drizzle-kit studio --config=drizzle.config.ts",
         "prepare": "husky install"
     },
     "keywords": [],
     "author": "",
     "license": "ISC",
     "devDependencies": {
+        "dotenv": "16.4.7",
+        "drizzle-kit": "0.30.1",
         "husky": "^9.1.7",
         "lint-staged": "^15.3.0",
         "prettier": "^3.4.2",
