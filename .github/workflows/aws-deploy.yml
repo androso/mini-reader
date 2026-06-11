@@ -1,0 +1,61 @@
+name: Deploy Reader Platform to AWS
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+  PROJECT_NAME: reader
+  IMAGE_TAG: ${{ github.sha }}
+  NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
+  NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${{ vars.NEXT_PUBLIC_GOOGLE_CLIENT_ID }}
+  ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
+  ECS_API_SERVICE: ${{ vars.ECS_API_SERVICE }}
+  ECS_WORKER_SERVICE: ${{ vars.ECS_WORKER_SERVICE }}
+  ECS_WEB_SERVICE: ${{ vars.ECS_WEB_SERVICE }}
+  ECS_MIGRATION_TASK_DEFINITION: ${{ vars.ECS_MIGRATION_TASK_DEFINITION }}
+  ECS_PRIVATE_SUBNET_IDS: ${{ vars.ECS_PRIVATE_SUBNET_IDS }}
+  ECS_TASK_SECURITY_GROUP_ID: ${{ vars.ECS_TASK_SECURITY_GROUP_ID }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.11.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm test
+
+      - run: pnpm build
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Build and push images
+        run: ./scripts/deploy-images.sh
+
+      - name: Run database migrations in ECS
+        run: ./scripts/run-ecs-migrations.sh
+
+      - name: Redeploy ECS services
+        run: ./scripts/force-deploy-ecs-services.sh
