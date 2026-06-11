@@ -8,9 +8,9 @@ import { Books } from "../db/schema";
 import { eq, sql } from "drizzle-orm";
 import { createHash, extractMetadata } from "../utils/bookUtils";
 import { PDFUtils } from "../utils/pdfUtils";
-import { processUploadedBook } from "../services/BookProcessingService";
 import { bookSearchChunkStore } from "../services/BookSearchChunkStore";
 import { hybridBookSearchService } from "../services/HybridBookSearchService";
+import { handleBookProcessingEnqueue } from "../services/BookProcessingEnqueueService";
 
 const upload = multer({
     storage: multer.memoryStorage(),
@@ -18,6 +18,7 @@ const upload = multer({
         fileSize: 80 * 1024 * 1024, // 80 mb
     },
 });
+
 /**
  * @swagger
  * components:
@@ -178,23 +179,31 @@ router.post("/", authenticate, upload.single("file"), async (req, res) => {
             })
             .returning();
 
-        const result = await processUploadedBook({
-            bookId: book.id,
-            userId: book.userId,
-            fileKey: book.fileKey,
-            fileType,
-        });
-        const [processedBook] = await db
+        try {
+            await handleBookProcessingEnqueue({
+                bookId: book.id,
+                userId: book.userId,
+                fileKey: book.fileKey,
+                fileType,
+            });
+        } catch (error) {
+            console.error("Book processing enqueue failed", error);
+            res.status(503).json({
+                error: "Book processing queue is unavailable",
+            });
+            return;
+        }
+
+        const [queuedBook] = await db
             .select()
             .from(Books)
             .where(eq(Books.id, book.id));
 
         console.log("filename:", fileName);
-        res.json({
-            message: "File upload successful",
-            book: processedBook ?? book,
-            collection: result.collectionName,
-            processStatus: "ready",
+        res.status(202).json({
+            message: "File upload accepted for processing",
+            book: queuedBook ?? book,
+            processStatus: "processing",
             fileType: mimeType,
         });
     } catch (e) {
@@ -391,22 +400,20 @@ router.delete("/:id", authenticate, async (req, res) => {
             .from(Books)
             .where(eq(Books.fileKey, book.fileKey));
         if (remaining.count === 0) {
-            // delete file
             await deleteFile(book.fileKey);
 
-            const deleted = await vectorStore.deleteCollection(
-                book.collectionName!
-            );
-            await bookSearchChunkStore.deleteCollectionChunks(
-                book.collectionName!
-            );
-            hybridBookSearchService.clearCollectionCache(book.collectionName!);
-            if (deleted) {
-                res.status(204).json({
-                    message: "Collection deleted successfully",
-                });
+            if (book.collectionName) {
+                await vectorStore.deleteCollection(book.collectionName);
+                await bookSearchChunkStore.deleteCollectionChunks(
+                    book.collectionName
+                );
+                hybridBookSearchService.clearCollectionCache(
+                    book.collectionName
+                );
             }
         }
+
+        res.status(204).send();
     } catch (e) {
         console.error("Error deleting the file", e);
         res.status(500).json({

@@ -12,7 +12,8 @@ This repository is now structured as the Reader platform monorepo. The current b
 ## Commands
 
 - `pnpm dev`: run the API app in development mode.
-- `pnpm build`: compile the backend packages and API app.
+- `pnpm build`: compile the backend packages, API app, and worker app.
+- `pnpm worker:dev`: run the Redis-backed book processing worker in development.
 - `pnpm web:dev`: run the Next.js web app on port `3001`.
 - `pnpm web:build`: build the Next.js web app.
 - `pnpm web:lint`: run the web lint script.
@@ -21,4 +22,4 @@ This repository is now structured as the Reader platform monorepo. The current b
 
 ## Migration Notes
 
-Book uploads are processed synchronously by the API. There is no Redis or worker process required for the current ingestion flow.
+Book uploads are processed asynchronously. The API stores the uploaded file, inserts a `processing` book row, enqueues a Redis/BullMQ job, and returns immediately while `apps/worker` finishes PDF/EPUB ingestion. Set `REDIS_URL` for both the API and worker.

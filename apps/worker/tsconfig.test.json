@@ -1,0 +1,9 @@
+{
+    "extends": "./tsconfig.json",
+    "compilerOptions": {
+        "rootDir": ".",
+        "outDir": "../../.tmp/apps-worker-test",
+        "noEmit": false
+    },
+    "include": ["src/**/*", "test/**/*"]
+}

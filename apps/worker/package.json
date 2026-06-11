@@ -1,0 +1,30 @@
+{
+    "name": "@reader/worker",
+    "version": "0.1.0",
+    "private": true,
+    "main": "build/index.js",
+    "scripts": {
+        "predev": "pnpm --filter @reader/api build",
+        "prebuild": "pnpm --filter @reader/api build",
+        "pretest": "pnpm --filter @reader/api build",
+        "dev": "DOTENV_CONFIG_PATH=../../.env ts-node-dev -r dotenv/config --respawn --transpile-only --ignore-watch ../../packages src/index.ts",
+        "build": "tsc -p tsconfig.json",
+        "start": "DOTENV_CONFIG_PATH=../../.env node -r dotenv/config build/index.js",
+        "test": "tsc -p tsconfig.test.json && NODE_PATH=./node_modules:../../packages/jobs/node_modules:../../packages/processing/node_modules node --test ../../.tmp/apps-worker-test/test/processor.test.js"
+    },
+    "dependencies": {
+        "@reader/jobs": "workspace:*",
+        "@reader/processing": "workspace:*",
+        "@reader/providers": "workspace:*",
+        "@reader/api": "workspace:*",
+        "bullmq": "^5.0.0",
+        "dotenv": "^16.4.7",
+        "ioredis": "^5.0.0"
+    },
+    "devDependencies": {
+        "@types/node": "^22.10.2",
+        "ts-node": "^10.9.2",
+        "ts-node-dev": "^2.0.0",
+        "typescript": "^5.7.2"
+    }
+}
