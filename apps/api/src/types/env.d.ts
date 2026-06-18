@@ -3,10 +3,11 @@ import { User } from "./index";
 declare global {
     namespace NodeJS {
         interface ProcessEnv {
-            DO_SPACES_KEY: string;
-            DO_SPACES_SECRET: string;
-            DO_SPACES_ENDPOINT: string;
-            DO_SPACES_NAME: string;
+            AWS_ACCESS_KEY_ID: string;
+            AWS_SECRET_ACCESS_KEY: string;
+            S3_ENDPOINT: string;
+            S3_BUCKET_NAME: string;
+            S3_REGION?: string;
             OPENAI_API_KEY: string;
             CHROMA_URL: string;
             CHROMA_CLIENT_AUTH_CREDENTIALS: string;

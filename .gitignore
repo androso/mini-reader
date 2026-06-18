@@ -116,3 +116,5 @@ dist
 Thumbs.db
 #build
 build/
+
+source-code.xml

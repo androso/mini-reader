@@ -56,6 +56,8 @@ For console-managed ECS services, point container images at `:latest`, for examp
 <account-id>.dkr.ecr.<region>.amazonaws.com/reader-api:latest
 ```
 
+`:latest` is fine for this console-managed setup because the CI/CD script pushes both `latest` and `<git-sha>` tags, then forces a new ECS deployment. ECS will pull the new `latest` image without registering a new task definition revision. If you switch services to Git SHA tags for exact rollback points, you also need to register new task definition revisions on each deploy or extend the workflow to do that automatically.
+
 ## 2. Create Network And Data Services
 
 In the AWS Console:
@@ -65,6 +67,10 @@ In the AWS Console:
 3. Create ElastiCache Redis in private subnets.
 4. Create an S3 bucket for uploaded books.
 5. Create an EFS file system for Chroma persistence, with mount targets in the private subnets.
+6. Add a NAT Gateway in a public subnet and update the private subnet route tables to send `0.0.0.0/0` to the NAT Gateway.
+   - API and worker tasks need outbound internet access for OpenAI API, Google OAuth, S3, ECR image pulls, CloudWatch Logs, and Secrets Manager.
+   - The Chroma task uses `chromadb/chroma:latest` from Docker Hub in this guide, so it also needs NAT unless you mirror that image into ECR.
+   - VPC endpoints for S3, ECR, CloudWatch Logs, and Secrets Manager can reduce AWS-service traffic through NAT, but they do not replace NAT for OpenAI, Google, or Docker Hub.
 
 Security group rules:
 
@@ -73,6 +79,7 @@ Security group rules:
 - API and worker tasks can reach RDS on `5432`.
 - API and worker tasks can reach Redis on `6379`.
 - API and worker tasks can reach Chroma on `8000`.
+- Migration tasks can reach RDS on `5432`.
 - Chroma task can reach EFS on `2049`.
 - Chroma should not allow public inbound traffic.
 
@@ -86,22 +93,27 @@ REDIS_URL
 JWT_SECRET
 OPENAI_API_KEY
 CHROMA_CLIENT_AUTH_CREDENTIALS
+CHROMA_SERVER_AUTHN_CREDENTIALS
 GOOGLE_CLIENT_ID
 GOOGLE_CLIENT_SECRET
-DO_SPACES_NAME
-DO_SPACES_ENDPOINT
-DO_SPACES_KEY
-DO_SPACES_SECRET
+S3_BUCKET_NAME
+S3_ENDPOINT
+S3_REGION
+AWS_ACCESS_KEY_ID
+AWS_SECRET_ACCESS_KEY
 ```
 
-For AWS S3, keep the current app variable names:
+The app picks up region from the `S3_REGION` environment variable (defaults to `us-east-1`):
 
 ```text
-DO_SPACES_NAME=<s3-bucket-name>
-DO_SPACES_ENDPOINT=https://s3.<region>.amazonaws.com
-DO_SPACES_KEY=<access-key>
-DO_SPACES_SECRET=<secret-key>
+S3_BUCKET_NAME=<s3-bucket-name>
+S3_ENDPOINT=https://s3.<region>.amazonaws.com
+S3_REGION=us-east-1
+AWS_ACCESS_KEY_ID=<access-key>
+AWS_SECRET_ACCESS_KEY=<secret-key>
 ```
+
+Create the S3 bucket in the same region as `S3_REGION`.
 
 ## 4. Create ECS Cluster And Logs
 
@@ -118,16 +130,21 @@ In ECS:
 /ecs/reader-prod/chroma
 ```
 
+Create or reuse an ECS task execution role for the API, worker, web, migration, and Chroma task definitions. Attach `AmazonECSTaskExecutionRolePolicy` so Fargate can pull images and write logs, and add `secretsmanager:GetSecretValue` for the Secrets Manager entries above. If the secrets use a customer-managed KMS key, also allow `kms:Decrypt` for that key.
+
 ## 5. Create Chroma Task And Service
 
 Create a Fargate task definition:
 
-- Image: `chromadb/chroma:latest`
+- Image: `chromadb/chroma:latest` for the first deployment, or an ECR mirror of a tested Chroma image tag if you want fully private image pulls.
 - Container port: `8000`
 - CPU/memory: start with `1 vCPU / 2 GB`
 - Environment:
   - `IS_PERSISTENT=TRUE`
   - `PERSIST_DIRECTORY=/chroma/chroma`
+  - `CHROMA_SERVER_AUTHN_PROVIDER=chromadb.auth.basic_authn.BasicAuthenticationServerProvider`
+- Secrets from Secrets Manager:
+  - `CHROMA_SERVER_AUTHN_CREDENTIALS` (use the same value stored for `CHROMA_CLIENT_AUTH_CREDENTIALS`)
 - EFS volume:
   - mount the EFS file system at `/chroma/chroma`
 - Logs:
@@ -147,6 +164,8 @@ API and worker tasks will use:
 ```text
 CHROMA_URL=http://chroma.reader-prod.local:8000
 ```
+
+The Chroma server auth credentials must match the client credentials. Store the same value in both `CHROMA_SERVER_AUTHN_CREDENTIALS` (for the Chroma server) and `CHROMA_CLIENT_AUTH_CREDENTIALS` (for the API and worker clients).
 
 ## 6. Create API Task And Service
 
@@ -168,10 +187,11 @@ Create a Fargate task definition:
   - `CHROMA_CLIENT_AUTH_CREDENTIALS`
   - `GOOGLE_CLIENT_ID`
   - `GOOGLE_CLIENT_SECRET`
-  - `DO_SPACES_NAME`
-  - `DO_SPACES_ENDPOINT`
-  - `DO_SPACES_KEY`
-  - `DO_SPACES_SECRET`
+  - `S3_BUCKET_NAME`
+  - `S3_ENDPOINT`
+  - `S3_REGION`
+  - `AWS_ACCESS_KEY_ID`
+  - `AWS_SECRET_ACCESS_KEY`
 - Logs: `/ecs/reader-prod/api`
 
 Create an internet-facing Application Load Balancer:
@@ -248,10 +268,10 @@ Create one additional ECS task definition using the API image:
 <account-id>.dkr.ecr.<region>.amazonaws.com/reader-api:latest
 ```
 
-Set the container command to:
+Set the container command to the following array of parts in the ECS console:
 
 ```text
-pnpm exec drizzle-kit migrate --config drizzle.config.ts
+["pnpm", "exec", "drizzle-kit", "migrate", "--config", "drizzle.config.ts"]
 ```
 
 Use the same private subnets, task security group, and Secrets Manager values as the API service. CI/CD runs this task before redeploying services.
@@ -291,7 +311,7 @@ ECS_TASK_SECURITY_GROUP_ID=sg-123456 \
 
 ## 12. Configure GitHub CI/CD
 
-The workflow at `.github/workflows/aws-deploy.yml` does not create AWS infrastructure. It expects the console-created resources above to already exist.
+The workflow at `.github/workflows/aws-deploy.yml` runs on pushes to `main` and can also be started manually with `workflow_dispatch`. It does not create AWS infrastructure. It expects the console-created resources above to already exist.
 
 It does:
 
@@ -329,6 +349,7 @@ The deploy role needs permissions for:
 ecr:GetAuthorizationToken
 ecr:DescribeRepositories
 ecr:CreateRepository
+ecr:BatchCheckLayerAvailability
 ecr:PutImage
 ecr:InitiateLayerUpload
 ecr:UploadLayerPart
@@ -375,4 +396,4 @@ Check:
 - Chroma should stay private; do not expose port `8000` publicly.
 - Keep one Chroma task at first. Scaling Chroma horizontally needs more care than scaling stateless API/web tasks.
 - If uploads or processing fail, check CloudWatch logs for API, worker, and Chroma first.
-- The current app still uses `DO_SPACES_*` names for S3-compatible object storage. Rename them later only with a code change.
+- The app uses standard AWS S3 environment variables for object storage.
