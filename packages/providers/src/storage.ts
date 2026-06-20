@@ -59,7 +59,6 @@ export class ObjectStorageProvider implements StorageProvider {
                 Bucket: process.env.S3_BUCKET_NAME,
                 Key: key,
                 Body: file,
-                ACL: "private",
             })
         );
     }
