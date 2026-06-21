@@ -42,6 +42,10 @@ export interface BookProcessingRepository {
 
 export type ProcessBookForSearch = typeof processBookForSearch;
 
+export interface ProcessUploadedBookOptions {
+    markFailedOnError?: boolean;
+}
+
 const getErrorMessage = (error: unknown) =>
     error instanceof Error ? error.message : "Book processing failed";
 
@@ -94,7 +98,8 @@ const bookProcessingRepository: BookProcessingRepository = {
 export const handleProcessUploadedBook = async (
     payload: ProcessUploadedBookPayload,
     repository: BookProcessingRepository,
-    processBook: ProcessBookForSearch
+    processBook: ProcessBookForSearch,
+    options: ProcessUploadedBookOptions = {}
 ): Promise<ProcessBookResult> => {
     try {
         const book = await repository.findBookForProcessing(
@@ -124,13 +129,16 @@ export const handleProcessUploadedBook = async (
         await repository.markReady(payload.bookId, result.collectionName);
         return result;
     } catch (error) {
-        await repository.markFailed(payload.bookId, getErrorMessage(error));
+        if (options.markFailedOnError ?? true) {
+            await repository.markFailed(payload.bookId, getErrorMessage(error));
+        }
         throw error;
     }
 };
 
 export const processUploadedBook = async (
-    payload: ProcessUploadedBookPayload
+    payload: ProcessUploadedBookPayload,
+    options: ProcessUploadedBookOptions = {}
 ): Promise<ProcessBookResult> => {
     const result = await handleProcessUploadedBook(
         payload,
@@ -140,7 +148,8 @@ export const processUploadedBook = async (
                 storage: storageProvider,
                 vectorStore,
                 searchIndexStore: bookSearchChunkStore,
-            })
+            }),
+        options
     );
     hybridBookSearchService.clearCollectionCache(result.collectionName);
     return result;

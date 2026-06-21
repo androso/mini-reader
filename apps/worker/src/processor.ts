@@ -3,7 +3,8 @@ import type { BookProcessingJobData } from "@reader/jobs";
 import type { ProcessBookResult } from "@reader/processing";
 
 export type ProcessUploadedBook = (
-    payload: BookProcessingJobData
+    payload: BookProcessingJobData,
+    options?: { markFailedOnError?: boolean }
 ) => Promise<ProcessBookResult>;
 
 const loadProcessUploadedBook = (): ProcessUploadedBook => {
@@ -12,8 +13,16 @@ const loadProcessUploadedBook = (): ProcessUploadedBook => {
 };
 
 export const processBookProcessingJob = async (
-    job: Pick<Job<BookProcessingJobData>, "data">,
+    job: Pick<Job<BookProcessingJobData>, "attemptsMade" | "data" | "opts">,
     processBook: ProcessUploadedBook = loadProcessUploadedBook()
 ) => {
-    await processBook(job.data);
+    const maxAttempts =
+        typeof job.opts.attempts === "number" && job.opts.attempts > 0
+            ? job.opts.attempts
+            : 1;
+    const isFinalAttempt = job.attemptsMade + 1 >= maxAttempts;
+
+    await processBook(job.data, {
+        markFailedOnError: isFinalAttempt,
+    });
 };

@@ -26,6 +26,93 @@ export interface VectorSearchResult {
     distance?: number;
 }
 
+const parsePositiveIntegerEnv = (name: string, fallback: number) => {
+    const value = Number(process.env[name]);
+    return Number.isInteger(value) && value > 0 ? value : fallback;
+};
+
+const sleep = (delayMs: number) =>
+    new Promise((resolve) => setTimeout(resolve, delayMs));
+
+const getErrorDetail = (error: unknown) => {
+    if (!error || typeof error !== "object") {
+        return String(error);
+    }
+
+    const details = error as {
+        code?: unknown;
+        errno?: unknown;
+        status?: unknown;
+        type?: unknown;
+        message?: unknown;
+        name?: unknown;
+    };
+
+    return [
+        details.name,
+        details.code,
+        details.errno,
+        details.status,
+        details.type,
+        details.message,
+    ]
+        .filter(Boolean)
+        .join(" ");
+};
+
+const isRetryableVectorStoreError = (error: unknown) => {
+    const detail = getErrorDetail(error);
+
+    return [
+        "ERR_STREAM_PREMATURE_CLOSE",
+        "Premature close",
+        "Invalid response body",
+        "ECONNRESET",
+        "ETIMEDOUT",
+        "ENOTFOUND",
+        "EAI_AGAIN",
+        "ECONNREFUSED",
+        "APIConnectionError",
+        "APIConnectionTimeoutError",
+        "429",
+        "500",
+        "502",
+        "503",
+        "504",
+    ].some((retryable) => detail.includes(retryable));
+};
+
+const withRetry = async <T>(
+    operation: () => Promise<T>,
+    {
+        attempts,
+        delayMs,
+        label,
+    }: { attempts: number; delayMs: number; label: string }
+) => {
+    let lastError: unknown;
+
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+        try {
+            return await operation();
+        } catch (error) {
+            lastError = error;
+            if (attempt >= attempts || !isRetryableVectorStoreError(error)) {
+                throw error;
+            }
+
+            const retryDelayMs = delayMs * 2 ** (attempt - 1);
+            console.warn(
+                `${label} failed on attempt ${attempt}; retrying in ${retryDelayMs}ms`,
+                error
+            );
+            await sleep(retryDelayMs);
+        }
+    }
+
+    throw lastError;
+};
+
 export class ChromaVectorStore implements VectorStoreProvider {
     private readonly client: ChromaClient;
     private readonly embeddingFunction: OpenAIEmbeddingFunction;
@@ -119,8 +206,22 @@ export class ChromaVectorStore implements VectorStoreProvider {
         const validDocuments = documents.filter(
             (doc) => doc && doc.length > 0 && doc.length < 4000
         );
-        const batchSize = 75;
-        const concurrentBatches = 8;
+        const batchSize = parsePositiveIntegerEnv(
+            "VECTOR_STORE_BATCH_SIZE",
+            50
+        );
+        const concurrentBatches = parsePositiveIntegerEnv(
+            "VECTOR_STORE_CONCURRENT_BATCHES",
+            2
+        );
+        const batchRetryAttempts = parsePositiveIntegerEnv(
+            "VECTOR_STORE_BATCH_RETRY_ATTEMPTS",
+            4
+        );
+        const batchRetryDelayMs = parsePositiveIntegerEnv(
+            "VECTOR_STORE_BATCH_RETRY_DELAY_MS",
+            1000
+        );
         const allBatches = [];
 
         for (let i = 0; i < validDocuments.length; i += batchSize) {
@@ -139,9 +240,13 @@ export class ChromaVectorStore implements VectorStoreProvider {
 
         for (let i = 0; i < allBatches.length; i += concurrentBatches) {
             await Promise.all(
-                allBatches
-                    .slice(i, i + concurrentBatches)
-                    .map((batchData) => collection.upsert(batchData))
+                allBatches.slice(i, i + concurrentBatches).map((batchData) =>
+                    withRetry(() => collection.upsert(batchData), {
+                        attempts: batchRetryAttempts,
+                        delayMs: batchRetryDelayMs,
+                        label: `Vector upsert for ${collectionName}`,
+                    })
+                )
             );
         }
     }
