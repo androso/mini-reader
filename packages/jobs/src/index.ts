@@ -50,7 +50,7 @@ export const createBookProcessingQueue = (
     });
 
 export const createBookProcessingJobId = (bookId: string) =>
-    `book-processing:${bookId}`;
+    `book-processing-${bookId}`;
 
 export const enqueueBookProcessingJob = async (
     queue: BookProcessingQueue,
