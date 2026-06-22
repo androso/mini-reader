@@ -15,6 +15,24 @@ type ChatMessage = {
     content: string;
 };
 
+const getErrorDetail = (error: unknown) => {
+    if (!error || typeof error !== "object") return String(error);
+    const details = error as {
+        code?: unknown;
+        errno?: unknown;
+        message?: unknown;
+        name?: unknown;
+    };
+
+    return [details.name, details.code, details.errno, details.message]
+        .filter(Boolean)
+        .join(" ");
+};
+
+const isPrematureCloseError = (error: unknown) =>
+    getErrorDetail(error).includes("ERR_STREAM_PREMATURE_CLOSE") ||
+    getErrorDetail(error).includes("Premature close");
+
 const buildRagMessages = async (
     resourceType: string,
     resourceId: string,
@@ -207,11 +225,30 @@ router.post(
             );
 
             let accumulatedResponse = "";
-            for await (const chunk of textStream) {
-                if (res.writableEnded) break;
-                const content = chunk.choices[0]?.delta?.content || "";
-                accumulatedResponse += content;
-                res.write(`data: ${JSON.stringify({ content })}\n\n`);
+            let streamCompleted = false;
+            try {
+                for await (const chunk of textStream) {
+                    if (res.writableEnded) break;
+                    const choice = chunk.choices[0];
+                    if (choice?.finish_reason === "stop") {
+                        streamCompleted = true;
+                    }
+                    const content = choice?.delta?.content || "";
+                    accumulatedResponse += content;
+                    res.write(`data: ${JSON.stringify({ content })}\n\n`);
+                }
+            } catch (streamError) {
+                if (!streamCompleted || !isPrematureCloseError(streamError)) {
+                    throw streamError;
+                }
+
+                log.warn(
+                    "Ignoring premature close after completed chat stream",
+                    {
+                        conversationId: conversation.id,
+                        error: getErrorDetail(streamError),
+                    }
+                );
             }
 
             if (!res.writableEnded) {
@@ -339,14 +376,33 @@ router.post(
                 ragResult.messages
             );
             let accumulatedResponse = "";
+            let streamCompleted = false;
             console.log("Stream response generation initiated.");
 
-            for await (const chunk of textStream) {
-                if (res.writableEnded) break;
-                const content = chunk.choices[0]?.delta?.content || "";
-                accumulatedResponse += content;
-                console.log("Chunk received:", chunk);
-                res.write(`data: ${JSON.stringify({ content })}\n\n`);
+            try {
+                for await (const chunk of textStream) {
+                    if (res.writableEnded) break;
+                    const choice = chunk.choices[0];
+                    if (choice?.finish_reason === "stop") {
+                        streamCompleted = true;
+                    }
+                    const content = choice?.delta?.content || "";
+                    accumulatedResponse += content;
+                    console.log("Chunk received:", chunk);
+                    res.write(`data: ${JSON.stringify({ content })}\n\n`);
+                }
+            } catch (streamError) {
+                if (!streamCompleted || !isPrematureCloseError(streamError)) {
+                    throw streamError;
+                }
+
+                log.warn(
+                    "Ignoring premature close after completed chat stream",
+                    {
+                        conversationId,
+                        error: getErrorDetail(streamError),
+                    }
+                );
             }
 
             if (!res.writableEnded) {
