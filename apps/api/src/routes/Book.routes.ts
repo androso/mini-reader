@@ -1,7 +1,13 @@
 import { Router } from "express";
 const router = Router();
 import multer from "multer";
-import { deleteFile, getFile, uploadFile, vectorStore } from "@reader/providers";
+import {
+    createLogger,
+    deleteFile,
+    getFile,
+    uploadFile,
+    vectorStore,
+} from "@reader/providers";
 import { authenticate } from "../middleware/auth";
 import { db } from "../db";
 import { Books } from "../db/schema";
@@ -11,6 +17,8 @@ import { PDFUtils } from "../utils/pdfUtils";
 import { bookSearchChunkStore } from "../services/BookSearchChunkStore";
 import { hybridBookSearchService } from "../services/HybridBookSearchService";
 import { handleBookProcessingEnqueue } from "../services/BookProcessingEnqueueService";
+
+const log = createLogger("books");
 
 const upload = multer({
     storage: multer.memoryStorage(),
@@ -138,8 +146,15 @@ const upload = multer({
  *                   example: "File size exceeds 80MB limit"
  */
 router.post("/", authenticate, upload.single("file"), async (req, res) => {
+    const requestStart = Date.now();
+    log.info("Book upload request received", {
+        userId: req.user.id,
+        fileName: req.file?.originalname,
+        mimeType: req.file?.mimetype,
+    });
     try {
         if (!req.file) {
+            log.warn("Book upload rejected: no file");
             res.status(400).json({ error: "No file uploaded" });
             return;
         }
@@ -148,23 +163,41 @@ router.post("/", authenticate, upload.single("file"), async (req, res) => {
         const fileBuffer = req.file.buffer;
         // Validate file type
         if (!["application/pdf", "application/epub+zip"].includes(mimeType)) {
+            log.warn("Book upload rejected: unsupported file type", {
+                mimeType,
+                userId: req.user.id,
+            });
             res.status(400).json({
                 error: "Unsupported file type. Only PDF and EPUB are supported.",
             });
             return;
         }
         if (mimeType === "application/pdf") {
+            log.info("Extracting PDF metadata for upload", {
+                userId: req.user.id,
+                fileName: req.file.originalname,
+            });
             const pdfUtils = new PDFUtils();
             const hash = await pdfUtils.pdfMetadata(fileBuffer);
             if (!hash) throw new Error("Could not generate hash for PDF");
             fileName = `pdf-${hash.slice(0, 12)}`;
         } else {
+            log.info("Extracting EPUB metadata for upload", {
+                userId: req.user.id,
+                fileName: req.file.originalname,
+            });
             const metadata = await extractMetadata(fileBuffer);
             if (!metadata) throw new Error("Could not extract EPUB metadata");
             fileName = `epub-${createHash(metadata).slice(0, 12)}`;
         }
 
+        log.info("Uploading file to storage", {
+            userId: req.user.id,
+            fileName,
+            mimeType,
+        });
         await uploadFile(fileName, fileBuffer);
+        log.info("File uploaded to storage", { userId: req.user.id, fileName });
         const fileType = mimeType === "application/pdf" ? "pdf" : "epub";
 
         const [book] = await db
@@ -178,6 +211,12 @@ router.post("/", authenticate, upload.single("file"), async (req, res) => {
                 processingError: null,
             })
             .returning();
+        log.info("Book record created", {
+            bookId: book.id,
+            userId: req.user.id,
+            fileKey: fileName,
+            fileType,
+        });
 
         try {
             await handleBookProcessingEnqueue({
@@ -187,7 +226,10 @@ router.post("/", authenticate, upload.single("file"), async (req, res) => {
                 fileType,
             });
         } catch (error) {
-            console.error("Book processing enqueue failed", error);
+            log.error("Book processing enqueue failed", {
+                bookId: book.id,
+                error: error instanceof Error ? error.message : String(error),
+            });
             res.status(503).json({
                 error: "Book processing queue is unavailable",
             });
@@ -199,7 +241,12 @@ router.post("/", authenticate, upload.single("file"), async (req, res) => {
             .from(Books)
             .where(eq(Books.id, book.id));
 
-        console.log("filename:", fileName);
+        const duration = Date.now() - requestStart;
+        log.info("Book upload accepted", {
+            bookId: book.id,
+            durationMs: duration,
+            fileName,
+        });
         res.status(202).json({
             message: "File upload accepted for processing",
             book: queuedBook ?? book,
@@ -207,7 +254,12 @@ router.post("/", authenticate, upload.single("file"), async (req, res) => {
             fileType: mimeType,
         });
     } catch (e) {
-        console.error("Upload Error", e);
+        const duration = Date.now() - requestStart;
+        log.error("Book upload failed", {
+            userId: req.user.id,
+            durationMs: duration,
+            error: e instanceof Error ? e.message : String(e),
+        });
         res.status(500).json({ error: "Upload failed" });
     }
 });
@@ -375,6 +427,7 @@ router.get("/:id", authenticate, async (req, res) => {
 // working
 router.delete("/:id", authenticate, async (req, res) => {
     const bookId = req.params.id;
+    log.info("Book delete request received", { bookId, userId: req.user.id });
 
     try {
         const [book] = await db
@@ -382,24 +435,35 @@ router.delete("/:id", authenticate, async (req, res) => {
             .from(Books)
             .where(eq(Books.id, bookId));
         if (!book) {
+            log.warn("Book delete failed: not found", { bookId });
             res.status(404).json({
                 error: "Book was not found",
             });
             return;
         }
         if (book.userId !== req.user.id) {
+            log.warn("Book delete failed: unauthorized", {
+                bookId,
+                userId: req.user.id,
+                ownerId: book.userId,
+            });
             res.status(403).json({
                 error: "Not authorized",
             });
             return;
         }
         await db.delete(Books).where(eq(Books.id, bookId));
+        log.info("Book record deleted", { bookId });
 
         const [remaining] = await db
             .select({ count: sql`count(*)`.mapWith(Number) })
             .from(Books)
             .where(eq(Books.fileKey, book.fileKey));
         if (remaining.count === 0) {
+            log.info("Deleting orphaned file and collection", {
+                fileKey: book.fileKey,
+                collectionName: book.collectionName,
+            });
             await deleteFile(book.fileKey);
 
             if (book.collectionName) {
@@ -411,11 +475,20 @@ router.delete("/:id", authenticate, async (req, res) => {
                     book.collectionName
                 );
             }
+        } else {
+            log.debug("Skipping cleanup, file still referenced", {
+                fileKey: book.fileKey,
+                remainingCount: remaining.count,
+            });
         }
 
+        log.info("Book delete successful", { bookId });
         res.status(204).send();
     } catch (e) {
-        console.error("Error deleting the file", e);
+        log.error("Book delete failed", {
+            bookId,
+            error: e instanceof Error ? e.message : String(e),
+        });
         res.status(500).json({
             error: "Failed to delete the file",
         });

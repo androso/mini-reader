@@ -18,6 +18,7 @@ declare global {
             LOCAL_STORAGE_DIR?: string;
             NODE_ENV?: string;
             STORAGE_DRIVER?: "s3" | "local";
+            LOG_LEVEL?: "debug" | "info" | "warn" | "error";
         }
     }
 

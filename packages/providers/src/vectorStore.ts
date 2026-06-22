@@ -1,4 +1,7 @@
 import { ChromaClient, OpenAIEmbeddingFunction } from "chromadb";
+import { createLogger } from "./logger";
+
+const log = createLogger("chroma");
 
 export interface VectorStoreProvider {
     createCollection(name: string): Promise<any>;
@@ -149,13 +152,16 @@ export class ChromaVectorStore implements VectorStoreProvider {
     }
 
     async getCollection(name: string) {
+        log.debug("Fetching collection", { name, source: "cache" });
         try {
             const cachedCollection = this.collections.get(name);
             if (cachedCollection) {
                 cachedCollection.lastAccessed = Date.now();
+                log.debug("Collection cache hit", { name });
                 return cachedCollection.collection;
             }
 
+            log.info("Fetching collection from Chroma", { name });
             const collection = await this.client.getCollection({
                 name,
                 embeddingFunction: this.embeddingFunction,
@@ -166,13 +172,19 @@ export class ChromaVectorStore implements VectorStoreProvider {
                 collection,
                 lastAccessed: Date.now(),
             });
+            log.info("Collection loaded from Chroma", { name });
             return collection;
-        } catch {
+        } catch (error) {
+            log.debug("Collection not found in Chroma", {
+                name,
+                error: getErrorDetail(error),
+            });
             return null;
         }
     }
 
     async createCollection(name: string): Promise<any> {
+        log.info("Creating Chroma collection", { name });
         const collection = await this.client.createCollection({
             name,
             embeddingFunction: this.embeddingFunction,
@@ -182,30 +194,53 @@ export class ChromaVectorStore implements VectorStoreProvider {
             collection,
             lastAccessed: Date.now(),
         });
+        log.info("Chroma collection created", { name });
         return collection;
     }
 
     async getOrCreateCollection(name: string): Promise<any> {
+        log.debug("Resolving collection", { name });
         const existingCollection = await this.getCollection(name);
         if (existingCollection) return existingCollection;
+        log.info("Collection does not exist, creating", { name });
         return this.createCollection(name);
     }
 
     async resetCollection(name: string) {
+        log.info("Resetting collection", { name });
         try {
             await this.client.deleteCollection({ name });
-        } catch {
-            // Missing collections are already reset.
+            log.info("Deleted existing collection for reset", { name });
+        } catch (error) {
+            log.debug("No existing collection to delete during reset", {
+                name,
+                error: getErrorDetail(error),
+            });
         }
         this.collections.delete(name);
         await this.createCollection(name);
+        log.info("Collection reset complete", { name });
     }
 
     async addDocuments(collectionName: string, documents: string[]) {
+        const start = Date.now();
+        log.info("Adding documents to collection", {
+            collectionName,
+            documentCount: documents.length,
+        });
         const collection = await this.getOrCreateCollection(collectionName);
         const validDocuments = documents.filter(
             (doc) => doc && doc.length > 0 && doc.length < 4000
         );
+        const invalidCount = documents.length - validDocuments.length;
+        if (invalidCount > 0) {
+            log.warn("Filtered invalid documents", {
+                collectionName,
+                invalidCount,
+                totalCount: documents.length,
+            });
+        }
+
         const batchSize = parsePositiveIntegerEnv(
             "VECTOR_STORE_BATCH_SIZE",
             50
@@ -222,6 +257,16 @@ export class ChromaVectorStore implements VectorStoreProvider {
             "VECTOR_STORE_BATCH_RETRY_DELAY_MS",
             1000
         );
+
+        log.debug("Upsert configuration", {
+            collectionName,
+            batchSize,
+            concurrentBatches,
+            batchRetryAttempts,
+            batchRetryDelayMs,
+            validDocumentCount: validDocuments.length,
+        });
+
         const allBatches = [];
 
         for (let i = 0; i < validDocuments.length; i += batchSize) {
@@ -238,25 +283,66 @@ export class ChromaVectorStore implements VectorStoreProvider {
             });
         }
 
+        log.info("Starting batched upsert", {
+            collectionName,
+            batchCount: allBatches.length,
+            totalDocuments: validDocuments.length,
+        });
+
         for (let i = 0; i < allBatches.length; i += concurrentBatches) {
+            const batchGroup = allBatches.slice(i, i + concurrentBatches);
+            log.debug("Upserting batch group", {
+                collectionName,
+                groupIndex: i,
+                groupSize: batchGroup.length,
+            });
             await Promise.all(
-                allBatches.slice(i, i + concurrentBatches).map((batchData) =>
+                batchGroup.map((batchData, batchIndex) =>
                     withRetry(() => collection.upsert(batchData), {
                         attempts: batchRetryAttempts,
                         delayMs: batchRetryDelayMs,
-                        label: `Vector upsert for ${collectionName}`,
+                        label: `Vector upsert for ${collectionName} batch ${i + batchIndex}`,
+                    }).then(() => {
+                        log.debug("Batch upsert succeeded", {
+                            collectionName,
+                            batchIndex: i + batchIndex,
+                            documentsInBatch: batchData.documents.length,
+                        });
                     })
                 )
             );
         }
+
+        const duration = Date.now() - start;
+        log.info("Documents added to collection", {
+            collectionName,
+            documentCount: validDocuments.length,
+            durationMs: duration,
+        });
     }
 
     async queryCollection(collectionName: string, query: string, nResults = 3) {
+        const start = Date.now();
+        log.info("Querying collection", { collectionName, nResults });
+        log.debug("Query text", { collectionName, query: query.slice(0, 200) });
         const collection = await this.getOrCreateCollection(collectionName);
-        return collection.query({
+        const results = await collection.query({
             queryTexts: [query],
             nResults,
         });
+        const duration = Date.now() - start;
+        const resultCount = results.ids?.[0]?.length ?? 0;
+        log.info("Collection query complete", {
+            collectionName,
+            nResults,
+            resultCount,
+            durationMs: duration,
+        });
+        log.debug("Query results", {
+            collectionName,
+            distances: results.distances?.[0],
+        });
+        return results;
     }
 
     async searchDocuments(
@@ -264,6 +350,8 @@ export class ChromaVectorStore implements VectorStoreProvider {
         query: string,
         nResults = 20
     ): Promise<VectorSearchResult[]> {
+        const start = Date.now();
+        log.info("Searching documents", { collectionName, nResults });
         const results = await this.queryCollection(
             collectionName,
             query,
@@ -273,7 +361,7 @@ export class ChromaVectorStore implements VectorStoreProvider {
         const documents = results.documents?.[0] || [];
         const distances = results.distances?.[0] || [];
 
-        return documents
+        const mapped = documents
             .map((content: string | null, index: number) => {
                 if (!content) return null;
                 return {
@@ -284,11 +372,22 @@ export class ChromaVectorStore implements VectorStoreProvider {
                 };
             })
             .filter(Boolean) as VectorSearchResult[];
+
+        const duration = Date.now() - start;
+        log.info("Document search complete", {
+            collectionName,
+            nResults,
+            returnedCount: mapped.length,
+            durationMs: duration,
+        });
+        return mapped;
     }
 
     async deleteCollection(name: string): Promise<boolean> {
+        log.info("Deleting collection", { name });
         await this.client.deleteCollection({ name });
         this.collections.delete(name);
+        log.info("Collection deleted", { name });
         return true;
     }
 }

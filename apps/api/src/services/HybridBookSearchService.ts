@@ -1,5 +1,6 @@
 import MiniSearch from "minisearch";
 import {
+    createLogger,
     vectorStore,
     type VectorSearchResult,
     type VectorStoreProvider,
@@ -8,6 +9,8 @@ import {
     bookSearchChunkStore,
     type BookSearchChunk,
 } from "./BookSearchChunkStore";
+
+const log = createLogger("hybridSearch");
 
 export interface BookSearchChunkReader {
     getCollectionChunks(collectionName: string): Promise<BookSearchChunk[]>;
@@ -54,17 +57,26 @@ export class HybridBookSearchService {
     ) {}
 
     clearCollectionCache(collectionName: string) {
+        log.info("Clearing hybrid search cache", { collectionName });
         this.indexes.delete(collectionName);
     }
 
     private async getMiniSearchIndex(collectionName: string) {
         const cached = this.indexes.get(collectionName);
         if (cached && Date.now() - cached.createdAt < INDEX_CACHE_TTL_MS) {
+            log.debug("MiniSearch cache hit", { collectionName });
             return cached;
         }
 
-        const chunks = await this.chunkStore.getCollectionChunks(collectionName);
-        if (!chunks.length) return null;
+        log.info("Building MiniSearch index", { collectionName });
+        const chunks =
+            await this.chunkStore.getCollectionChunks(collectionName);
+        if (!chunks.length) {
+            log.warn("No chunks available to build MiniSearch index", {
+                collectionName,
+            });
+            return null;
+        }
 
         const index = new MiniSearch<BookSearchChunk>({
             fields: ["content"],
@@ -79,6 +91,10 @@ export class HybridBookSearchService {
             createdAt: Date.now(),
         };
         this.indexes.set(collectionName, next);
+        log.info("MiniSearch index built", {
+            collectionName,
+            chunkCount: chunks.length,
+        });
         return next;
     }
 
@@ -87,12 +103,16 @@ export class HybridBookSearchService {
         query: string,
         limit: number
     ): Promise<LexicalSearchResult[]> {
-        if (!query.trim()) return [];
+        if (!query.trim()) {
+            log.debug("Empty lexical query, skipping", { collectionName });
+            return [];
+        }
 
+        log.info("Searching lexical index", { collectionName, limit });
         const cached = await this.getMiniSearchIndex(collectionName);
         if (!cached) return [];
 
-        return cached.index
+        const results = cached.index
             .search(query, {
                 prefix: true,
             })
@@ -107,6 +127,11 @@ export class HybridBookSearchService {
                 };
             })
             .filter((result) => result.content);
+        log.info("Lexical search complete", {
+            collectionName,
+            resultCount: results.length,
+        });
+        return results;
     }
 
     private fuseResults(
@@ -167,9 +192,20 @@ export class HybridBookSearchService {
             finalLimit?: number;
         } = {}
     ): Promise<RankedSearchResult[]> {
+        const start = Date.now();
         const lexicalLimit = options.lexicalLimit ?? 20;
         const vectorLimit = options.vectorLimit ?? 20;
         const finalLimit = options.finalLimit ?? 5;
+        log.info("Starting hybrid search", {
+            collectionName,
+            lexicalLimit,
+            vectorLimit,
+            finalLimit,
+        });
+        log.debug("Search query", {
+            collectionName,
+            query: query.slice(0, 200),
+        });
 
         const [lexicalResults, vectorResults] = await Promise.all([
             this.searchLexical(collectionName, query, lexicalLimit),
@@ -180,17 +216,41 @@ export class HybridBookSearchService {
             ),
         ]);
 
+        log.info("Search results before fusion", {
+            collectionName,
+            lexicalResultCount: lexicalResults.length,
+            vectorResultCount: vectorResults.length,
+        });
+
         if (!lexicalResults.length) {
-            return vectorResults.slice(0, finalLimit).map((result) => ({
-                id: result.id,
-                content: result.content,
-                chunkIndex: parseChunkIndex(result.id),
-                score: 1 / (RRF_K + result.rank),
-                bestRank: result.rank,
-            }));
+            const fallback = vectorResults
+                .slice(0, finalLimit)
+                .map((result) => ({
+                    id: result.id,
+                    content: result.content,
+                    chunkIndex: parseChunkIndex(result.id),
+                    score: 1 / (RRF_K + result.rank),
+                    bestRank: result.rank,
+                }));
+            log.info("Returning vector-only results", {
+                collectionName,
+                resultCount: fallback.length,
+            });
+            return fallback;
         }
 
-        return this.fuseResults(lexicalResults, vectorResults, finalLimit);
+        const fused = this.fuseResults(
+            lexicalResults,
+            vectorResults,
+            finalLimit
+        );
+        const duration = Date.now() - start;
+        log.info("Hybrid search complete", {
+            collectionName,
+            resultCount: fused.length,
+            durationMs: duration,
+        });
+        return fused;
     }
 }
 
