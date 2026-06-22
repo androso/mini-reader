@@ -1,7 +1,17 @@
-import { ChromaClient, OpenAIEmbeddingFunction } from "chromadb";
+import { ChromaClient, type IEmbeddingFunction } from "chromadb";
+import OpenAI from "openai";
 import { createLogger } from "./logger";
 
 const log = createLogger("chroma");
+const DEFAULT_OPENAI_EMBEDDING_MODEL = "text-embedding-ada-002";
+
+const precomputedEmbeddingFunction: IEmbeddingFunction = {
+    async generate() {
+        throw new Error(
+            "Embeddings are generated before Chroma calls in ChromaVectorStore"
+        );
+    },
+};
 
 export interface VectorStoreProvider {
     createCollection(name: string): Promise<any>;
@@ -105,10 +115,13 @@ const withRetry = async <T>(
             }
 
             const retryDelayMs = delayMs * 2 ** (attempt - 1);
-            console.warn(
-                `${label} failed on attempt ${attempt}; retrying in ${retryDelayMs}ms`,
-                error
-            );
+            log.warn("Retryable vector operation failed", {
+                label,
+                attempt,
+                attempts,
+                retryDelayMs,
+                error: getErrorDetail(error),
+            });
             await sleep(retryDelayMs);
         }
     }
@@ -118,7 +131,8 @@ const withRetry = async <T>(
 
 export class ChromaVectorStore implements VectorStoreProvider {
     private readonly client: ChromaClient;
-    private readonly embeddingFunction: OpenAIEmbeddingFunction;
+    private readonly openai: OpenAI;
+    private readonly embeddingModel: string;
     private readonly collections = new Map<
         string,
         { name: string; collection: any; lastAccessed: number }
@@ -133,9 +147,36 @@ export class ChromaVectorStore implements VectorStoreProvider {
             },
         });
 
-        this.embeddingFunction = new OpenAIEmbeddingFunction({
-            openai_api_key: process.env.OPENAI_API_KEY || "",
-            openai_model: "text-embedding-ada-002",
+        this.embeddingModel =
+            process.env.OPENAI_EMBEDDING_MODEL ||
+            DEFAULT_OPENAI_EMBEDDING_MODEL;
+
+        const openAiOptions: NonNullable<
+            ConstructorParameters<typeof OpenAI>[0]
+        > = {
+            apiKey: process.env.OPENAI_API_KEY || "",
+            maxRetries: 0,
+            defaultHeaders: {
+                "Accept-Encoding": "identity",
+            },
+        };
+
+        if (typeof globalThis.fetch === "function") {
+            openAiOptions.fetch = globalThis.fetch.bind(
+                globalThis
+            ) as NonNullable<typeof openAiOptions.fetch>;
+        }
+
+        this.openai = new OpenAI(openAiOptions);
+
+        log.info("Initialized Chroma vector store", {
+            chromaUrl: process.env.CHROMA_URL || "http://localhost:8000",
+            embeddingModel: this.embeddingModel,
+            embeddingFetch:
+                typeof globalThis.fetch === "function"
+                    ? "globalThis.fetch"
+                    : "openai-sdk-default",
+            embeddingAcceptEncoding: "identity",
         });
 
         setInterval(() => this.cleanUpCache(), 1800000).unref();
@@ -164,7 +205,7 @@ export class ChromaVectorStore implements VectorStoreProvider {
             log.info("Fetching collection from Chroma", { name });
             const collection = await this.client.getCollection({
                 name,
-                embeddingFunction: this.embeddingFunction,
+                embeddingFunction: precomputedEmbeddingFunction,
             });
 
             this.collections.set(name, {
@@ -187,7 +228,7 @@ export class ChromaVectorStore implements VectorStoreProvider {
         log.info("Creating Chroma collection", { name });
         const collection = await this.client.createCollection({
             name,
-            embeddingFunction: this.embeddingFunction,
+            embeddingFunction: precomputedEmbeddingFunction,
         });
         this.collections.set(name, {
             name,
@@ -258,7 +299,7 @@ export class ChromaVectorStore implements VectorStoreProvider {
             1000
         );
 
-        log.debug("Upsert configuration", {
+        log.info("Upsert configuration", {
             collectionName,
             batchSize,
             concurrentBatches,
@@ -298,10 +339,11 @@ export class ChromaVectorStore implements VectorStoreProvider {
             });
             await Promise.all(
                 batchGroup.map((batchData, batchIndex) =>
-                    withRetry(() => collection.upsert(batchData), {
+                    this.upsertBatch(collection, batchData, {
+                        collectionName,
+                        batchIndex: i + batchIndex,
                         attempts: batchRetryAttempts,
                         delayMs: batchRetryDelayMs,
-                        label: `Vector upsert for ${collectionName} batch ${i + batchIndex}`,
                     }).then(() => {
                         log.debug("Batch upsert succeeded", {
                             collectionName,
@@ -321,13 +363,104 @@ export class ChromaVectorStore implements VectorStoreProvider {
         });
     }
 
+    private async upsertBatch(
+        collection: any,
+        batchData: {
+            ids: string[];
+            documents: string[];
+            metadatas: { collectionName: string; chunkIndex: number }[];
+        },
+        {
+            collectionName,
+            batchIndex,
+            attempts,
+            delayMs,
+        }: {
+            collectionName: string;
+            batchIndex: number;
+            attempts: number;
+            delayMs: number;
+        }
+    ) {
+        const embeddings = await withRetry(
+            () =>
+                this.createEmbeddings(batchData.documents, {
+                    collectionName,
+                    batchIndex,
+                }),
+            {
+                attempts,
+                delayMs,
+                label: `OpenAI embeddings for ${collectionName} batch ${batchIndex}`,
+            }
+        );
+
+        await withRetry(
+            () =>
+                collection.upsert({
+                    ...batchData,
+                    embeddings,
+                }),
+            {
+                attempts,
+                delayMs,
+                label: `Chroma upsert for ${collectionName} batch ${batchIndex}`,
+            }
+        );
+    }
+
+    private async createEmbeddings(
+        input: string[],
+        context: { collectionName: string; batchIndex?: number }
+    ): Promise<number[][]> {
+        const start = Date.now();
+        log.info("Creating OpenAI embeddings", {
+            ...context,
+            inputCount: input.length,
+            model: this.embeddingModel,
+        });
+
+        const { data: response, request_id: requestId } =
+            await this.openai.embeddings
+                .create({
+                    model: this.embeddingModel,
+                    input,
+                    encoding_format: "float",
+                })
+                .withResponse();
+
+        const embeddings = response.data.map(
+            (item: { embedding: number[] }) => item.embedding
+        );
+        if (embeddings.length !== input.length) {
+            throw new Error(
+                `OpenAI returned ${embeddings.length} embeddings for ${input.length} inputs`
+            );
+        }
+
+        log.info("OpenAI embeddings created", {
+            ...context,
+            inputCount: input.length,
+            requestId,
+            promptTokens: response.usage?.prompt_tokens,
+            totalTokens: response.usage?.total_tokens,
+            durationMs: Date.now() - start,
+        });
+
+        return embeddings;
+    }
+
     async queryCollection(collectionName: string, query: string, nResults = 3) {
         const start = Date.now();
         log.info("Querying collection", { collectionName, nResults });
         log.debug("Query text", { collectionName, query: query.slice(0, 200) });
         const collection = await this.getOrCreateCollection(collectionName);
+        const [queryEmbedding] = await this.createEmbeddings([query], {
+            collectionName,
+            batchIndex: 0,
+        });
         const results = await collection.query({
-            queryTexts: [query],
+            queryEmbeddings: [queryEmbedding],
             nResults,
         });
         const duration = Date.now() - start;
