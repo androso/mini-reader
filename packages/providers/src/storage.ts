@@ -20,11 +20,11 @@ export class ObjectStorageProvider implements StorageProvider {
 
     constructor() {
         this.s3Client = new S3Client({
-            endpoint: process.env.DO_SPACES_ENDPOINT!,
-            region: "us-east-1",
+            endpoint: process.env.S3_ENDPOINT!,
+            region: process.env.S3_REGION || "us-east-1",
             credentials: {
-                accessKeyId: process.env.DO_SPACES_KEY!,
-                secretAccessKey: process.env.DO_SPACES_SECRET!,
+                accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+                secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
             },
         });
         this.storageDriver = process.env.STORAGE_DRIVER || "s3";
@@ -56,10 +56,9 @@ export class ObjectStorageProvider implements StorageProvider {
 
         return this.s3Client.send(
             new PutObjectCommand({
-                Bucket: process.env.DO_SPACES_NAME,
+                Bucket: process.env.S3_BUCKET_NAME,
                 Key: key,
                 Body: file,
-                ACL: "private",
             })
         );
     }
@@ -71,7 +70,7 @@ export class ObjectStorageProvider implements StorageProvider {
 
         const response = await this.s3Client.send(
             new GetObjectCommand({
-                Bucket: process.env.DO_SPACES_NAME,
+                Bucket: process.env.S3_BUCKET_NAME,
                 Key: key,
             })
         );
@@ -95,7 +94,7 @@ export class ObjectStorageProvider implements StorageProvider {
 
         return this.s3Client.send(
             new DeleteObjectCommand({
-                Bucket: process.env.DO_SPACES_NAME,
+                Bucket: process.env.S3_BUCKET_NAME,
                 Key: key,
             })
         );

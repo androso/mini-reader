@@ -8,15 +8,14 @@ export class S3Service {
     private bucketName: string;
 
     constructor(bucketName: string) {
-        this.bucketName = process.env.DO_SPACES_NAME || bucketName;
+        this.bucketName = process.env.S3_BUCKET_NAME || bucketName;
         this.s3 = new S3({
-            endpoint: process.env.DO_SPACES_ENDPOINT,
+            endpoint: process.env.S3_ENDPOINT,
             credentials: {
-                accessKeyId: process.env.DO_SPACES_KEY || "",
-                secretAccessKey: process.env.DO_SPACES_SECRET || "",
+                accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
+                secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
             },
-            region: "us-east-1", // DigitalOcean Spaces default region
-            forcePathStyle: false, // Required for DigitalOcean Spaces
+            region: process.env.S3_REGION || "us-east-1",
         });
     }
     //retieve file from s3

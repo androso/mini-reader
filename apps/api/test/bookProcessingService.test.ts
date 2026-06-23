@@ -73,6 +73,44 @@ test("failed synchronous processing marks book failed", async () => {
     assert.deepEqual(calls.failed, ["extract failed"]);
 });
 
+test("failed processing can skip failed status for retryable attempts", async () => {
+    const { repository, calls } = createRepository();
+
+    await assert.rejects(
+        handleProcessUploadedBook(
+            payload,
+            repository,
+            async () => {
+                throw new Error("temporary embedding failure");
+            },
+            { markFailedOnError: false }
+        ),
+        /temporary embedding failure/
+    );
+
+    assert.deepEqual(calls.ready, []);
+    assert.deepEqual(calls.failed, []);
+});
+
+test("failed processing marks failed on final attempt option", async () => {
+    const { repository, calls } = createRepository();
+
+    await assert.rejects(
+        handleProcessUploadedBook(
+            payload,
+            repository,
+            async () => {
+                throw new Error("final embedding failure");
+            },
+            { markFailedOnError: true }
+        ),
+        /final embedding failure/
+    );
+
+    assert.deepEqual(calls.ready, []);
+    assert.deepEqual(calls.failed, ["final embedding failure"]);
+});
+
 test("duplicate upload reuses ready collection", async () => {
     const { repository, calls } = createRepository({
         findReadyDuplicate: async () => ({ collectionName: "book_existing" }),

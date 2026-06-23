@@ -116,3 +116,9 @@ dist
 Thumbs.db
 #build
 build/
+
+source-code.xml
+# AWS deployment scratch files
+*-task-def*.json
+secret-map.json
+secret-sources.txt

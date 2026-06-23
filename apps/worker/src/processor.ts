@@ -1,19 +1,73 @@
 import type { Job } from "bullmq";
 import type { BookProcessingJobData } from "@reader/jobs";
 import type { ProcessBookResult } from "@reader/processing";
+import { createLogger } from "@reader/providers";
+
+const log = createLogger("worker");
 
 export type ProcessUploadedBook = (
-    payload: BookProcessingJobData
+    payload: BookProcessingJobData,
+    options?: { markFailedOnError?: boolean }
 ) => Promise<ProcessBookResult>;
 
 const loadProcessUploadedBook = (): ProcessUploadedBook => {
+    log.debug("Loading processUploadedBook from built API module");
     const module = require("@reader/api/build/services/BookProcessingService");
+    log.debug("Loaded processUploadedBook");
     return module.processUploadedBook as ProcessUploadedBook;
 };
 
 export const processBookProcessingJob = async (
-    job: Pick<Job<BookProcessingJobData>, "data">,
+    job: Pick<
+        Job<BookProcessingJobData>,
+        "attemptsMade" | "data" | "opts" | "id"
+    >,
     processBook: ProcessUploadedBook = loadProcessUploadedBook()
 ) => {
-    await processBook(job.data);
+    const start = Date.now();
+    const maxAttempts =
+        typeof job.opts.attempts === "number" && job.opts.attempts > 0
+            ? job.opts.attempts
+            : 1;
+    const isFinalAttempt = job.attemptsMade + 1 >= maxAttempts;
+
+    log.info("Processing book job", {
+        jobId: job.id,
+        bookId: job.data.bookId,
+        userId: job.data.userId,
+        fileKey: job.data.fileKey,
+        fileType: job.data.fileType,
+        attemptsMade: job.attemptsMade,
+        maxAttempts,
+        isFinalAttempt,
+    });
+
+    try {
+        const result = await processBook(job.data, {
+            markFailedOnError: isFinalAttempt,
+        });
+        const duration = Date.now() - start;
+        log.info("Book job completed successfully", {
+            jobId: job.id,
+            bookId: job.data.bookId,
+            collectionName: result.collectionName,
+            chunkCount: result.chunks,
+            reusedCollection: result.reusedCollection,
+            durationMs: duration,
+        });
+    } catch (error) {
+        const duration = Date.now() - start;
+        log.error("Book job failed", {
+            jobId: job.id,
+            bookId: job.data.bookId,
+            userId: job.data.userId,
+            fileKey: job.data.fileKey,
+            attemptsMade: job.attemptsMade,
+            maxAttempts,
+            isFinalAttempt,
+            durationMs: duration,
+            error: error instanceof Error ? error.message : String(error),
+        });
+        throw error;
+    }
 };

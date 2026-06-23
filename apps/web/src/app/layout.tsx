@@ -1,16 +1,12 @@
-import { Geist, Geist_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import AppProviders from "./providers";
 import { Metadata } from "next";
 
-const geistSans = Geist({
-    variable: "--font-geist-sans",
-    subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-    variable: "--font-geist-mono",
-    subsets: ["latin"],
+const literata = localFont({
+    src: "../../public/fonts/literata-variable.ttf",
+    variable: "--font-literata",
+    display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -25,9 +21,7 @@ export default function RootLayout({
 }>) {
     return (
         <html lang="en">
-            <body
-                className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-            >
+            <body className={`${literata.variable} antialiased`}>
                 <AppProviders>{children}</AppProviders>
             </body>
         </html>

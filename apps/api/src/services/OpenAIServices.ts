@@ -7,9 +7,23 @@ export class OpenAIService {
     private client: OpenAI;
 
     constructor() {
-        this.client = new OpenAI({
+        const openAiOptions: NonNullable<
+            ConstructorParameters<typeof OpenAI>[0]
+        > = {
             apiKey: process.env.OPENAI_API_KEY,
-        });
+            maxRetries: 0,
+            defaultHeaders: {
+                "Accept-Encoding": "identity",
+            },
+        };
+
+        if (typeof globalThis.fetch === "function") {
+            openAiOptions.fetch = globalThis.fetch.bind(
+                globalThis
+            ) as NonNullable<typeof openAiOptions.fetch>;
+        }
+
+        this.client = new OpenAI(openAiOptions);
     }
 
     async generateStreamResponse(

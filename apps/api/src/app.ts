@@ -4,6 +4,7 @@ import authRoutes from "./routes/Auth.routes";
 import userRoutes from "./routes/User.routes";
 import bookRoutes from "./routes/Book.routes";
 import chatRoutes from "./routes/Chat.routes";
+import healthRoutes from "./routes/Health.routes";
 import tracker from "./routes/Tracker.routes";
 import cors from "cors";
 import { logger } from "./middleware/logger";
@@ -49,6 +50,8 @@ app.use(logger);
 app.get("/", (req, res) => {
     res.send("Hello World");
 });
+
+app.use("/health", healthRoutes);
 
 // auth routes
 app.use("/api/auth", authRoutes);
