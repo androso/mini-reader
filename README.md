@@ -20,6 +20,12 @@ This repository is now structured as the Reader platform monorepo. The current b
 - `pnpm --filter @reader/api <script>`: run an API-specific script directly.
 - `pnpm --filter @reader/web <script>`: run a web-specific script directly.
 
+## AWS infrastructure
+
+CloudFormation is the source of truth for a clean AWS rebuild. Follow
+`docs/aws-cloudformation-rebuild.md`; the console guide is retained only as
+historical operational reference.
+
 ## Migration Notes
 
 Book uploads are processed asynchronously. The API stores the uploaded file, inserts a `processing` book row, enqueues a Redis/BullMQ job, and returns immediately while `apps/worker` finishes PDF/EPUB ingestion. Set `REDIS_URL` for both the API and worker.

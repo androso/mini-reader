@@ -1,0 +1,14 @@
+[
+  { "ParameterKey": "JwtSecretValue", "ParameterValue": "<jwt-secret>" },
+  { "ParameterKey": "OpenAiApiKeySecretValue", "ParameterValue": "<openai-api-key>" },
+  { "ParameterKey": "GoogleClientId", "ParameterValue": "<google-client-id>" },
+  { "ParameterKey": "GoogleClientSecretValue", "ParameterValue": "<google-client-secret>" },
+  { "ParameterKey": "ChromaServerAuthnCredentialsSecretValue", "ParameterValue": "<username:password>" },
+  { "ParameterKey": "ChromaClientAuthCredentialsSecretValue", "ParameterValue": "<matching-client-credentials>" },
+  { "ParameterKey": "FrontendUrl", "ParameterValue": "<https-or-http-frontend-origin>" },
+  { "ParameterKey": "ApiDesiredCount", "ParameterValue": "0" },
+  { "ParameterKey": "WorkerDesiredCount", "ParameterValue": "0" },
+  { "ParameterKey": "WebDesiredCount", "ParameterValue": "0" },
+  { "ParameterKey": "ChromaDesiredCount", "ParameterValue": "0" },
+  { "ParameterKey": "DatabaseDeletionProtection", "ParameterValue": "true" }
+]
