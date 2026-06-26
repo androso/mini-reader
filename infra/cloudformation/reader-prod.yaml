@@ -1,0 +1,179 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Reader production infrastructure, deployable from a clean AWS account
+Metadata:
+  Source:
+    Region: us-east-1
+    Runbook: docs/aws-cloudformation-rebuild.md
+    Mode: clean-account-redeployment
+
+Parameters:
+  JwtSecretValue:
+    Type: String
+    NoEcho: true
+  OpenAiApiKeySecretValue:
+    Type: String
+    NoEcho: true
+  GoogleClientId:
+    Type: String
+  GoogleClientSecretValue:
+    Type: String
+    NoEcho: true
+  ChromaServerAuthnCredentialsSecretValue:
+    Type: String
+    NoEcho: true
+  ChromaClientAuthCredentialsSecretValue:
+    Type: String
+    NoEcho: true
+  FrontendUrl:
+    Type: String
+  ApiDesiredCount:
+    Type: Number
+    Default: 0
+    MinValue: 0
+  WorkerDesiredCount:
+    Type: Number
+    Default: 0
+    MinValue: 0
+  WebDesiredCount:
+    Type: Number
+    Default: 0
+    MinValue: 0
+  ChromaDesiredCount:
+    Type: Number
+    Default: 0
+    MinValue: 0
+  ChromaImage:
+    Type: String
+    Default: chromadb/chroma:1.0.15
+  DatabaseDeletionProtection:
+    Type: String
+    Default: "true"
+    AllowedValues:
+      - "true"
+      - "false"
+
+Resources:
+  NetworkStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: nested/network.yaml
+      Tags:
+        - Key: project
+          Value: reader
+        - Key: Name
+          Value: reader-prod-network
+
+  DataStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: nested/data.yaml
+      Parameters:
+        JwtSecretValue: !Ref JwtSecretValue
+        OpenAiApiKeySecretValue: !Ref OpenAiApiKeySecretValue
+        GoogleClientSecretValue: !Ref GoogleClientSecretValue
+        ChromaServerAuthnCredentialsSecretValue: !Ref ChromaServerAuthnCredentialsSecretValue
+        ChromaClientAuthCredentialsSecretValue: !Ref ChromaClientAuthCredentialsSecretValue
+        DatabaseDeletionProtection: !Ref DatabaseDeletionProtection
+        VpcId: !GetAtt NetworkStack.Outputs.VpcId
+        PrivateSubnetIds: !GetAtt NetworkStack.Outputs.PrivateSubnetIds
+        RdsSecurityGroupId: !GetAtt NetworkStack.Outputs.RdsSecurityGroupId
+        RedisSecurityGroupId: !GetAtt NetworkStack.Outputs.RedisSecurityGroupId
+        EfsSecurityGroupId: !GetAtt NetworkStack.Outputs.EfsSecurityGroupId
+      Tags:
+        - Key: project
+          Value: reader
+        - Key: Name
+          Value: reader-prod-data
+
+  CiStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: nested/ci.yaml
+      Parameters:
+        DeployStackName: !Ref AWS::StackName
+      Tags:
+        - Key: project
+          Value: reader
+        - Key: Name
+          Value: reader-prod-ci
+
+  EcsStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn:
+      - CiStack
+    Properties:
+      TemplateURL: nested/ecs.yaml
+      Parameters:
+        FrontendUrl: !Ref FrontendUrl
+        GoogleClientId: !Ref GoogleClientId
+        ApiDesiredCount: !Ref ApiDesiredCount
+        WorkerDesiredCount: !Ref WorkerDesiredCount
+        WebDesiredCount: !Ref WebDesiredCount
+        ChromaDesiredCount: !Ref ChromaDesiredCount
+        ChromaImage: !Ref ChromaImage
+        VpcId: !GetAtt NetworkStack.Outputs.VpcId
+        PublicSubnetIds: !GetAtt NetworkStack.Outputs.PublicSubnetIds
+        PrivateSubnetIds: !GetAtt NetworkStack.Outputs.PrivateSubnetIds
+        ApiAlbSecurityGroupId: !GetAtt NetworkStack.Outputs.ApiAlbSecurityGroupId
+        WebAlbSecurityGroupId: !GetAtt NetworkStack.Outputs.WebAlbSecurityGroupId
+        EcsTasksSecurityGroupId: !GetAtt NetworkStack.Outputs.EcsTasksSecurityGroupId
+        WebTaskSecurityGroupId: !GetAtt NetworkStack.Outputs.WebTaskSecurityGroupId
+        ChromaSecurityGroupId: !GetAtt NetworkStack.Outputs.ChromaSecurityGroupId
+        UploadsBucketName: !GetAtt DataStack.Outputs.UploadsBucketName
+        UploadsBucketArn: !GetAtt DataStack.Outputs.UploadsBucketArn
+        DatabaseUrlSecretArn: !GetAtt DataStack.Outputs.DatabaseUrlSecretArn
+        RedisUrlSecretArn: !GetAtt DataStack.Outputs.RedisUrlSecretArn
+        JwtSecretArn: !GetAtt DataStack.Outputs.JwtSecretArn
+        OpenAiApiKeySecretArn: !GetAtt DataStack.Outputs.OpenAiApiKeySecretArn
+        ChromaServerAuthnCredentialsSecretArn: !GetAtt DataStack.Outputs.ChromaServerAuthnCredentialsSecretArn
+        ChromaClientAuthCredentialsSecretArn: !GetAtt DataStack.Outputs.ChromaClientAuthCredentialsSecretArn
+        GoogleClientSecretSecretArn: !GetAtt DataStack.Outputs.GoogleClientSecretSecretArn
+        ChromaFileSystemId: !GetAtt DataStack.Outputs.ChromaFileSystemId
+        ChromaDiscoveryServiceArn: !GetAtt DataStack.Outputs.ChromaDiscoveryServiceArn
+      Tags:
+        - Key: project
+          Value: reader
+        - Key: Name
+          Value: reader-prod-ecs
+
+Outputs:
+  AWSRegion:
+    Value: !Ref AWS::Region
+  AWSAccountId:
+    Value: !Ref AWS::AccountId
+  ECSCluster:
+    Value: !GetAtt EcsStack.Outputs.ECSCluster
+  ECSApiService:
+    Value: !GetAtt EcsStack.Outputs.ECSApiService
+  ECSWorkerService:
+    Value: !GetAtt EcsStack.Outputs.ECSWorkerService
+  ECSWebService:
+    Value: !GetAtt EcsStack.Outputs.ECSWebService
+  ECSMigrationTaskDefinition:
+    Value: !GetAtt EcsStack.Outputs.ECSMigrationTaskDefinition
+  ECSPrivateSubnetIds:
+    Value: !GetAtt NetworkStack.Outputs.PrivateSubnetIds
+  ECSTaskSecurityGroupId:
+    Value: !GetAtt NetworkStack.Outputs.EcsTasksSecurityGroupId
+  ApiAlbDnsName:
+    Value: !GetAtt EcsStack.Outputs.ApiAlbDnsName
+  WebAlbDnsName:
+    Value: !GetAtt EcsStack.Outputs.WebAlbDnsName
+  ApiHealthUrl:
+    Value: !GetAtt EcsStack.Outputs.ApiHealthUrl
+  ApiBaseUrl:
+    Value: !GetAtt EcsStack.Outputs.ApiBaseUrl
+  NextPublicGoogleClientId:
+    Value: !Ref GoogleClientId
+  WebUrl:
+    Value: !GetAtt EcsStack.Outputs.WebUrl
+  S3BucketName:
+    Value: !GetAtt DataStack.Outputs.UploadsBucketName
+  RdsEndpoint:
+    Value: !GetAtt DataStack.Outputs.RdsEndpoint
+  RedisEndpoint:
+    Value: !GetAtt DataStack.Outputs.RedisEndpoint
+  ChromaUrl:
+    Value: http://chroma.reader-prod.local:8000
+  GitHubActionsDeployRoleArn:
+    Value: !GetAtt CiStack.Outputs.GitHubActionsDeployRoleArn

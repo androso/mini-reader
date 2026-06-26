@@ -1,5 +1,8 @@
 # AWS Console Deployment Guide
 
+> Legacy manual procedure. For a clean-account rebuild, use
+> `infra/cloudformation/reader-prod.yaml` and `docs/aws-cloudformation-rebuild.md`.
+
 This guide deploys Reader on AWS while keeping Chroma self-hosted. Infrastructure is created manually in the AWS Console. The repo-provided CI/CD only builds images, pushes them to ECR, runs migrations through ECS, and redeploys existing ECS services.
 
 No Terraform, CloudFormation, or CDK is used.

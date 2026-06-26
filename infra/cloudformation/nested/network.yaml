@@ -1,0 +1,425 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Reader production network, routing, and security groups
+
+Resources:
+  ReaderProdVpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: project
+          Value: reader
+        - Key: Name
+          Value: reader-prod-vpc
+
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref ReaderProdVpc
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      CidrBlock: 10.0.0.0/20
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: project
+          Value: reader
+        - Key: Name
+          Value: reader-prod-subnet-public1-us-east-1a
+
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref ReaderProdVpc
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      CidrBlock: 10.0.16.0/20
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: project
+          Value: reader
+        - Key: Name
+          Value: reader-prod-subnet-public2-us-east-1b
+
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref ReaderProdVpc
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      CidrBlock: 10.0.128.0/20
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: project
+          Value: reader
+        - Key: Name
+          Value: reader-prod-subnet-private1-us-east-1a
+
+  PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref ReaderProdVpc
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      CidrBlock: 10.0.144.0/20
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: project
+          Value: reader
+        - Key: Name
+          Value: reader-prod-subnet-private2-us-east-1b
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: project
+          Value: reader
+        - Key: Name
+          Value: reader-prod-vpc
+
+  VpcGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref ReaderProdVpc
+      InternetGatewayId: !Ref InternetGateway
+
+  RegionalNatEipA:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: project
+          Value: reader
+        - Key: Name
+          Value: reader-prod-regional-nat-eip-a
+
+  RegionalNatEipB:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: project
+          Value: reader
+        - Key: Name
+          Value: reader-prod-regional-nat-eip-b
+
+  RegionalNatGateway:
+    Type: AWS::EC2::NatGateway
+    DependsOn: VpcGatewayAttachment
+    Properties:
+      VpcId: !Ref ReaderProdVpc
+      ConnectivityType: public
+      AvailabilityMode: regional
+      AvailabilityZoneAddresses:
+        - AvailabilityZone: !Select [0, !GetAZs ""]
+          AllocationIds:
+            - !GetAtt RegionalNatEipA.AllocationId
+        - AvailabilityZone: !Select [1, !GetAZs ""]
+          AllocationIds:
+            - !GetAtt RegionalNatEipB.AllocationId
+      Tags:
+        - Key: project
+          Value: reader
+        - Key: Name
+          Value: reader-prod-regional-nat
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref ReaderProdVpc
+      Tags:
+        - Key: project
+          Value: reader
+        - Key: Name
+          Value: reader-prod-public-rtb
+
+  PublicDefaultRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VpcGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetA
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetBRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetB
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateRouteTableA:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref ReaderProdVpc
+      Tags:
+        - Key: project
+          Value: reader
+        - Key: Name
+          Value: reader-prod-private-rtb-a
+
+  PrivateRouteTableB:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref ReaderProdVpc
+      Tags:
+        - Key: project
+          Value: reader
+        - Key: Name
+          Value: reader-prod-private-rtb-b
+
+  PrivateDefaultRouteA:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableA
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref RegionalNatGateway
+
+  PrivateDefaultRouteB:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableB
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref RegionalNatGateway
+
+  PrivateSubnetARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetA
+      RouteTableId: !Ref PrivateRouteTableA
+
+  PrivateSubnetBRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetB
+      RouteTableId: !Ref PrivateRouteTableB
+
+  S3GatewayEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.s3
+      VpcEndpointType: Gateway
+      VpcId: !Ref ReaderProdVpc
+      RouteTableIds:
+        - !Ref PrivateRouteTableA
+        - !Ref PrivateRouteTableB
+      Tags:
+        - Key: project
+          Value: reader
+        - Key: Name
+          Value: reader-prod-s3-gateway-endpoint
+
+  ApiAlbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: reader-api-alb-sg
+      GroupDescription: Reader API ALB security group
+      VpcId: !Ref ReaderProdVpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: project
+          Value: reader
+        - Key: Name
+          Value: reader-api-alb-sg
+
+  WebAlbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: reader-prod-web-alb-sg
+      GroupDescription: Reader prod web ALB security group
+      VpcId: !Ref ReaderProdVpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: project
+          Value: reader
+        - Key: Name
+          Value: reader-prod-web-alb-sg
+
+  EcsTasksSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: reader-ecs-tasks-sg
+      GroupDescription: Reader ECS API and worker tasks security group
+      VpcId: !Ref ReaderProdVpc
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: project
+          Value: reader
+        - Key: Name
+          Value: reader-ecs-tasks-sg
+
+  WebTaskSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: reader-prod-web-task-sg
+      GroupDescription: Reader prod web task security group
+      VpcId: !Ref ReaderProdVpc
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: project
+          Value: reader
+        - Key: Name
+          Value: reader-prod-web-task-sg
+
+  ChromaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: reader-chroma-sg
+      GroupDescription: Reader Chroma security group
+      VpcId: !Ref ReaderProdVpc
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: project
+          Value: reader
+        - Key: Name
+          Value: reader-chroma-sg
+
+  RdsSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: reader-rds-sg
+      GroupDescription: Reader RDS security group
+      VpcId: !Ref ReaderProdVpc
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: project
+          Value: reader
+        - Key: Name
+          Value: reader-rds-sg
+
+  RedisSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: reader-redis-sg
+      GroupDescription: Reader Redis security group
+      VpcId: !Ref ReaderProdVpc
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: project
+          Value: reader
+        - Key: Name
+          Value: reader-redis-sg
+
+  EfsSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: reader-efs-sg
+      GroupDescription: Reader EFS security group
+      VpcId: !Ref ReaderProdVpc
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: project
+          Value: reader
+        - Key: Name
+          Value: reader-efs-sg
+
+  EcsTasksIngressFromApiAlb:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref EcsTasksSecurityGroup
+      IpProtocol: tcp
+      FromPort: 3000
+      ToPort: 3000
+      SourceSecurityGroupId: !Ref ApiAlbSecurityGroup
+
+  WebTaskIngressFromWebAlb:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref WebTaskSecurityGroup
+      IpProtocol: tcp
+      FromPort: 3000
+      ToPort: 3000
+      SourceSecurityGroupId: !Ref WebAlbSecurityGroup
+
+  ChromaIngressFromEcsTasks:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref ChromaSecurityGroup
+      IpProtocol: tcp
+      FromPort: 8000
+      ToPort: 8000
+      SourceSecurityGroupId: !Ref EcsTasksSecurityGroup
+
+  RdsIngressFromEcsTasks:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref RdsSecurityGroup
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      SourceSecurityGroupId: !Ref EcsTasksSecurityGroup
+
+  RedisIngressFromEcsTasks:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref RedisSecurityGroup
+      IpProtocol: tcp
+      FromPort: 6379
+      ToPort: 6379
+      SourceSecurityGroupId: !Ref EcsTasksSecurityGroup
+
+  EfsIngressFromChroma:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref EfsSecurityGroup
+      IpProtocol: tcp
+      FromPort: 2049
+      ToPort: 2049
+      SourceSecurityGroupId: !Ref ChromaSecurityGroup
+
+Outputs:
+  VpcId:
+    Value: !Ref ReaderProdVpc
+  PublicSubnetIds:
+    Value: !Join [",", [!Ref PublicSubnetA, !Ref PublicSubnetB]]
+  PrivateSubnetIds:
+    Value: !Join [",", [!Ref PrivateSubnetA, !Ref PrivateSubnetB]]
+  ApiAlbSecurityGroupId:
+    Value: !Ref ApiAlbSecurityGroup
+  WebAlbSecurityGroupId:
+    Value: !Ref WebAlbSecurityGroup
+  EcsTasksSecurityGroupId:
+    Value: !Ref EcsTasksSecurityGroup
+  WebTaskSecurityGroupId:
+    Value: !Ref WebTaskSecurityGroup
+  ChromaSecurityGroupId:
+    Value: !Ref ChromaSecurityGroup
+  RdsSecurityGroupId:
+    Value: !Ref RdsSecurityGroup
+  RedisSecurityGroupId:
+    Value: !Ref RedisSecurityGroup
+  EfsSecurityGroupId:
+    Value: !Ref EfsSecurityGroup

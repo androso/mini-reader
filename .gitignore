@@ -122,3 +122,7 @@ source-code.xml
 *-task-def*.json
 secret-map.json
 secret-sources.txt
+infra/cloudformation/environments/prod/parameters.json
+infra/cloudformation/**/*.changeset.json
+
+aws_architecture_map.json

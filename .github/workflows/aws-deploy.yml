@@ -11,19 +11,10 @@ permissions:
   id-token: write
 
 env:
-  AWS_REGION: ${{ vars.AWS_REGION }}
-  AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+  AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
   PROJECT_NAME: reader
   IMAGE_TAG: ${{ github.sha }}
-  NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
   NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${{ vars.NEXT_PUBLIC_GOOGLE_CLIENT_ID }}
-  ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
-  ECS_API_SERVICE: ${{ vars.ECS_API_SERVICE }}
-  ECS_WORKER_SERVICE: ${{ vars.ECS_WORKER_SERVICE }}
-  ECS_WEB_SERVICE: ${{ vars.ECS_WEB_SERVICE }}
-  ECS_MIGRATION_TASK_DEFINITION: ${{ vars.ECS_MIGRATION_TASK_DEFINITION }}
-  ECS_PRIVATE_SUBNET_IDS: ${{ vars.ECS_PRIVATE_SUBNET_IDS }}
-  ECS_TASK_SECURITY_GROUP_ID: ${{ vars.ECS_TASK_SECURITY_GROUP_ID }}
 
 jobs:
   deploy:
@@ -50,6 +41,9 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Load deployment values from CloudFormation
+        run: ./scripts/export-cloudformation-env.sh >> "$GITHUB_ENV"
 
       - name: Build and push images
         run: ./scripts/deploy-images.sh
