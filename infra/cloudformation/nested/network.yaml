@@ -103,6 +103,7 @@ Resources:
 
   RegionalNatGateway:
     Type: AWS::EC2::NatGateway
+    DependsOn: VpcGatewayAttachment
     Properties:
       VpcId: !Ref ReaderProdVpc
       ConnectivityType: public
