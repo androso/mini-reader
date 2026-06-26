@@ -189,6 +189,21 @@ export const recordObservationError = (
     });
 };
 
+export const shutdownLangfuseTracing = async () => {
+    if (!sdk) return;
+
+    const activeSdk = sdk;
+    sdk = null;
+
+    try {
+        await activeSdk.shutdown();
+    } catch (error) {
+        log.warn("Error shutting down Langfuse tracing", {
+            error: getErrorMessage(error),
+        });
+    }
+};
+
 export const startLangfuseTracing = () => {
     if (!isLangfuseTracingConfigured()) {
         log.info("Langfuse tracing disabled; missing credentials");
@@ -225,16 +240,6 @@ export const startLangfuseTracing = () => {
         maxCaptureChars: capture.maxChars,
         hasBaseUrl: Boolean(process.env.LANGFUSE_BASE_URL),
     });
-
-    const shutdown = () => {
-        sdk?.shutdown().catch((error) => {
-            log.warn("Error shutting down Langfuse tracing", {
-                error: getErrorMessage(error),
-            });
-        });
-    };
-    process.once("SIGTERM", shutdown);
-    process.once("SIGINT", shutdown);
 };
 
 export interface BookChatTraceContext {
