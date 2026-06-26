@@ -5,9 +5,16 @@ AWS_REGION="${AWS_REGION:-us-east-1}"
 STACK_NAME="${STACK_NAME:-reader-prod}"
 PARAMETERS_FILE="${PARAMETERS_FILE:-infra/cloudformation/environments/prod/parameters.json}"
 TEMPLATE_FILE="${TEMPLATE_FILE:-infra/cloudformation/reader-prod.yaml}"
+CFN_ARTIFACT_BUCKET="${CFN_ARTIFACT_BUCKET:-}"
+CFN_ARTIFACT_PREFIX="${CFN_ARTIFACT_PREFIX:-${STACK_NAME}/templates}"
 
 [[ -f "$PARAMETERS_FILE" ]] || {
     printf 'Missing %s; copy parameters.example.json and fill every placeholder.\n' "$PARAMETERS_FILE" >&2
+    exit 1
+}
+
+[[ -n "$CFN_ARTIFACT_BUCKET" ]] || {
+    printf 'Missing CFN_ARTIFACT_BUCKET; nested CloudFormation templates must be packaged to S3 before deploy.\n' >&2
     exit 1
 }
 
@@ -15,10 +22,25 @@ mapfile -t PARAMETER_OVERRIDES < <(
     jq -r '.[] | "\(.ParameterKey)=\(.ParameterValue)"' "$PARAMETERS_FILE"
 )
 
+TEMPLATE_DIR="$(cd "$(dirname "$TEMPLATE_FILE")" && pwd)"
+TEMPLATE_BASENAME="$(basename "$TEMPLATE_FILE")"
+PACKAGED_TEMPLATE="$(mktemp)"
+trap 'rm -f "$PACKAGED_TEMPLATE"' EXIT
+
+(
+    cd "$TEMPLATE_DIR"
+    aws cloudformation package \
+        --region "$AWS_REGION" \
+        --template-file "$TEMPLATE_BASENAME" \
+        --s3-bucket "$CFN_ARTIFACT_BUCKET" \
+        --s3-prefix "$CFN_ARTIFACT_PREFIX" \
+        --output-template-file "$PACKAGED_TEMPLATE"
+)
+
 aws cloudformation deploy \
     --region "$AWS_REGION" \
     --stack-name "$STACK_NAME" \
-    --template-file "$TEMPLATE_FILE" \
+    --template-file "$PACKAGED_TEMPLATE" \
     --parameter-overrides "${PARAMETER_OVERRIDES[@]}" \
     --capabilities CAPABILITY_NAMED_IAM \
     --no-fail-on-empty-changeset

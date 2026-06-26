@@ -1,6 +1,6 @@
 # Rebuild Reader AWS Infrastructure
 
-This is the source of truth for recreating Reader after the AWS account has been cleaned. The stack is defined in `infra/cloudformation/reader-prod.yaml`.
+This is the source of truth for recreating Reader after the AWS account has been cleaned. The root stack is defined in `infra/cloudformation/reader-prod.yaml`; nested templates live under `infra/cloudformation/nested/`.
 
 ## What the stack creates
 
@@ -15,7 +15,7 @@ The template deliberately starts all ECS services at desired count `0`. This let
 ## Prerequisites
 
 - AWS CLI authenticated as an administrator.
-- Docker, `jq`, Node 22, and pnpm 10.11.1.
+- Docker, `jq`, `cfn-lint`, Node 22, and pnpm 10.11.1.
 - Region `us-east-1`, unless the template is deliberately adapted.
 - Values for OpenAI, Google OAuth, JWT, and Chroma basic authentication.
 
@@ -35,15 +35,19 @@ For the initial create, `FrontendUrl` may be `http://localhost`; all desired cou
 ## 2. Validate and create the empty stack
 
 ```bash
-aws cloudformation validate-template \
-  --region us-east-1 \
-  --template-body file://infra/cloudformation/reader-prod.yaml
+cfn-lint -i W3002 -- infra/cloudformation/reader-prod.yaml infra/cloudformation/nested/*.yaml
 
-AWS_REGION=us-east-1 STACK_NAME=reader-prod \
+export CFN_ARTIFACT_BUCKET="reader-prod-cloudformation-artifacts-$(aws sts get-caller-identity \
+  --query Account --output text)-us-east-1"
+
+aws s3api head-bucket --bucket "$CFN_ARTIFACT_BUCKET" 2>/dev/null || \
+  aws s3api create-bucket --region us-east-1 --bucket "$CFN_ARTIFACT_BUCKET"
+
+AWS_REGION=us-east-1 STACK_NAME=reader-prod CFN_ARTIFACT_BUCKET="$CFN_ARTIFACT_BUCKET" \
   ./scripts/deploy-cloudformation.sh
 ```
 
-The deploy requires `CAPABILITY_NAMED_IAM`. Wait for `CREATE_COMPLETE`.
+The deploy script packages local nested templates to the artifact bucket, then deploys the packaged root template. The deploy requires `CAPABILITY_NAMED_IAM`. Wait for `CREATE_COMPLETE`.
 
 ## 3. Export stack outputs
 
