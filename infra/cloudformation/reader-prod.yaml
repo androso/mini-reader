@@ -161,6 +161,8 @@ Outputs:
     Value: !GetAtt EcsStack.Outputs.ApiHealthUrl
   ApiBaseUrl:
     Value: !GetAtt EcsStack.Outputs.ApiBaseUrl
+  NextPublicGoogleClientId:
+    Value: !Ref GoogleClientId
   WebUrl:
     Value: !GetAtt EcsStack.Outputs.WebUrl
   S3BucketName:

@@ -54,7 +54,6 @@ The deploy script packages local nested templates to the artifact bucket, then d
 ```bash
 ./scripts/export-cloudformation-env.sh
 eval "$(./scripts/export-cloudformation-env.sh | grep -v '^AWS_DEPLOY_ROLE_ARN=')"
-export NEXT_PUBLIC_GOOGLE_CLIENT_ID='<google-client-id>'
 ```
 
 Update `FrontendUrl` in `parameters.json` to the emitted `WebUrl`, then deploy the stack once more. This configures API CORS with the actual web origin.
@@ -62,11 +61,6 @@ Update `FrontendUrl` in `parameters.json` to the emitted `WebUrl`, then deploy t
 ## 4. Build and push images
 
 ```bash
-export NEXT_PUBLIC_API_URL="$(aws cloudformation describe-stacks \
-  --stack-name reader-prod \
-  --query "Stacks[0].Outputs[?OutputKey=='ApiBaseUrl'].OutputValue | [0]" \
-  --output text)"
-
 ./scripts/deploy-images.sh
 ```
 

@@ -23,5 +23,6 @@ ECS_MIGRATION_TASK_DEFINITION=$(output ECSMigrationTaskDefinition)
 ECS_PRIVATE_SUBNET_IDS=$(output ECSPrivateSubnetIds)
 ECS_TASK_SECURITY_GROUP_ID=$(output ECSTaskSecurityGroupId)
 NEXT_PUBLIC_API_URL=$(output ApiBaseUrl)
+NEXT_PUBLIC_GOOGLE_CLIENT_ID=$(output NextPublicGoogleClientId)
 AWS_DEPLOY_ROLE_ARN=$(output GitHubActionsDeployRoleArn)
 EOF
