@@ -89,6 +89,8 @@ Resources:
     Type: AWS::CloudFormation::Stack
     Properties:
       TemplateURL: nested/ci.yaml
+      Parameters:
+        DeployStackName: !Ref AWS::StackName
       Tags:
         - Key: project
           Value: reader

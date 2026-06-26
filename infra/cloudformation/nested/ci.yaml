@@ -1,6 +1,11 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: Reader production image repositories and GitHub deploy identity
 
+Parameters:
+  DeployStackName:
+    Type: String
+    Description: Root CloudFormation stack name that GitHub Actions reads for deployment outputs.
+
 Resources:
   ApiRepository:
     Type: AWS::ECR::Repository
@@ -122,6 +127,10 @@ Resources:
                   - logs:PutLogEvents
                   - logs:DescribeLogGroups
                 Resource: "*"
+              - Sid: ReadDeploymentStackOutputs
+                Effect: Allow
+                Action: cloudformation:DescribeStacks
+                Resource: !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${DeployStackName}/*
       Tags:
         - Key: project
           Value: reader
