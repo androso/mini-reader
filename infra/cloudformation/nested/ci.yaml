@@ -78,8 +78,8 @@ Resources:
             Condition:
               StringEquals:
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
-              StringLike:
-                token.actions.githubusercontent.com:sub: repo:androso/reader-backend:*
+              StringEquals:
+                token.actions.githubusercontent.com:sub: repo:androso/reader-backend:ref:refs/heads/main
       Policies:
         - PolicyName: ReaderGitHubActionsDeployPolicy
           PolicyDocument:
@@ -113,7 +113,10 @@ Resources:
               - Sid: PassRoleForECSTasks
                 Effect: Allow
                 Action: iam:PassRole
-                Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*
+                Resource:
+                  - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/ecsTaskExecutionRole
+                  - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/reader-prod-api-task-role
+                  - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/reader-prod-worker-task-role
                 Condition:
                   StringEqualsIfExists:
                     iam:PassedToService:
