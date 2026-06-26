@@ -1,6 +1,12 @@
 [
   { "ParameterKey": "JwtSecretValue", "ParameterValue": "<jwt-secret>" },
   { "ParameterKey": "OpenAiApiKeySecretValue", "ParameterValue": "<openai-api-key>" },
+  { "ParameterKey": "LangfusePublicKey", "ParameterValue": "" },
+  { "ParameterKey": "LangfuseSecretKeyValue", "ParameterValue": "" },
+  { "ParameterKey": "LangfuseBaseUrl", "ParameterValue": "" },
+  { "ParameterKey": "LangfuseSampleRate", "ParameterValue": "1" },
+  { "ParameterKey": "LangfuseCaptureContent", "ParameterValue": "metadata" },
+  { "ParameterKey": "LangfuseMaxCaptureChars", "ParameterValue": "500" },
   { "ParameterKey": "GoogleClientId", "ParameterValue": "<google-client-id>" },
   { "ParameterKey": "GoogleClientSecretValue", "ParameterValue": "<google-client-secret>" },
   { "ParameterKey": "ChromaServerAuthnCredentialsSecretValue", "ParameterValue": "<username:password>" },

@@ -6,6 +6,25 @@ Parameters:
     Type: String
   GoogleClientId:
     Type: String
+  LangfusePublicKey:
+    Type: String
+    Default: ""
+  LangfuseBaseUrl:
+    Type: String
+    Default: ""
+  LangfuseSampleRate:
+    Type: String
+    Default: "1"
+  LangfuseCaptureContent:
+    Type: String
+    Default: metadata
+    AllowedValues:
+      - metadata
+      - snippets
+  LangfuseMaxCaptureChars:
+    Type: Number
+    Default: 500
+    MinValue: 20
   ApiDesiredCount:
     Type: Number
     MinValue: 0
@@ -48,6 +67,9 @@ Parameters:
     Type: String
   OpenAiApiKeySecretArn:
     Type: String
+  LangfuseSecretKeySecretArn:
+    Type: String
+    Default: ""
   ChromaServerAuthnCredentialsSecretArn:
     Type: String
   ChromaClientAuthCredentialsSecretArn:
@@ -58,6 +80,11 @@ Parameters:
     Type: String
   ChromaDiscoveryServiceArn:
     Type: String
+
+Conditions:
+  HasLangfusePublicKey: !Not [!Equals [!Ref LangfusePublicKey, ""]]
+  HasLangfuseBaseUrl: !Not [!Equals [!Ref LangfuseBaseUrl, ""]]
+  HasLangfuseSecretKey: !Not [!Equals [!Ref LangfuseSecretKeySecretArn, ""]]
 
 Resources:
   EcsTaskExecutionRole:
@@ -356,6 +383,22 @@ Resources:
               Value: !Ref UploadsBucketName
             - Name: S3_REGION
               Value: !Ref AWS::Region
+            - Name: LANGFUSE_SAMPLE_RATE
+              Value: !Ref LangfuseSampleRate
+            - Name: LANGFUSE_CAPTURE_CONTENT
+              Value: !Ref LangfuseCaptureContent
+            - Name: LANGFUSE_MAX_CAPTURE_CHARS
+              Value: !Sub "${LangfuseMaxCaptureChars}"
+            - !If
+              - HasLangfusePublicKey
+              - Name: LANGFUSE_PUBLIC_KEY
+                Value: !Ref LangfusePublicKey
+              - !Ref AWS::NoValue
+            - !If
+              - HasLangfuseBaseUrl
+              - Name: LANGFUSE_BASE_URL
+                Value: !Ref LangfuseBaseUrl
+              - !Ref AWS::NoValue
           Secrets:
             - Name: DATABASE_URL
               ValueFrom: !Ref DatabaseUrlSecretArn
@@ -369,6 +412,11 @@ Resources:
               ValueFrom: !Ref RedisUrlSecretArn
             - Name: CHROMA_CLIENT_AUTH_CREDENTIALS
               ValueFrom: !Ref ChromaClientAuthCredentialsSecretArn
+            - !If
+              - HasLangfuseSecretKey
+              - Name: LANGFUSE_SECRET_KEY
+                ValueFrom: !Ref LangfuseSecretKeySecretArn
+              - !Ref AWS::NoValue
           LogConfiguration:
             LogDriver: awslogs
             Options:
