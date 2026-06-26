@@ -228,7 +228,16 @@ export const startLangfuseTracing = () => {
                 secretKey: process.env.LANGFUSE_SECRET_KEY,
                 baseUrl: process.env.LANGFUSE_BASE_URL || undefined,
                 environment: process.env.NODE_ENV || "development",
-                mask: ({ data }) => maskValue(data, undefined, capture),
+                mask: ({ data }) => {
+                    let parsed: unknown;
+                    try {
+                        parsed =
+                            typeof data === "string" ? JSON.parse(data) : data;
+                    } catch {
+                        parsed = data;
+                    }
+                    return maskValue(parsed, undefined, capture);
+                },
             }),
         ],
     });
