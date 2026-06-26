@@ -18,9 +18,7 @@ CFN_ARTIFACT_PREFIX="${CFN_ARTIFACT_PREFIX:-${STACK_NAME}/templates}"
     exit 1
 }
 
-mapfile -t PARAMETER_OVERRIDES < <(
-    jq -r '.[] | "\(.ParameterKey)=\(.ParameterValue)"' "$PARAMETERS_FILE"
-)
+PARAMETERS_FILE_ABS="$(cd "$(dirname "$PARAMETERS_FILE")" && pwd)/$(basename "$PARAMETERS_FILE")"
 
 TEMPLATE_DIR="$(cd "$(dirname "$TEMPLATE_FILE")" && pwd)"
 TEMPLATE_BASENAME="$(basename "$TEMPLATE_FILE")"
@@ -41,7 +39,7 @@ aws cloudformation deploy \
     --region "$AWS_REGION" \
     --stack-name "$STACK_NAME" \
     --template-file "$PACKAGED_TEMPLATE" \
-    --parameter-overrides "${PARAMETER_OVERRIDES[@]}" \
+    --parameter-overrides "file://$PARAMETERS_FILE_ABS" \
     --capabilities CAPABILITY_NAMED_IAM \
     --no-fail-on-empty-changeset
 

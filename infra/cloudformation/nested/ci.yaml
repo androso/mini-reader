@@ -1,6 +1,11 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: Reader production image repositories and GitHub deploy identity
 
+Parameters:
+  DeployStackName:
+    Type: String
+    Description: Root CloudFormation stack name that GitHub Actions reads for deployment outputs.
+
 Resources:
   ApiRepository:
     Type: AWS::ECR::Repository
@@ -73,8 +78,8 @@ Resources:
             Condition:
               StringEquals:
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
-              StringLike:
-                token.actions.githubusercontent.com:sub: repo:androso/reader-backend:*
+              StringEquals:
+                token.actions.githubusercontent.com:sub: repo:androso/reader-backend:ref:refs/heads/main
       Policies:
         - PolicyName: ReaderGitHubActionsDeployPolicy
           PolicyDocument:
@@ -108,7 +113,10 @@ Resources:
               - Sid: PassRoleForECSTasks
                 Effect: Allow
                 Action: iam:PassRole
-                Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*
+                Resource:
+                  - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/ecsTaskExecutionRole
+                  - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/reader-prod-api-task-role
+                  - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/reader-prod-worker-task-role
                 Condition:
                   StringEqualsIfExists:
                     iam:PassedToService:
@@ -127,6 +135,10 @@ Resources:
                   - logs:PutLogEvents
                   - logs:DescribeLogGroups
                 Resource: "*"
+              - Sid: ReadDeploymentStackOutputs
+                Effect: Allow
+                Action: cloudformation:DescribeStacks
+                Resource: !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${DeployStackName}/*
       Tags:
         - Key: project
           Value: reader
