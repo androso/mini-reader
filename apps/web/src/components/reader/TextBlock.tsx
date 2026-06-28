@@ -17,17 +17,9 @@ const TextBlock = memo(
         const [isLocked, setIsLocked] = React.useState(false);
         const dragThreshold = 80;
 
-        const handleDragStart = (e: React.MouseEvent | React.TouchEvent) => {
-            const clientX = "touches" in e ? e.touches[0].clientX : e.clientX;
-            setStartX(clientX);
-            if (!isLocked) {
-                setIsDragging(true);
-            }
-        };
-
-        const handleDragMove = (e: React.MouseEvent | React.TouchEvent) => {
+        const handleDragMove = (e: React.TouchEvent) => {
             if (!isDragging || isLocked) return;
-            const clientX = "touches" in e ? e.touches[0].clientX : e.clientX;
+            const clientX = e.touches[0].clientX;
             const deltaX = clientX - startX;
             setOffset(Math.min(Math.max(0, deltaX), 100));
         };
@@ -87,16 +79,14 @@ const TextBlock = memo(
         return (
             <div
                 id={id}
-                className={`transition-all transform select-none cursor-grab active:cursor-grabbing relative  `}
+                className="relative transform cursor-grab select-none transition-all md:cursor-auto md:select-text"
             >
                 <div
-                    className="absolute inset-0 z-10"
-                    onMouseDown={handleDragStart}
+                    className="absolute inset-0 z-10 md:pointer-events-none"
                     onTouchStart={(e) => {
                         const touch = e.touches[0];
                         setStartX(touch.clientX);
                     }}
-                    onMouseMove={handleDragMove}
                     onTouchMove={(e) => {
                         if (
                             !isDragging &&
@@ -110,9 +100,7 @@ const TextBlock = memo(
                             handleDragMove(e);
                         }
                     }}
-                    onMouseUp={handleDragEnd}
                     onTouchEnd={handleDragEnd}
-                    onMouseLeave={handleDragEnd}
                     style={{
                         touchAction: isDragging ? "none" : "pan-y",
                     }}
@@ -126,15 +114,13 @@ const TextBlock = memo(
                                 : "border-l-4 border-transparent"
                         } ${isDragging || isLocked ? "shadow-lg" : ""} ${
                             isLocked ? "cursor-pointer" : ""
-                        }`}
+                        } ${isLocked ? "pointer-events-auto" : "pointer-events-none md:pointer-events-auto"}`}
                         onClick={handleParagraphClick}
                         style={{
                             transform: `translateX(${offset}px)`,
                             transition: !isDragging
                                 ? "transform 0.2s ease-out"
                                 : "none",
-                            userSelect: "none",
-                            pointerEvents: isLocked ? "auto" : "none",
                         }}
                         dangerouslySetInnerHTML={{ __html: content }}
                     />
