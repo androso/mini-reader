@@ -14,9 +14,43 @@ export type ChatMessage = {
     content: string;
 };
 
-export const OPENAI_CHAT_MODEL = "gpt-4o-mini";
+export const OPENAI_CHAT_MODELS = [
+    "gpt-4o-mini",
+    "gpt-5.5-2026-04-23",
+    "gpt-5.4-mini-2026-03-17",
+] as const;
+export type OpenAIChatModel = (typeof OPENAI_CHAT_MODELS)[number];
+export const OPENAI_CHAT_MODEL: OpenAIChatModel = OPENAI_CHAT_MODELS[0];
 export const OPENAI_CHAT_TEMPERATURE = 0.7;
 export const OPENAI_CHAT_MAX_TOKENS = 300;
+
+export const isOpenAIChatModel = (model: unknown): model is OpenAIChatModel =>
+    typeof model === "string" &&
+    (OPENAI_CHAT_MODELS as readonly string[]).includes(model);
+
+const usesMaxCompletionTokens = (model: OpenAIChatModel) =>
+    model !== OPENAI_CHAT_MODEL;
+
+const getModelRequestParameters = (
+    model: OpenAIChatModel
+): Pick<
+    ChatCompletionCreateParamsStreaming,
+    "temperature" | "max_tokens" | "max_completion_tokens"
+> => {
+    if (usesMaxCompletionTokens(model)) {
+        return { max_completion_tokens: OPENAI_CHAT_MAX_TOKENS };
+    }
+
+    return {
+        temperature: OPENAI_CHAT_TEMPERATURE,
+        max_tokens: OPENAI_CHAT_MAX_TOKENS,
+    };
+};
+
+const getInstructionRole = (
+    model: OpenAIChatModel
+): ChatCompletionMessageParam["role"] =>
+    model === OPENAI_CHAT_MODEL ? "system" : "developer";
 
 export interface LangfuseOpenAITraceOptions {
     userId: string;
@@ -28,6 +62,7 @@ export interface LangfuseOpenAITraceOptions {
 }
 
 export interface GenerateStreamResponseOptions {
+    model?: OpenAIChatModel;
     langfuse?: LangfuseOpenAITraceOptions;
 }
 
@@ -54,19 +89,19 @@ export const createOpenAIClientOptions = (): NonNullable<
 
 export const buildChatCompletionRequest = (
     userMessages: ChatMessage[],
-    systemPrompt = "You are a helpful assistant."
+    systemPrompt = "You are a helpful assistant.",
+    model: OpenAIChatModel = OPENAI_CHAT_MODEL
 ): ChatCompletionCreateParamsStreaming => ({
-    model: OPENAI_CHAT_MODEL,
+    model: model as ChatCompletionCreateParamsStreaming["model"],
     messages: [
         {
-            role: "system",
+            role: getInstructionRole(model),
             content: systemPrompt,
             name: "system",
-        },
+        } as ChatCompletionMessageParam,
         ...(userMessages as ChatCompletionMessageParam[]),
     ],
-    temperature: OPENAI_CHAT_TEMPERATURE,
-    max_tokens: OPENAI_CHAT_MAX_TOKENS,
+    ...getModelRequestParameters(model),
     stream: true,
     stream_options: {
         include_usage: true,
@@ -102,7 +137,11 @@ export class OpenAIService {
         options?: GenerateStreamResponseOptions
     ): Promise<any> {
         const response = await this.getClient(options).chat.completions.create(
-            buildChatCompletionRequest(userMessages, systemPrompt)
+            buildChatCompletionRequest(
+                userMessages,
+                systemPrompt,
+                options?.model
+            )
         );
         return response;
     }

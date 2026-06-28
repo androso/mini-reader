@@ -9,6 +9,7 @@ import {
     foreignKey,
     ForeignKey,
     uniqueIndex,
+    jsonb,
 } from "drizzle-orm/pg-core";
 
 export const messageRoleEnum = pgEnum("message_role", ["user", "assistant"]);
@@ -71,6 +72,14 @@ export const Conversations = pgTable("conversations", {
     resourceId: uuid("resource_id").notNull(),
 });
 
+export type MessageContextSource = {
+    id: string;
+    chunkIndex: number;
+    score: number;
+    bestRank: number;
+    excerpt: string;
+};
+
 export const Messages = pgTable("messages", {
     id: uuid("id").defaultRandom().primaryKey(),
     conversationId: uuid("conversation_id")
@@ -78,6 +87,9 @@ export const Messages = pgTable("messages", {
         .notNull(),
     role: messageRoleEnum("role").notNull(),
     content: text("content").notNull(),
+    contextSources: jsonb("context_sources").$type<
+        MessageContextSource[] | null
+    >(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

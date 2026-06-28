@@ -1,7 +1,12 @@
 import { and, desc, eq } from "drizzle-orm";
 import { createLogger } from "@reader/providers";
 import { db } from "../db";
-import { Books, Conversations, Messages } from "../db/schema";
+import {
+    Books,
+    Conversations,
+    Messages,
+    type MessageContextSource,
+} from "../db/schema";
 import { authenticate } from "../middleware/auth";
 import {
     OPENAI_CHAT_MAX_TOKENS,
@@ -9,6 +14,8 @@ import {
     OPENAI_CHAT_TEMPERATURE,
     OpenAIService,
     type ChatMessage,
+    type OpenAIChatModel,
+    isOpenAIChatModel,
 } from "../services/OpenAIServices";
 import { Router, Request, Response } from "express";
 import { hybridBookSearchService } from "../services/HybridBookSearchService";
@@ -43,6 +50,14 @@ const isPrematureCloseError = (error: unknown) =>
     getErrorDetail(error).includes("ERR_STREAM_PREMATURE_CLOSE") ||
     getErrorDetail(error).includes("Premature close");
 
+const resolveChatModel = (model: unknown): OpenAIChatModel | null => {
+    if (model === undefined || model === null || model === "") {
+        return OPENAI_CHAT_MODEL;
+    }
+
+    return isOpenAIChatModel(model) ? model : null;
+};
+
 const summarizeRetrievedChunks = (
     results: Awaited<ReturnType<typeof hybridBookSearchService.search>>
 ) => {
@@ -59,6 +74,17 @@ const summarizeRetrievedChunks = (
     });
 };
 
+const buildContextSources = (
+    results: Awaited<ReturnType<typeof hybridBookSearchService.search>>
+): MessageContextSource[] =>
+    results.map((result) => ({
+        id: result.id,
+        chunkIndex: result.chunkIndex,
+        score: result.score,
+        bestRank: result.bestRank,
+        excerpt: result.content,
+    }));
+
 const buildRagMessages = async (
     resourceType: string,
     resourceId: string,
@@ -69,6 +95,7 @@ const buildRagMessages = async (
 ): Promise<{
     messages: ChatMessage[];
     status: "ready" | "processing" | "failed";
+    sources: MessageContextSource[] | null;
     error?: string | null;
 }> => {
     log.debug("Building RAG messages", {
@@ -82,7 +109,7 @@ const buildRagMessages = async (
             resourceType,
             resourceId,
         });
-        return { messages, status: "ready" };
+        return { messages, status: "ready", sources: null };
     }
 
     const loadBookSpan = trace.startObservation("load_book", {
@@ -115,7 +142,7 @@ const buildRagMessages = async (
 
     if (!book) {
         log.warn("Book not found for RAG", { resourceId, userId });
-        return { messages, status: "ready" };
+        return { messages, status: "ready", sources: null };
     }
 
     if (book.processingStatus === "failed") {
@@ -127,6 +154,7 @@ const buildRagMessages = async (
         return {
             messages,
             status: "failed",
+            sources: null,
             error: book.processingError,
         };
     }
@@ -137,7 +165,7 @@ const buildRagMessages = async (
             userId,
             processingStatus: book.processingStatus,
         });
-        return { messages, status: "processing" };
+        return { messages, status: "processing", sources: null };
     }
 
     try {
@@ -193,9 +221,10 @@ const buildRagMessages = async (
                 resourceId,
                 collectionName: book.collectionName,
             });
-            return { messages, status: "ready" };
+            return { messages, status: "ready", sources: null };
         }
 
+        const sources = buildContextSources(searchResults);
         const promptSpan = trace.startObservation("build_rag_prompt", {
             input: {
                 retrievedChunkCount: documents.length,
@@ -217,6 +246,7 @@ const buildRagMessages = async (
         promptSpan.end();
         return {
             status: "ready",
+            sources,
             messages: [
                 {
                     role: "system" as const,
@@ -231,7 +261,7 @@ const buildRagMessages = async (
             collectionName: book.collectionName,
             error: error instanceof Error ? error.message : String(error),
         });
-        return { messages, status: "ready" };
+        return { messages, status: "ready", sources: null };
     }
 };
 
@@ -253,6 +283,7 @@ const streamAssistantResponse = async ({
     resourceType,
     resourceId,
     routeName,
+    model,
     traceOpenAI,
 }: {
     messages: ChatMessage[];
@@ -263,11 +294,12 @@ const streamAssistantResponse = async ({
     resourceType: string;
     resourceId: string;
     routeName: string;
+    model: OpenAIChatModel;
     traceOpenAI: boolean;
 }) => {
     const openAiSpan = trace.startObservation("openai_chat_stream", {
         input: {
-            model: OPENAI_CHAT_MODEL,
+            model,
             temperature: OPENAI_CHAT_TEMPERATURE,
             maxTokens: OPENAI_CHAT_MAX_TOKENS,
             messageCount: messages.length,
@@ -283,24 +315,27 @@ const streamAssistantResponse = async ({
         const textStream = await oaiService.generateStreamResponse(
             messages,
             undefined,
-            traceOpenAI
-                ? {
-                      langfuse: {
-                          userId,
-                          sessionId: conversationId,
-                          generationName: "openai_chat_completion",
-                          tags: ["reader-api", "book-chat", routeName],
-                          generationMetadata: {
-                              routeName,
-                              resourceType,
-                              resourceId,
-                              conversationId,
-                              model: OPENAI_CHAT_MODEL,
+            {
+                model,
+                ...(traceOpenAI
+                    ? {
+                          langfuse: {
+                              userId,
+                              sessionId: conversationId,
+                              generationName: "openai_chat_completion",
+                              tags: ["reader-api", "book-chat", routeName],
+                              generationMetadata: {
+                                  routeName,
+                                  resourceType,
+                                  resourceId,
+                                  conversationId,
+                                  model,
+                              },
+                              parentSpanContext: openAiSpan.getSpanContext(),
                           },
-                          parentSpanContext: openAiSpan.getSpanContext(),
-                      },
-                  }
-                : undefined
+                      }
+                    : {}),
+            }
         );
 
         for await (const chunk of textStream) {
@@ -363,12 +398,14 @@ const streamAssistantResponse = async ({
 const saveAssistantMessage = async (
     conversationId: string,
     content: string,
+    contextSources: MessageContextSource[] | null,
     trace: TraceObservation
 ) => {
     const saveSpan = trace.startObservation("save_assistant_message", {
         input: {
             conversationId,
             responseLength: content.length,
+            sourceCount: contextSources?.length ?? 0,
         },
     });
 
@@ -377,11 +414,13 @@ const saveAssistantMessage = async (
             conversationId,
             role: "assistant",
             content,
+            contextSources,
         });
         saveSpan.update({
             output: {
                 saved: true,
                 responseLength: content.length,
+                sourceCount: contextSources?.length ?? 0,
             },
         });
     } catch (error) {
@@ -405,6 +444,7 @@ const runChatCompletion = async ({
     query,
     res,
     routeName,
+    model,
     trace,
 }: {
     resourceType: string;
@@ -415,6 +455,7 @@ const runChatCompletion = async ({
     query: string;
     res: Response;
     routeName: string;
+    model: OpenAIChatModel;
     trace: TraceObservation;
 }) => {
     const ragResult = await buildRagMessages(
@@ -453,17 +494,29 @@ const runChatCompletion = async ({
         resourceType,
         resourceId,
         routeName,
+        model,
         traceOpenAI: resourceType === "book",
     });
 
     if (!res.writableEnded) {
-        await saveAssistantMessage(conversationId, accumulatedResponse, trace);
+        await saveAssistantMessage(
+            conversationId,
+            accumulatedResponse,
+            ragResult.sources,
+            trace
+        );
         trace.setTraceIO({
             output: {
                 status: "complete",
                 assistantResponseLength: accumulatedResponse.length,
+                sourceCount: ragResult.sources?.length ?? 0,
             },
         });
+        if (ragResult.sources?.length) {
+            res.write(
+                `data: ${JSON.stringify({ type: "sources", sources: ragResult.sources })}\n\n`
+            );
+        }
         res.write("data: [DONE]\n\n");
         res.end();
     }
@@ -520,10 +573,17 @@ router.post(
         }
 
         try {
-            const { message, messages } = req.body;
+            const { message, messages, model } = req.body;
             if (!message || !Array.isArray(messages)) {
                 res.status(400).send({
                     error: "Message and messages array are required",
+                });
+                return;
+            }
+            const chatModel = resolveChatModel(model);
+            if (!chatModel) {
+                res.status(400).send({
+                    error: "Unsupported chat model",
                 });
                 return;
             }
@@ -572,6 +632,7 @@ router.post(
                         query: message,
                         res,
                         routeName: "create_conversation",
+                        model: chatModel,
                         trace,
                     })
             );
@@ -628,10 +689,17 @@ router.post(
                 return;
             }
 
-            const { messages } = req.body;
+            const { messages, model } = req.body;
             if (!Array.isArray(messages) || messages.length === 0) {
                 res.status(400).send({
                     error: "Messages array is required",
+                });
+                return;
+            }
+            const chatModel = resolveChatModel(model);
+            if (!chatModel) {
+                res.status(400).send({
+                    error: "Unsupported chat model",
                 });
                 return;
             }
@@ -667,6 +735,7 @@ router.post(
                         query: lastMessage.content,
                         res,
                         routeName: "append_message",
+                        model: chatModel,
                         trace,
                     })
             );

@@ -40,6 +40,21 @@ test("chat stream request includes usage capture and model settings", () => {
     assert.equal(request.messages[1].role, "user");
 });
 
+test("newer chat models use compatible request parameters", () => {
+    for (const model of [
+        "gpt-5.5-2026-04-23",
+        "gpt-5.4-mini-2026-03-17",
+    ] as const) {
+        const request = buildChatCompletionRequest(messages, undefined, model);
+
+        assert.equal(request.model, model);
+        assert.equal(request.max_completion_tokens, OPENAI_CHAT_MAX_TOKENS);
+        assert.equal(request.max_tokens, undefined);
+        assert.equal(request.temperature, undefined);
+        assert.equal(request.messages[0].role, "developer");
+    }
+});
+
 test("OpenAI client options preserve transport hardening", () => {
     const options = createOpenAIClientOptions();
 
