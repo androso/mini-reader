@@ -88,6 +88,38 @@ export const useChat = (bookId: string) => {
                             continue;
                         }
 
+                        if (jsonData.type === "sources") {
+                            setChatState((prev) => {
+                                const messages = [...prev.messages];
+                                const lastMessage =
+                                    messages[messages.length - 1];
+
+                                if (lastMessage?.role === "assistant") {
+                                    messages[messages.length - 1] = {
+                                        ...lastMessage,
+                                        contextSources: Array.isArray(
+                                            jsonData.sources
+                                        )
+                                            ? jsonData.sources
+                                            : [],
+                                    };
+                                }
+
+                                return {
+                                    ...prev,
+                                    messages,
+                                    currentConversation:
+                                        prev.currentConversation
+                                            ? {
+                                                  ...prev.currentConversation,
+                                                  messages,
+                                              }
+                                            : null,
+                                };
+                            });
+                            continue;
+                        }
+
                         if (jsonData.error !== undefined) {
                             setChatState((prev) => {
                                 const messages = [...prev.messages];
@@ -148,7 +180,7 @@ export const useChat = (bookId: string) => {
     );
 
     const handleSubmit = useCallback(
-        async (e: React.FormEvent) => {
+        async (e: React.FormEvent, model: string) => {
             e.preventDefault();
             if (!input.trim()) return;
 
@@ -177,6 +209,7 @@ export const useChat = (bookId: string) => {
                         message: userMessage.content,
                         role: "user",
                         messages: [...chatState.messages, userMessage],
+                        model,
                     }),
                 });
 

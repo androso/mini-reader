@@ -1,13 +1,19 @@
 "use client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, SendHorizontal, History } from "lucide-react";
-import { useMemo } from "react";
+import { ArrowLeft, SendHorizontal, History, ChevronDown } from "lucide-react";
+import { useMemo, useState } from "react";
 import MessageList, { Message } from "./MessageList";
 import ChatHistory from "./ChatHistory";
 import useConversations from "@/hooks/chat/useConversations";
 import { useChat } from "@/hooks/chat/useChat";
 import { useBookProcessingStatus } from "@/hooks/useBookProcessingStatus";
+
+const CHAT_MODELS = [
+    { value: "gpt-4o-mini", label: "GPT-4o mini" },
+    { value: "gpt-5.5-2026-04-23", label: "GPT-5.5" },
+    { value: "gpt-5.4-mini-2026-03-17", label: "GPT-5.4 mini" },
+];
 
 interface ChatInterfaceProps {
     isMobile?: boolean;
@@ -45,6 +51,7 @@ export function ChatInterface({
     const { data: conversationsData, refetch: refetchConversations } =
         useConversations(bookId);
     const { data: processingStatus } = useBookProcessingStatus(bookId);
+    const [selectedModel, setSelectedModel] = useState(CHAT_MODELS[0].value);
     const isDocumentReady = processingStatus?.ready ?? false;
     const processingError =
         processingStatus?.status === "failed"
@@ -103,10 +110,12 @@ export function ChatInterface({
                 <ChatInput
                     input={input}
                     setInput={setInput}
-                    handleSubmit={handleSubmit}
+                    handleSubmit={(event) => handleSubmit(event, selectedModel)}
                     isDocumentReady={isDocumentReady}
                     isCheckingStatus={!processingStatus}
                     processingError={processingError}
+                    selectedModel={selectedModel}
+                    setSelectedModel={setSelectedModel}
                     onHistoryClick={() => {
                         refetchConversations();
                         setChatState((prev) => ({
@@ -147,6 +156,8 @@ const ChatInput = ({
     isDocumentReady,
     isCheckingStatus,
     processingError,
+    selectedModel,
+    setSelectedModel,
     onHistoryClick,
 }: {
     input: string;
@@ -155,6 +166,8 @@ const ChatInput = ({
     isDocumentReady: boolean;
     isCheckingStatus: boolean;
     processingError: string | null;
+    selectedModel: string;
+    setSelectedModel: (value: string) => void;
     onHistoryClick: () => void;
 }) => (
     <form onSubmit={handleSubmit} className="mt-auto shrink-0 p-6 md:p-8">
@@ -172,6 +185,23 @@ const ChatInput = ({
                         : "Document context is still processing. You can ask questions once it is ready.")}
             </div>
         )}
+        <div className="mb-2 flex justify-end">
+            <div className="relative">
+                <select
+                    value={selectedModel}
+                    onChange={(e) => setSelectedModel(e.target.value)}
+                    aria-label="Chat model"
+                    className="h-9 appearance-none rounded-md border border-white/10 bg-[#2b2c32] pl-3 pr-8 text-sm font-semibold text-white shadow-sm outline-none transition-colors hover:bg-[#303139] focus:border-white/30 focus:ring-2 focus:ring-white/20"
+                >
+                    {CHAT_MODELS.map((model) => (
+                        <option key={model.value} value={model.value}>
+                            {model.label}
+                        </option>
+                    ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-white/70" />
+            </div>
+        </div>
         <div className="flex items-center gap-2 rounded-full bg-white py-2 pl-2 pr-3 shadow-[0px_10px_30px_rgba(0,0,0,0.15)]">
             <Button
                 type="button"

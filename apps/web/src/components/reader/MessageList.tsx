@@ -1,11 +1,54 @@
 import { ScrollArea } from "@radix-ui/react-scroll-area";
-import { Sparkles } from "lucide-react";
+import { BookOpenText, ChevronDown, Sparkles } from "lucide-react";
 import { memo } from "react";
 
+export type ContextSource = {
+    id: string;
+    chunkIndex: number;
+    score: number;
+    bestRank: number;
+    excerpt: string;
+};
+
 export type Message = {
+    id?: string | null;
     role: string;
     content: string;
+    contextSources?: ContextSource[] | null;
 };
+
+const formatScore = (score: number) =>
+    Number.isFinite(score) ? score.toFixed(4) : "n/a";
+
+const MessageSources = ({ sources }: { sources: ContextSource[] }) => (
+    <details className="group max-w-[85%] rounded-lg border border-white/10 bg-[#2f3039] text-[#d6d5e3] shadow-sm">
+        <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-xs font-semibold text-white/85 marker:hidden [&::-webkit-details-marker]:hidden">
+            <BookOpenText className="h-4 w-4 text-[#c6c5d4]" />
+            <span>Sources</span>
+            <span className="rounded-full bg-white/10 px-2 py-0.5 text-[11px] leading-4 text-white/70">
+                {sources.length}
+            </span>
+            <ChevronDown className="ml-auto h-4 w-4 text-white/60 transition-transform group-open:rotate-180" />
+        </summary>
+        <div className="max-h-80 space-y-3 overflow-y-auto border-t border-white/10 px-3 py-3">
+            {sources.map((source, index) => (
+                <div
+                    key={`${source.id}-${index}`}
+                    className="border-b border-white/10 pb-3 last:border-b-0 last:pb-0"
+                >
+                    <div className="mb-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-semibold uppercase tracking-normal text-white/60">
+                        <span>Chunk {source.chunkIndex}</span>
+                        <span>Score {formatScore(source.score)}</span>
+                        <span>Rank {source.bestRank}</span>
+                    </div>
+                    <p className="whitespace-pre-wrap break-words text-xs leading-relaxed text-[#c6c5d4]">
+                        {source.excerpt}
+                    </p>
+                </div>
+            ))}
+        </div>
+    </details>
+);
 
 const MessageList = memo(
     ({
@@ -25,6 +68,7 @@ const MessageList = memo(
                     .filter(Boolean)
                     .map((message: Message, index: number) => {
                         const isAssistant = message.role === "assistant";
+                        const sources = message.contextSources ?? [];
 
                         return (
                             <div
@@ -59,6 +103,9 @@ const MessageList = memo(
                                         {message.content}
                                     </p>
                                 </div>
+                                {isAssistant && sources.length > 0 && (
+                                    <MessageSources sources={sources} />
+                                )}
                             </div>
                         );
                     })}
