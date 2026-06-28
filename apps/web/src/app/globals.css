@@ -1,5 +1,6 @@
 @import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700&display=swap");
 @import url("https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap");
+@import "katex/dist/katex.min.css";
 
 @tailwind base;
 @tailwind components;
@@ -197,4 +198,102 @@ body {
 	align-items: center;
 	justify-content: center;
 	min-height: 50vh;
+}
+
+.chat-markdown {
+	overflow-wrap: anywhere;
+}
+
+.chat-markdown > *:first-child {
+	margin-top: 0;
+}
+
+.chat-markdown > *:last-child {
+	margin-bottom: 0;
+}
+
+.chat-markdown p,
+.chat-markdown ul,
+.chat-markdown ol,
+.chat-markdown blockquote,
+.chat-markdown pre,
+.chat-markdown .katex-display {
+	margin-bottom: 0.75rem;
+}
+
+.chat-markdown h1,
+.chat-markdown h2,
+.chat-markdown h3,
+.chat-markdown h4,
+.chat-markdown h5,
+.chat-markdown h6 {
+	margin: 0.85rem 0 0.35rem;
+	font-size: 0.95rem;
+	font-weight: 700;
+	line-height: 1.35;
+	color: #f4f3ff;
+}
+
+.chat-markdown p {
+	white-space: pre-wrap;
+}
+
+.chat-markdown ul,
+.chat-markdown ol {
+	padding-left: 1.25rem;
+}
+
+.chat-markdown ul {
+	list-style: disc;
+}
+
+.chat-markdown ol {
+	list-style: decimal;
+}
+
+.chat-markdown li {
+	margin: 0.2rem 0;
+}
+
+.chat-markdown a {
+	color: #d8d7ff;
+	text-decoration: underline;
+	text-underline-offset: 2px;
+}
+
+.chat-markdown blockquote {
+	border-left: 3px solid rgba(255, 255, 255, 0.22);
+	color: #deddf0;
+	padding-left: 0.75rem;
+}
+
+.chat-markdown code {
+	border-radius: 0.25rem;
+	background: rgba(0, 0, 0, 0.22);
+	color: #f7f5ff;
+	font-size: 0.82rem;
+	font-weight: 600;
+	padding: 0.08rem 0.3rem;
+}
+
+.chat-markdown pre {
+	max-width: 100%;
+	overflow-x: auto;
+	border-radius: 0.5rem;
+	background: rgba(16, 17, 24, 0.7);
+	padding: 0.85rem;
+}
+
+.chat-markdown pre code {
+	display: block;
+	background: transparent;
+	padding: 0;
+	white-space: pre;
+}
+
+.chat-markdown .katex-display {
+	max-width: 100%;
+	overflow-x: auto;
+	overflow-y: hidden;
+	padding: 0.25rem 0;
 }

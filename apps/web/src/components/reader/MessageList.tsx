@@ -1,6 +1,9 @@
 import { ScrollArea } from "@radix-ui/react-scroll-area";
 import { BookOpenText, ChevronDown, Sparkles } from "lucide-react";
 import { memo } from "react";
+import ReactMarkdown from "react-markdown";
+import rehypeKatex from "rehype-katex";
+import remarkMath from "remark-math";
 
 export type ContextSource = {
     id: string;
@@ -48,6 +51,22 @@ const MessageSources = ({ sources }: { sources: ContextSource[] }) => (
             ))}
         </div>
     </details>
+);
+
+const AssistantMessageContent = ({ content }: { content: string }) => (
+    <ReactMarkdown
+        remarkPlugins={[remarkMath]}
+        rehypePlugins={[rehypeKatex]}
+        components={{
+            a: ({ children, ...props }) => (
+                <a {...props} target="_blank" rel="noreferrer">
+                    {children}
+                </a>
+            ),
+        }}
+    >
+        {content}
+    </ReactMarkdown>
 );
 
 const MessageList = memo(
@@ -99,9 +118,17 @@ const MessageList = memo(
                                             : "rounded-tr-none bg-[#444654] text-white"
                                     }`}
                                 >
-                                    <p className="whitespace-pre-wrap font-sans text-sm font-semibold leading-relaxed">
-                                        {message.content}
-                                    </p>
+                                    {isAssistant ? (
+                                        <div className="chat-markdown font-sans text-sm font-semibold leading-relaxed">
+                                            <AssistantMessageContent
+                                                content={message.content}
+                                            />
+                                        </div>
+                                    ) : (
+                                        <p className="whitespace-pre-wrap font-sans text-sm font-semibold leading-relaxed">
+                                            {message.content}
+                                        </p>
+                                    )}
                                 </div>
                                 {isAssistant && sources.length > 0 && (
                                     <MessageSources sources={sources} />
