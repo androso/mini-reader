@@ -3,7 +3,10 @@ import test from "node:test";
 import { HybridBookSearchService } from "../src/services/HybridBookSearchService";
 import type { BookSearchChunk } from "../src/services/BookSearchChunkStore";
 import type { VectorSearchResult } from "@reader/providers";
-import { withBookChatTrace } from "../src/observability/langfuse";
+import {
+    maskLangfuseAttribute,
+    withBookChatTrace,
+} from "../src/observability/langfuse";
 
 const chunks: BookSearchChunk[] = [
     {
@@ -152,4 +155,24 @@ test("hybrid search runs through disabled Langfuse tracing", async () => {
         restoreEnv("LANGFUSE_PUBLIC_KEY", previousPublicKey);
         restoreEnv("LANGFUSE_SECRET_KEY", previousSecretKey);
     }
+});
+
+test("Langfuse mask preserves stringified input and output attributes", () => {
+    const masked = maskLangfuseAttribute(
+        JSON.stringify({
+            query: "What happened in chapter one?",
+            metadata: {
+                routeName: "chat",
+            },
+        }),
+        { mode: "metadata", maxChars: 100 }
+    );
+
+    assert.equal(typeof masked, "string");
+    assert.deepEqual(JSON.parse(masked as string), {
+        query: "[redacted]",
+        metadata: {
+            routeName: "chat",
+        },
+    });
 });

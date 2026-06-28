@@ -141,6 +141,32 @@ const maskValue = (
     return value;
 };
 
+const stringifyLangfuseAttribute = (value: unknown) => {
+    try {
+        return typeof value === "string" ? value : JSON.stringify(value);
+    } catch {
+        return "<failed to serialize>";
+    }
+};
+
+export const maskLangfuseAttribute = (
+    data: unknown,
+    capture = getLangfuseCaptureConfig()
+) => {
+    if (typeof data !== "string") {
+        return maskValue(data, undefined, capture);
+    }
+
+    try {
+        const parsed = JSON.parse(data);
+        return stringifyLangfuseAttribute(
+            maskValue(parsed, undefined, capture)
+        );
+    } catch {
+        return maskValue(data, undefined, capture);
+    }
+};
+
 const wrapObservation = (
     observation: LangfuseObservation
 ): TraceObservation => {
@@ -229,14 +255,7 @@ export const startLangfuseTracing = () => {
                 baseUrl: process.env.LANGFUSE_BASE_URL || undefined,
                 environment: process.env.NODE_ENV || "development",
                 mask: ({ data }) => {
-                    let parsed: unknown;
-                    try {
-                        parsed =
-                            typeof data === "string" ? JSON.parse(data) : data;
-                    } catch {
-                        parsed = data;
-                    }
-                    return maskValue(parsed, undefined, capture);
+                    return maskLangfuseAttribute(data, capture);
                 },
             }),
         ],
