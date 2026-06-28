@@ -53,7 +53,9 @@ The deploy script packages local nested templates to the artifact bucket, then d
 
 ```bash
 ./scripts/export-cloudformation-env.sh
+set -a
 eval "$(./scripts/export-cloudformation-env.sh | grep -v '^AWS_DEPLOY_ROLE_ARN=')"
+set +a
 ```
 
 Update `FrontendUrl` in `parameters.json` to the emitted `WebUrl`, then deploy the stack once more. This configures API CORS with the actual web origin.

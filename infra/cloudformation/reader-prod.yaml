@@ -13,6 +13,29 @@ Parameters:
   OpenAiApiKeySecretValue:
     Type: String
     NoEcho: true
+  LangfusePublicKey:
+    Type: String
+    Default: ""
+  LangfuseSecretKeyValue:
+    Type: String
+    NoEcho: true
+    Default: ""
+  LangfuseBaseUrl:
+    Type: String
+    Default: ""
+  LangfuseSampleRate:
+    Type: String
+    Default: "1"
+  LangfuseCaptureContent:
+    Type: String
+    Default: metadata
+    AllowedValues:
+      - metadata
+      - snippets
+  LangfuseMaxCaptureChars:
+    Type: Number
+    Default: 500
+    MinValue: 20
   GoogleClientId:
     Type: String
   GoogleClientSecretValue:
@@ -70,6 +93,7 @@ Resources:
       Parameters:
         JwtSecretValue: !Ref JwtSecretValue
         OpenAiApiKeySecretValue: !Ref OpenAiApiKeySecretValue
+        LangfuseSecretKeyValue: !Ref LangfuseSecretKeyValue
         GoogleClientSecretValue: !Ref GoogleClientSecretValue
         ChromaServerAuthnCredentialsSecretValue: !Ref ChromaServerAuthnCredentialsSecretValue
         ChromaClientAuthCredentialsSecretValue: !Ref ChromaClientAuthCredentialsSecretValue
@@ -106,6 +130,11 @@ Resources:
       Parameters:
         FrontendUrl: !Ref FrontendUrl
         GoogleClientId: !Ref GoogleClientId
+        LangfusePublicKey: !Ref LangfusePublicKey
+        LangfuseBaseUrl: !Ref LangfuseBaseUrl
+        LangfuseSampleRate: !Ref LangfuseSampleRate
+        LangfuseCaptureContent: !Ref LangfuseCaptureContent
+        LangfuseMaxCaptureChars: !Ref LangfuseMaxCaptureChars
         ApiDesiredCount: !Ref ApiDesiredCount
         WorkerDesiredCount: !Ref WorkerDesiredCount
         WebDesiredCount: !Ref WebDesiredCount
@@ -125,6 +154,7 @@ Resources:
         RedisUrlSecretArn: !GetAtt DataStack.Outputs.RedisUrlSecretArn
         JwtSecretArn: !GetAtt DataStack.Outputs.JwtSecretArn
         OpenAiApiKeySecretArn: !GetAtt DataStack.Outputs.OpenAiApiKeySecretArn
+        LangfuseSecretKeySecretArn: !GetAtt DataStack.Outputs.LangfuseSecretKeySecretArn
         ChromaServerAuthnCredentialsSecretArn: !GetAtt DataStack.Outputs.ChromaServerAuthnCredentialsSecretArn
         ChromaClientAuthCredentialsSecretArn: !GetAtt DataStack.Outputs.ChromaClientAuthCredentialsSecretArn
         GoogleClientSecretSecretArn: !GetAtt DataStack.Outputs.GoogleClientSecretSecretArn

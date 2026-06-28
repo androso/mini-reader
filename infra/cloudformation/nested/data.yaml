@@ -8,6 +8,10 @@ Parameters:
   OpenAiApiKeySecretValue:
     Type: String
     NoEcho: true
+  LangfuseSecretKeyValue:
+    Type: String
+    NoEcho: true
+    Default: ""
   GoogleClientSecretValue:
     Type: String
     NoEcho: true
@@ -32,6 +36,9 @@ Parameters:
     Type: AWS::EC2::SecurityGroup::Id
   EfsSecurityGroupId:
     Type: AWS::EC2::SecurityGroup::Id
+
+Conditions:
+  HasLangfuseSecretKey: !Not [!Equals [!Ref LangfuseSecretKeyValue, ""]]
 
 Resources:
   DbCredentialsSecret:
@@ -100,6 +107,20 @@ Resources:
           Value: reader
         - Key: Name
           Value: reader/prod/OPENAI_API_KEY
+
+  LangfuseSecretKeySecret:
+    Type: AWS::SecretsManager::Secret
+    Condition: HasLangfuseSecretKey
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Name: reader/prod/LANGFUSE_SECRET_KEY
+      SecretString: !Ref LangfuseSecretKeyValue
+      Tags:
+        - Key: project
+          Value: reader
+        - Key: Name
+          Value: reader/prod/LANGFUSE_SECRET_KEY
 
   ChromaServerAuthnCredentialsSecret:
     Type: AWS::SecretsManager::Secret
@@ -318,6 +339,8 @@ Outputs:
     Value: !Ref JwtSecret
   OpenAiApiKeySecretArn:
     Value: !Ref OpenAiApiKeySecret
+  LangfuseSecretKeySecretArn:
+    Value: !If [HasLangfuseSecretKey, !Ref LangfuseSecretKeySecret, ""]
   ChromaServerAuthnCredentialsSecretArn:
     Value: !Ref ChromaServerAuthnCredentialsSecret
   ChromaClientAuthCredentialsSecretArn:

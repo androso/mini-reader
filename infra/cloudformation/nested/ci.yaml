@@ -122,6 +122,11 @@ Resources:
                     iam:PassedToService:
                       - ecs-tasks.amazonaws.com
                       - ecs.amazonaws.com
+              - Sid: CloudFormationDescribeForDeploy
+                Effect: Allow
+                Action:
+                  - cloudformation:DescribeStacks
+                Resource: "*"
               - Sid: CloudWatchLogs
                 Effect: Allow
                 Action:

@@ -83,6 +83,7 @@ Resources:
 
   RegionalNatEipA:
     Type: AWS::EC2::EIP
+    DependsOn: VpcGatewayAttachment
     Properties:
       Domain: vpc
       Tags:
@@ -93,6 +94,7 @@ Resources:
 
   RegionalNatEipB:
     Type: AWS::EC2::EIP
+    DependsOn: VpcGatewayAttachment
     Properties:
       Domain: vpc
       Tags:

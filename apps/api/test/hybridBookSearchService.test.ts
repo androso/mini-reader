@@ -3,6 +3,10 @@ import test from "node:test";
 import { HybridBookSearchService } from "../src/services/HybridBookSearchService";
 import type { BookSearchChunk } from "../src/services/BookSearchChunkStore";
 import type { VectorSearchResult } from "@reader/providers";
+import {
+    maskLangfuseAttribute,
+    withBookChatTrace,
+} from "../src/observability/langfuse";
 
 const chunks: BookSearchChunk[] = [
     {
@@ -24,6 +28,15 @@ const chunks: BookSearchChunk[] = [
         content: "A quiet library held maps of every kingdom.",
     },
 ];
+
+const restoreEnv = (name: string, value: string | undefined) => {
+    if (value === undefined) {
+        delete process.env[name];
+        return;
+    }
+
+    process.env[name] = value;
+};
 
 const createService = (
     semanticResults: VectorSearchResult[] = [],
@@ -95,7 +108,10 @@ test("falls back to semantic results when MiniSearch chunks are missing", async 
         finalLimit: 1,
     });
 
-    assert.deepEqual(results.map((result) => result.id), ["book_test_1"]);
+    assert.deepEqual(
+        results.map((result) => result.id),
+        ["book_test_1"]
+    );
 });
 
 test("reuses the cached MiniSearch index for the same collection", async () => {
@@ -105,4 +121,58 @@ test("reuses the cached MiniSearch index for the same collection", async () => {
     await service.search("book_test", "library", { vectorLimit: 0 });
 
     assert.equal(getLoadCount(), 1);
+});
+
+test("hybrid search runs through disabled Langfuse tracing", async () => {
+    const previousPublicKey = process.env.LANGFUSE_PUBLIC_KEY;
+    const previousSecretKey = process.env.LANGFUSE_SECRET_KEY;
+    delete process.env.LANGFUSE_PUBLIC_KEY;
+    delete process.env.LANGFUSE_SECRET_KEY;
+    const { service } = createService();
+
+    try {
+        const results = await withBookChatTrace(
+            {
+                userId: "user-1",
+                conversationId: "conversation-1",
+                resourceType: "book",
+                resourceId: "book-1",
+                routeName: "test",
+                messageCount: 1,
+                queryLength: "dragons".length,
+            },
+            (trace) =>
+                service.search(
+                    "book_test",
+                    "dragons",
+                    { vectorLimit: 0 },
+                    { trace, capture: { mode: "metadata", maxChars: 100 } }
+                )
+        );
+
+        assert.equal(results[0].id, "book_test_0");
+    } finally {
+        restoreEnv("LANGFUSE_PUBLIC_KEY", previousPublicKey);
+        restoreEnv("LANGFUSE_SECRET_KEY", previousSecretKey);
+    }
+});
+
+test("Langfuse mask preserves stringified input and output attributes", () => {
+    const masked = maskLangfuseAttribute(
+        JSON.stringify({
+            query: "What happened in chapter one?",
+            metadata: {
+                routeName: "chat",
+            },
+        }),
+        { mode: "metadata", maxChars: 100 }
+    );
+
+    assert.equal(typeof masked, "string");
+    assert.deepEqual(JSON.parse(masked as string), {
+        query: "[redacted]",
+        metadata: {
+            routeName: "chat",
+        },
+    });
 });

@@ -18,6 +18,12 @@ declare global {
             NODE_ENV?: string;
             STORAGE_DRIVER?: "s3" | "local";
             LOG_LEVEL?: "debug" | "info" | "warn" | "error";
+            LANGFUSE_PUBLIC_KEY?: string;
+            LANGFUSE_SECRET_KEY?: string;
+            LANGFUSE_BASE_URL?: string;
+            LANGFUSE_SAMPLE_RATE?: string;
+            LANGFUSE_CAPTURE_CONTENT?: "metadata" | "snippets";
+            LANGFUSE_MAX_CAPTURE_CHARS?: string;
         }
     }
 

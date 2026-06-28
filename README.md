@@ -11,7 +11,7 @@ This repository is now structured as the Reader platform monorepo. The current b
 
 ## Commands
 
-- `pnpm dev`: run the API app in development mode.
+- `pnpm dev`: run the API, web app, and Redis-backed worker in development mode.
 - `pnpm build`: compile the backend packages, API app, and worker app.
 - `pnpm worker:dev`: run the Redis-backed book processing worker in development.
 - `pnpm web:dev`: run the Next.js web app on port `3001`.

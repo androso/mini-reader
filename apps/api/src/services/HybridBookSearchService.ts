@@ -9,6 +9,12 @@ import {
     bookSearchChunkStore,
     type BookSearchChunk,
 } from "./BookSearchChunkStore";
+import {
+    recordObservationError,
+    snippetForLangfuse,
+    type LangfuseCaptureConfig,
+    type TraceObservation,
+} from "../observability/langfuse";
 
 const log = createLogger("hybridSearch");
 
@@ -31,6 +37,11 @@ interface LexicalSearchResult {
     rank: number;
 }
 
+interface HybridSearchTraceOptions {
+    trace?: TraceObservation;
+    capture?: LangfuseCaptureConfig;
+}
+
 interface CachedMiniSearchIndex {
     index: MiniSearch<BookSearchChunk>;
     chunksById: Map<string, BookSearchChunk>;
@@ -44,6 +55,46 @@ const parseChunkIndex = (id: string) => {
     const maybeIndex = Number(id.slice(id.lastIndexOf("_") + 1));
     return Number.isFinite(maybeIndex) ? maybeIndex : Number.MAX_SAFE_INTEGER;
 };
+
+const summarizeLexicalResults = (
+    results: LexicalSearchResult[],
+    capture?: LangfuseCaptureConfig
+) =>
+    results.slice(0, 5).map((result) => ({
+        id: result.id,
+        chunkIndex: result.chunkIndex,
+        rank: result.rank,
+        ...(capture
+            ? { snippet: snippetForLangfuse(result.content, capture) }
+            : {}),
+    }));
+
+const summarizeVectorResults = (
+    results: VectorSearchResult[],
+    capture?: LangfuseCaptureConfig
+) =>
+    results.slice(0, 5).map((result) => ({
+        id: result.id,
+        rank: result.rank,
+        distance: result.distance,
+        ...(capture
+            ? { snippet: snippetForLangfuse(result.content, capture) }
+            : {}),
+    }));
+
+const summarizeRankedResults = (
+    results: RankedSearchResult[],
+    capture?: LangfuseCaptureConfig
+) =>
+    results.slice(0, 5).map((result) => ({
+        id: result.id,
+        chunkIndex: result.chunkIndex,
+        score: result.score,
+        bestRank: result.bestRank,
+        ...(capture
+            ? { snippet: snippetForLangfuse(result.content, capture) }
+            : {}),
+    }));
 
 export class HybridBookSearchService {
     private readonly indexes = new Map<string, CachedMiniSearchIndex>();
@@ -101,37 +152,113 @@ export class HybridBookSearchService {
     private async searchLexical(
         collectionName: string,
         query: string,
-        limit: number
+        limit: number,
+        tracing: HybridSearchTraceOptions = {}
     ): Promise<LexicalSearchResult[]> {
+        const span = tracing.trace?.startObservation("lexical_search", {
+            input: {
+                collectionName,
+                queryLength: query.length,
+                limit,
+            },
+        });
+
         if (!query.trim()) {
             log.debug("Empty lexical query, skipping", { collectionName });
+            span?.update({ output: { skipped: true, resultCount: 0 } });
+            span?.end();
             return [];
         }
 
-        log.info("Searching lexical index", { collectionName, limit });
-        const cached = await this.getMiniSearchIndex(collectionName);
-        if (!cached) return [];
+        try {
+            log.info("Searching lexical index", { collectionName, limit });
+            const cached = await this.getMiniSearchIndex(collectionName);
+            if (!cached) {
+                span?.update({
+                    output: {
+                        indexed: false,
+                        resultCount: 0,
+                    },
+                });
+                return [];
+            }
 
-        const results = cached.index
-            .search(query, {
-                prefix: true,
-            })
-            .slice(0, limit)
-            .map((result, index) => {
-                const chunk = cached.chunksById.get(String(result.id));
-                return {
-                    id: String(result.id),
-                    content: String(result.content ?? chunk?.content ?? ""),
-                    chunkIndex: Number(result.chunkIndex ?? chunk?.chunkIndex),
-                    rank: index + 1,
-                };
-            })
-            .filter((result) => result.content);
-        log.info("Lexical search complete", {
-            collectionName,
-            resultCount: results.length,
+            const results = cached.index
+                .search(query, {
+                    prefix: true,
+                })
+                .slice(0, limit)
+                .map((result, index) => {
+                    const chunk = cached.chunksById.get(String(result.id));
+                    return {
+                        id: String(result.id),
+                        content: String(result.content ?? chunk?.content ?? ""),
+                        chunkIndex: Number(
+                            result.chunkIndex ?? chunk?.chunkIndex
+                        ),
+                        rank: index + 1,
+                    };
+                })
+                .filter((result) => result.content);
+            log.info("Lexical search complete", {
+                collectionName,
+                resultCount: results.length,
+            });
+            span?.update({
+                output: {
+                    indexed: true,
+                    resultCount: results.length,
+                    topResults: summarizeLexicalResults(
+                        results,
+                        tracing.capture
+                    ),
+                },
+            });
+            return results;
+        } catch (error) {
+            recordObservationError(span, error, "Lexical search failed");
+            throw error;
+        } finally {
+            span?.end();
+        }
+    }
+
+    private async searchVector(
+        collectionName: string,
+        query: string,
+        limit: number,
+        tracing: HybridSearchTraceOptions = {}
+    ): Promise<VectorSearchResult[]> {
+        const span = tracing.trace?.startObservation("vector_search", {
+            input: {
+                collectionName,
+                queryLength: query.length,
+                limit,
+            },
         });
-        return results;
+
+        try {
+            const results = await this.semanticSearch.searchDocuments(
+                collectionName,
+                query,
+                limit
+            );
+            span?.update({
+                output: {
+                    resultCount: results.length,
+                    topResults: summarizeVectorResults(
+                        results,
+                        tracing.capture
+                    ),
+                },
+            });
+            return results;
+        } catch (error) {
+            recordObservationError(span, error, "Vector search failed");
+            throw error;
+        } finally {
+            span?.end();
+        }
     }
 
     private fuseResults(
@@ -190,7 +317,8 @@ export class HybridBookSearchService {
             lexicalLimit?: number;
             vectorLimit?: number;
             finalLimit?: number;
-        } = {}
+        } = {},
+        tracing: HybridSearchTraceOptions = {}
     ): Promise<RankedSearchResult[]> {
         const start = Date.now();
         const lexicalLimit = options.lexicalLimit ?? 20;
@@ -208,12 +336,8 @@ export class HybridBookSearchService {
         });
 
         const [lexicalResults, vectorResults] = await Promise.all([
-            this.searchLexical(collectionName, query, lexicalLimit),
-            this.semanticSearch.searchDocuments(
-                collectionName,
-                query,
-                vectorLimit
-            ),
+            this.searchLexical(collectionName, query, lexicalLimit, tracing),
+            this.searchVector(collectionName, query, vectorLimit, tracing),
         ]);
 
         log.info("Search results before fusion", {
@@ -236,6 +360,19 @@ export class HybridBookSearchService {
                 collectionName,
                 resultCount: fallback.length,
             });
+            tracing.trace?.update({
+                output: {
+                    mode: "vector_only",
+                    resultCount: fallback.length,
+                    lexicalResultCount: lexicalResults.length,
+                    vectorResultCount: vectorResults.length,
+                    durationMs: Date.now() - start,
+                    topResults: summarizeRankedResults(
+                        fallback,
+                        tracing.capture
+                    ),
+                },
+            });
             return fallback;
         }
 
@@ -249,6 +386,16 @@ export class HybridBookSearchService {
             collectionName,
             resultCount: fused.length,
             durationMs: duration,
+        });
+        tracing.trace?.update({
+            output: {
+                mode: "hybrid",
+                resultCount: fused.length,
+                lexicalResultCount: lexicalResults.length,
+                vectorResultCount: vectorResults.length,
+                durationMs: duration,
+                topResults: summarizeRankedResults(fused, tracing.capture),
+            },
         });
         return fused;
     }
