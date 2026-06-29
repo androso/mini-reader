@@ -17,6 +17,13 @@ import {
     type OpenAIChatModel,
     isOpenAIChatModel,
 } from "../services/OpenAIServices";
+import {
+    addHighlightContextMessage,
+    buildBookContextSystemPrompt,
+    buildRetrievalQuery,
+    normalizeHighlightContext,
+    type HighlightContext,
+} from "../services/HighlightContext";
 import { Router, Request, Response } from "express";
 import { hybridBookSearchService } from "../services/HybridBookSearchService";
 import {
@@ -91,6 +98,7 @@ const buildRagMessages = async (
     userId: string,
     messages: ChatMessage[],
     query: string,
+    highlightContext: HighlightContext | null = null,
     trace: TraceObservation = getNoopTraceObservation()
 ): Promise<{
     messages: ChatMessage[];
@@ -109,7 +117,11 @@ const buildRagMessages = async (
             resourceType,
             resourceId,
         });
-        return { messages, status: "ready", sources: null };
+        return {
+            messages: addHighlightContextMessage(messages, highlightContext),
+            status: "ready",
+            sources: null,
+        };
     }
 
     const loadBookSpan = trace.startObservation("load_book", {
@@ -250,7 +262,10 @@ const buildRagMessages = async (
             messages: [
                 {
                     role: "system" as const,
-                    content: `Use the following retrieved book excerpts as the primary context for the user's question. If the excerpts do not contain the answer, say that the book context does not provide enough information.\n\nBook context:\n${context}`,
+                    content: buildBookContextSystemPrompt(
+                        context,
+                        highlightContext
+                    ),
                 },
                 ...messages,
             ],
@@ -445,6 +460,7 @@ const runChatCompletion = async ({
     res,
     routeName,
     model,
+    highlightContext,
     trace,
 }: {
     resourceType: string;
@@ -456,14 +472,17 @@ const runChatCompletion = async ({
     res: Response;
     routeName: string;
     model: OpenAIChatModel;
+    highlightContext: HighlightContext | null;
     trace: TraceObservation;
 }) => {
+    const retrievalQuery = buildRetrievalQuery(query, highlightContext);
     const ragResult = await buildRagMessages(
         resourceType,
         resourceId,
         userId,
         messages,
-        query,
+        retrievalQuery,
+        highlightContext,
         trace
     );
     if (ragResult.status === "processing") {
@@ -531,6 +550,7 @@ const runBookChatTraceIfNeeded = <T>(
         routeName,
         messageCount,
         queryLength,
+        hasHighlightContext,
     }: {
         resourceType: string;
         resourceId: string;
@@ -539,6 +559,7 @@ const runBookChatTraceIfNeeded = <T>(
         routeName: string;
         messageCount: number;
         queryLength: number;
+        hasHighlightContext?: boolean;
     },
     fn: (trace: TraceObservation) => T
 ) => {
@@ -553,6 +574,7 @@ const runBookChatTraceIfNeeded = <T>(
             routeName,
             messageCount,
             queryLength,
+            hasHighlightContext,
         },
         fn
     );
@@ -580,6 +602,9 @@ router.post(
                 });
                 return;
             }
+            const highlightContext = normalizeHighlightContext(
+                req.body.highlightContext
+            );
             const chatModel = resolveChatModel(model);
             if (!chatModel) {
                 res.status(400).send({
@@ -621,6 +646,7 @@ router.post(
                     routeName: "create_conversation",
                     messageCount: messages.length,
                     queryLength: message.length,
+                    hasHighlightContext: Boolean(highlightContext),
                 },
                 (trace) =>
                     runChatCompletion({
@@ -633,6 +659,7 @@ router.post(
                         res,
                         routeName: "create_conversation",
                         model: chatModel,
+                        highlightContext,
                         trace,
                     })
             );
@@ -696,6 +723,9 @@ router.post(
                 });
                 return;
             }
+            const highlightContext = normalizeHighlightContext(
+                req.body.highlightContext
+            );
             const chatModel = resolveChatModel(model);
             if (!chatModel) {
                 res.status(400).send({
@@ -724,6 +754,7 @@ router.post(
                     routeName: "append_message",
                     messageCount: messages.length,
                     queryLength: lastMessage.content.length,
+                    hasHighlightContext: Boolean(highlightContext),
                 },
                 (trace) =>
                     runChatCompletion({
@@ -736,6 +767,7 @@ router.post(
                         res,
                         routeName: "append_message",
                         model: chatModel,
+                        highlightContext,
                         trace,
                     })
             );

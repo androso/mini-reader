@@ -1,13 +1,21 @@
 "use client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, SendHorizontal, History, ChevronDown } from "lucide-react";
-import { useMemo, useState } from "react";
+import {
+    ArrowLeft,
+    SendHorizontal,
+    History,
+    ChevronDown,
+    Quote,
+    X,
+} from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import MessageList, { Message } from "./MessageList";
 import ChatHistory from "./ChatHistory";
 import useConversations from "@/hooks/chat/useConversations";
 import { useChat } from "@/hooks/chat/useChat";
 import { useBookProcessingStatus } from "@/hooks/useBookProcessingStatus";
+import type { HighlightContext } from "@/types/highlightContext";
 
 const CHAT_MODELS = [
     { value: "gpt-4o-mini", label: "GPT-4o mini" },
@@ -19,6 +27,8 @@ interface ChatInterfaceProps {
     isMobile?: boolean;
     bookId: string;
     onBack?: () => void;
+    highlightContext?: HighlightContext | null;
+    onClearHighlightContext?: () => void;
 }
 
 const ChatLayout = ({
@@ -47,11 +57,14 @@ export function ChatInterface({
     isMobile = false,
     bookId,
     onBack,
+    highlightContext = null,
+    onClearHighlightContext,
 }: ChatInterfaceProps) {
     const { data: conversationsData, refetch: refetchConversations } =
         useConversations(bookId);
     const { data: processingStatus } = useBookProcessingStatus(bookId);
     const [selectedModel, setSelectedModel] = useState(CHAT_MODELS[0].value);
+    const inputRef = useRef<HTMLInputElement>(null);
     const isDocumentReady = processingStatus?.ready ?? false;
     const processingError =
         processingStatus?.status === "failed"
@@ -66,6 +79,12 @@ export function ChatInterface({
         setChatState,
         setInput,
     } = useChat(bookId);
+
+    useEffect(() => {
+        if (isMobile || !highlightContext || !isDocumentReady) return;
+
+        inputRef.current?.focus();
+    }, [highlightContext, isDocumentReady, isMobile]);
 
     return (
         <div className={`relative flex ${!isMobile && "h-full w-full"}`}>
@@ -110,12 +129,22 @@ export function ChatInterface({
                 <ChatInput
                     input={input}
                     setInput={setInput}
-                    handleSubmit={(event) => handleSubmit(event, selectedModel)}
+                    handleSubmit={(event) =>
+                        handleSubmit(
+                            event,
+                            selectedModel,
+                            highlightContext,
+                            onClearHighlightContext
+                        )
+                    }
                     isDocumentReady={isDocumentReady}
                     isCheckingStatus={!processingStatus}
                     processingError={processingError}
+                    highlightContext={highlightContext}
+                    onClearHighlightContext={onClearHighlightContext}
                     selectedModel={selectedModel}
                     setSelectedModel={setSelectedModel}
+                    inputRef={inputRef}
                     onHistoryClick={() => {
                         refetchConversations();
                         setChatState((prev) => ({
@@ -156,8 +185,11 @@ const ChatInput = ({
     isDocumentReady,
     isCheckingStatus,
     processingError,
+    highlightContext,
+    onClearHighlightContext,
     selectedModel,
     setSelectedModel,
+    inputRef,
     onHistoryClick,
 }: {
     input: string;
@@ -166,8 +198,11 @@ const ChatInput = ({
     isDocumentReady: boolean;
     isCheckingStatus: boolean;
     processingError: string | null;
+    highlightContext: HighlightContext | null;
+    onClearHighlightContext?: () => void;
     selectedModel: string;
     setSelectedModel: (value: string) => void;
+    inputRef: React.RefObject<HTMLInputElement | null>;
     onHistoryClick: () => void;
 }) => (
     <form onSubmit={handleSubmit} className="mt-auto shrink-0 p-6 md:p-8">
@@ -202,6 +237,25 @@ const ChatInput = ({
                 <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-white/70" />
             </div>
         </div>
+        {highlightContext && (
+            <div className="mb-2 rounded-lg border border-white/10 bg-[#2b2c32] px-3 py-2 text-white shadow-sm">
+                <div className="mb-1 flex items-center gap-2 text-xs font-semibold text-white/75">
+                    <Quote className="h-3.5 w-3.5 text-[#c6c5d4]" />
+                    <span>Selected text</span>
+                    <button
+                        type="button"
+                        onClick={onClearHighlightContext}
+                        className="ml-auto rounded-full p-1 text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+                        aria-label="Remove selected text"
+                    >
+                        <X className="h-3.5 w-3.5" />
+                    </button>
+                </div>
+                <p className="max-h-20 overflow-y-auto whitespace-pre-wrap break-words text-xs font-medium leading-relaxed text-[#d6d5e3]">
+                    {highlightContext.text}
+                </p>
+            </div>
+        )}
         <div className="flex items-center gap-2 rounded-full bg-white py-2 pl-2 pr-3 shadow-[0px_10px_30px_rgba(0,0,0,0.15)]">
             <Button
                 type="button"
@@ -213,6 +267,7 @@ const ChatInput = ({
                 <History className="h-5 w-5" />
             </Button>
             <Input
+                ref={inputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder={

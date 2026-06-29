@@ -1,14 +1,45 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 
-export const useTextSelection = (_tooltipContent: string = "hello") => {
+const getSelectionContainerNode = (node: Node) =>
+    node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+
+const isSelectionInsideContainer = (
+    selection: Selection,
+    container: HTMLElement | null
+) => {
+    if (!container || !selection.rangeCount) return false;
+
+    const range = selection.getRangeAt(0);
+    const selectionNode = getSelectionContainerNode(
+        range.commonAncestorContainer
+    );
+
+    return selectionNode ? container.contains(selectionNode) : false;
+};
+
+export const useTextSelection = ({
+    containerRef,
+    enabled = true,
+}: {
+    containerRef: RefObject<HTMLElement | null>;
+    enabled?: boolean;
+}) => {
     const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
     const [isVisible, setIsVisible] = useState(false);
+    const [selectedText, setSelectedText] = useState("");
     const tooltipRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
+        if (!enabled) {
+            setIsVisible(false);
+            setSelectedText("");
+            return;
+        }
+
         const expandSelectionToWord = () => {
             const sel = window.getSelection();
             if (!sel?.rangeCount) return;
+            if (!isSelectionInsideContainer(sel, containerRef.current)) return;
 
             const range = sel.getRangeAt(0);
             const start = range.startContainer;
@@ -52,7 +83,10 @@ export const useTextSelection = (_tooltipContent: string = "hello") => {
 
         const handleSelectionChange = () => {
             const selection = window.getSelection();
-            if (selection?.toString().length) {
+            if (
+                selection?.toString().trim().length &&
+                isSelectionInsideContainer(selection, containerRef.current)
+            ) {
                 const range = selection.getRangeAt(0);
                 const rect = range.getBoundingClientRect();
 
@@ -66,15 +100,13 @@ export const useTextSelection = (_tooltipContent: string = "hello") => {
 
                 setTooltipPosition({
                     x: leftPosition,
-                    y:
-                        rect.top -
-                        (tooltipRef.current?.offsetHeight || 0) -
-                        10 +
-                        window.scrollY,
+                    y: rect.top - (tooltipRef.current?.offsetHeight || 0) - 10,
                 });
+                setSelectedText(selection.toString().trim());
                 setIsVisible(true);
             } else {
                 setIsVisible(false);
+                setSelectedText("");
             }
         };
 
@@ -88,7 +120,19 @@ export const useTextSelection = (_tooltipContent: string = "hello") => {
                 handleSelectionChange
             );
         };
-    }, []);
+    }, [containerRef, enabled]);
 
-    return { tooltipRef, tooltipPosition, isVisible };
+    const clearSelection = () => {
+        window.getSelection()?.removeAllRanges();
+        setSelectedText("");
+        setIsVisible(false);
+    };
+
+    return {
+        tooltipRef,
+        tooltipPosition,
+        isVisible,
+        selectedText,
+        clearSelection,
+    };
 };

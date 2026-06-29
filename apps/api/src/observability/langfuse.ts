@@ -278,6 +278,7 @@ export interface BookChatTraceContext {
     routeName: string;
     messageCount: number;
     queryLength: number;
+    hasHighlightContext?: boolean;
 }
 
 export const withBookChatTrace = <T>(
@@ -312,6 +313,9 @@ export const withBookChatTrace = <T>(
                         resourceId: context.resourceId,
                         messageCount: context.messageCount,
                         queryLength: context.queryLength,
+                        hasHighlightContext: Boolean(
+                            context.hasHighlightContext
+                        ),
                     },
                 });
 

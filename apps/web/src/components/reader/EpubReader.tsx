@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, memo } from "react";
-import { Menu } from "lucide-react";
+import { Menu, MessageCirclePlus } from "lucide-react";
 import Sidebar from "./Sidebar";
 import { useEpubProcessor } from "@/hooks/useEpubProcessor";
 import { useChapterLoader } from "@/hooks/useChapterLoader";
 import { useTextBlockNavigation } from "@/hooks/useTextBlockNavigation";
+import { useTextSelection } from "@/hooks/useTextSelection";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import Chapter from "./Chapter";
 import type { Chapter as EpubChapter } from "@/hooks/useChapterLoader";
@@ -11,12 +12,23 @@ import { findChapterByHref } from "@/lib/epubNavigation";
 
 interface EpubReaderProps {
     url: string;
+    onAddHighlightContext?: (text: string) => void;
 }
 
-const EpubReader: React.FC<EpubReaderProps> = memo(({ url }) => {
+const EpubReader = memo(({ url, onAddHighlightContext }: EpubReaderProps) => {
     const { processEpub, isLoading, error, epubContent, zipData } =
         useEpubProcessor();
     const contentRef = useRef<HTMLDivElement>(null);
+    const {
+        tooltipRef,
+        tooltipPosition,
+        isVisible: isSelectionActionVisible,
+        selectedText,
+        clearSelection,
+    } = useTextSelection({
+        containerRef: contentRef,
+        enabled: Boolean(onAddHighlightContext),
+    });
     const { chapters, loadAllChapters, flatTextBlocks } = useChapterLoader(
         epubContent,
         zipData
@@ -140,6 +152,33 @@ const EpubReader: React.FC<EpubReaderProps> = memo(({ url }) => {
                             />
                         )}
                     </div>
+                    {onAddHighlightContext &&
+                        isSelectionActionVisible &&
+                        selectedText && (
+                            <div
+                                ref={tooltipRef}
+                                className="fixed z-[80]"
+                                style={{
+                                    left: tooltipPosition.x,
+                                    top: Math.max(16, tooltipPosition.y),
+                                }}
+                            >
+                                <button
+                                    type="button"
+                                    onMouseDown={(event) =>
+                                        event.preventDefault()
+                                    }
+                                    onClick={() => {
+                                        onAddHighlightContext(selectedText);
+                                        clearSelection();
+                                    }}
+                                    className="inline-flex items-center gap-2 rounded-full bg-[#343541] px-3 py-2 text-xs font-semibold text-white shadow-[0px_10px_30px_rgba(0,0,0,0.22)] transition-colors hover:bg-[#25262d]"
+                                >
+                                    <MessageCirclePlus className="h-4 w-4" />
+                                    <span>Add to chat</span>
+                                </button>
+                            </div>
+                        )}
                 </div>
             </div>
         </>

@@ -6,6 +6,8 @@ import PdfReader from "@/components/reader/PdfReader";
 import { useWindowSize } from "@/hooks/useWindowSize";
 import { ChatInterface } from "@/components/reader/ChatInterface";
 import { ArrowLeft } from "lucide-react";
+import { useState } from "react";
+import type { HighlightContext } from "@/types/highlightContext";
 
 export default function Reader() {
     const router = useRouter();
@@ -16,6 +18,8 @@ export default function Reader() {
     const searchParams = useSearchParams();
     const bookId = searchParams.get("bookId");
     const fileType = searchParams.get("type");
+    const [highlightContext, setHighlightContext] =
+        useState<HighlightContext | null>(null);
     const isPdf = fileType === "pdf" || bookFileKey?.startsWith("pdf-");
     const bookUrl = `${process.env.NEXT_PUBLIC_API_URL}/api/books/${bookFileKey}`;
     const handleBack = () => {
@@ -40,13 +44,15 @@ export default function Reader() {
                             isMobile={false}
                             bookId={bookId ?? ""}
                             onBack={handleBack}
+                            highlightContext={highlightContext}
+                            onClearHighlightContext={() =>
+                                setHighlightContext(null)
+                            }
                         />
                     </div>
                 )}
                 {isMobile ? (
-                    <div
-                        className="relative h-full w-full overflow-hidden bg-[#f9f9f9]"
-                    >
+                    <div className="relative h-full w-full overflow-hidden bg-[#f9f9f9]">
                         <button
                             type="button"
                             onClick={handleBack}
@@ -63,13 +69,19 @@ export default function Reader() {
                         <ChatInterface isMobile={true} bookId={bookId ?? ""} />
                     </div>
                 ) : (
-                    <div
-                        className="relative w-[60%] overflow-hidden rounded-xl bg-[#f9f9f9]"
-                    >
+                    <div className="relative w-[60%] overflow-hidden rounded-xl bg-[#f9f9f9]">
                         {isPdf ? (
                             <PdfReader url={bookUrl} />
                         ) : (
-                            <EpubReader url={bookUrl} />
+                            <EpubReader
+                                url={bookUrl}
+                                onAddHighlightContext={(text) =>
+                                    setHighlightContext({
+                                        sourceType: "epub",
+                                        text,
+                                    })
+                                }
+                            />
                         )}
                     </div>
                 )}

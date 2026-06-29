@@ -2,6 +2,7 @@ import { Conversation } from "@/components/reader/ChatHistory";
 import { useCallback, useEffect, useState } from "react";
 import useSelectedConversation from "./useSelectedConversation";
 import { Message } from "@/components/reader/MessageList";
+import type { HighlightContext } from "@/types/highlightContext";
 
 export interface ChatState {
     messages: Message[];
@@ -180,7 +181,12 @@ export const useChat = (bookId: string) => {
     );
 
     const handleSubmit = useCallback(
-        async (e: React.FormEvent, model: string) => {
+        async (
+            e: React.FormEvent,
+            model: string,
+            highlightContext: HighlightContext | null = null,
+            onHighlightContextSent?: () => void
+        ) => {
             e.preventDefault();
             if (!input.trim()) return;
 
@@ -210,6 +216,7 @@ export const useChat = (bookId: string) => {
                         role: "user",
                         messages: [...chatState.messages, userMessage],
                         model,
+                        ...(highlightContext ? { highlightContext } : {}),
                     }),
                 });
 
@@ -230,6 +237,7 @@ export const useChat = (bookId: string) => {
                     reader,
                     setChatState
                 );
+                onHighlightContextSent?.();
 
                 if (conversationId) {
                     setChatState((prev) => ({
