@@ -3,6 +3,8 @@ import { useCallback, useEffect, useState } from "react";
 import useSelectedConversation from "./useSelectedConversation";
 import { Message } from "@/components/reader/MessageList";
 import type { HighlightContext } from "@/types/highlightContext";
+import { useQueryClient } from "@tanstack/react-query";
+import { conversationsQueryKey } from "./useConversations";
 
 export interface ChatState {
     messages: Message[];
@@ -22,6 +24,7 @@ export const initialChatState: ChatState = {
 export const useChat = (bookId: string) => {
     const [chatState, setChatState] = useState<ChatState>(initialChatState);
     const [input, setInput] = useState("");
+    const queryClient = useQueryClient();
     const { data: selectedConversationData } = useSelectedConversation(
         chatState,
         bookId
@@ -43,6 +46,17 @@ export const useChat = (bookId: string) => {
         },
         []
     );
+
+    const startNewConversation = useCallback(() => {
+        setChatState((prev) => ({
+            ...prev,
+            messages: [],
+            currentConversation: null,
+            isHistoryOpen: false,
+            isChatOpen: true,
+        }));
+        setInput("");
+    }, []);
 
     const toggleHistory = useCallback(
         (refetchConversations: () => Promise<void>) => {
@@ -244,12 +258,18 @@ export const useChat = (bookId: string) => {
                         ...prev,
                         currentConversation: {
                             id: conversationId,
-                            title: "New conversation",
+                            title:
+                                userMessage.content.substring(0, 50) + "...",
                             createdAt: new Date().toISOString().split("T")[0],
                             messages: prev.messages,
+                            lastMessageAt: new Date().toISOString(),
                         },
                     }));
                 }
+
+                await queryClient.invalidateQueries({
+                    queryKey: conversationsQueryKey(bookId),
+                });
             } catch (error) {
                 console.error("Error:", error);
                 setChatState((prev) => ({
@@ -265,7 +285,7 @@ export const useChat = (bookId: string) => {
                 }));
             }
         },
-        [input, chatState, bookId, handleMessageStream]
+        [input, chatState, bookId, handleMessageStream, queryClient]
     );
 
     // Update messages when selected conversation changes
@@ -293,6 +313,7 @@ export const useChat = (bookId: string) => {
         toggleHistory,
         toggleExpanded,
         resetChat,
+        startNewConversation,
         setChatState,
     };
 };

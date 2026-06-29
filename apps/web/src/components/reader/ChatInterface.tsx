@@ -8,6 +8,8 @@ import {
     ChevronDown,
     Quote,
     X,
+    PanelLeftOpen,
+    PanelLeftClose,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import MessageList, { Message } from "./MessageList";
@@ -60,10 +62,13 @@ export function ChatInterface({
     highlightContext = null,
     onClearHighlightContext,
 }: ChatInterfaceProps) {
+    const conversationsQuery = useConversations(bookId);
     const { data: conversationsData, refetch: refetchConversations } =
-        useConversations(bookId);
+        conversationsQuery;
     const { data: processingStatus } = useBookProcessingStatus(bookId);
     const [selectedModel, setSelectedModel] = useState(CHAT_MODELS[0].value);
+    const [isDesktopHistoryVisible, setIsDesktopHistoryVisible] =
+        useState(true);
     const inputRef = useRef<HTMLInputElement>(null);
     const isDocumentReady = processingStatus?.ready ?? false;
     const processingError =
@@ -78,7 +83,9 @@ export function ChatInterface({
         input,
         setChatState,
         setInput,
+        startNewConversation,
     } = useChat(bookId);
+    const conversations = conversationsData?.conversations ?? [];
 
     useEffect(() => {
         if (isMobile || !highlightContext || !isDocumentReady) return;
@@ -88,17 +95,50 @@ export function ChatInterface({
 
     return (
         <div className={`relative flex ${!isMobile && "h-full w-full"}`}>
-            {!isMobile && chatState.isHistoryOpen && (
-                <div className="max-w-[44%] overflow-x-hidden">
+            {!isMobile && isDesktopHistoryVisible && (
+                <div className="w-64 shrink-0 overflow-x-hidden">
                     <ChatHistory
-                        conversations={conversationsData?.conversations}
+                        conversations={conversations}
+                        currentConversationId={chatState.currentConversation?.id}
+                        isLoading={conversationsQuery.isLoading}
+                        isError={conversationsQuery.isError}
+                        onNewConversation={startNewConversation}
                         onSelectConversation={handleSelectConversation}
                     />
                 </div>
             )}
             <ChatLayout isMobile={isMobile} isExpanded={chatState.isExpanded}>
                 {!isMobile && onBack && (
-                    <div className="shrink-0 px-6 pt-6 md:px-8 md:pt-8">
+                    <div className="flex shrink-0 items-center gap-2 px-6 pt-6 md:px-8 md:pt-8">
+                        <button
+                            type="button"
+                            onClick={() =>
+                                setIsDesktopHistoryVisible((isVisible) => {
+                                    if (!isVisible) {
+                                        refetchConversations();
+                                    }
+
+                                    return !isVisible;
+                                })
+                            }
+                            className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-[#f1f1f1] transition-colors hover:bg-white/10 hover:text-white"
+                            aria-label={
+                                isDesktopHistoryVisible
+                                    ? "Hide previous chats"
+                                    : "Show previous chats"
+                            }
+                            title={
+                                isDesktopHistoryVisible
+                                    ? "Hide previous chats"
+                                    : "Show previous chats"
+                            }
+                        >
+                            {isDesktopHistoryVisible ? (
+                                <PanelLeftClose className="h-5 w-5" />
+                            ) : (
+                                <PanelLeftOpen className="h-5 w-5" />
+                            )}
+                        </button>
                         <button
                             type="button"
                             onClick={onBack}
@@ -114,7 +154,13 @@ export function ChatInterface({
                     chatState.isHistoryOpen && (
                         <div className="overflow-scroll h-full">
                             <ChatHistory
-                                conversations={conversationsData.conversations}
+                                conversations={conversations}
+                                currentConversationId={
+                                    chatState.currentConversation?.id
+                                }
+                                isLoading={conversationsQuery.isLoading}
+                                isError={conversationsQuery.isError}
+                                onNewConversation={startNewConversation}
                                 onSelectConversation={handleSelectConversation}
                             />
                         </div>
@@ -146,14 +192,38 @@ export function ChatInterface({
                     setSelectedModel={setSelectedModel}
                     inputRef={inputRef}
                     onHistoryClick={() => {
-                        refetchConversations();
-                        setChatState((prev) => ({
-                            ...prev,
-                            isHistoryOpen: !prev.isHistoryOpen,
-                            isChatOpen: true,
-                            isExpanded: true,
-                        }));
+                        if (isMobile) {
+                            refetchConversations();
+                            setChatState((prev) => ({
+                                ...prev,
+                                isHistoryOpen: !prev.isHistoryOpen,
+                                isChatOpen: true,
+                                isExpanded: true,
+                            }));
+                            return;
+                        }
+
+                        setIsDesktopHistoryVisible((isVisible) => {
+                            if (!isVisible) {
+                                refetchConversations();
+                            }
+
+                            return !isVisible;
+                        });
                     }}
+                    showHistoryButton={isMobile}
+                    historyButtonLabel={
+                        isMobile
+                            ? "Toggle previous chats"
+                            : isDesktopHistoryVisible
+                              ? "Hide previous chats"
+                              : "Show previous chats"
+                    }
+                    isHistoryButtonActive={
+                        isMobile
+                            ? chatState.isHistoryOpen
+                            : isDesktopHistoryVisible
+                    }
                 />
             </ChatLayout>
         </div>
@@ -191,6 +261,9 @@ const ChatInput = ({
     setSelectedModel,
     inputRef,
     onHistoryClick,
+    showHistoryButton,
+    historyButtonLabel,
+    isHistoryButtonActive,
 }: {
     input: string;
     setInput: (value: string) => void;
@@ -204,6 +277,9 @@ const ChatInput = ({
     setSelectedModel: (value: string) => void;
     inputRef: React.RefObject<HTMLInputElement | null>;
     onHistoryClick: () => void;
+    showHistoryButton: boolean;
+    historyButtonLabel: string;
+    isHistoryButtonActive: boolean;
 }) => (
     <form onSubmit={handleSubmit} className="mt-auto shrink-0 p-6 md:p-8">
         {!isDocumentReady && (
@@ -257,15 +333,23 @@ const ChatInput = ({
             </div>
         )}
         <div className="flex items-center gap-2 rounded-full bg-white py-2 pl-2 pr-3 shadow-[0px_10px_30px_rgba(0,0,0,0.15)]">
-            <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                onClick={onHistoryClick}
-                className="h-10 w-10 rounded-full text-[#616363] hover:bg-[#eeeeee] hover:text-[#1a1c1c]"
-            >
-                <History className="h-5 w-5" />
-            </Button>
+            {showHistoryButton && (
+                <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    onClick={onHistoryClick}
+                    aria-label={historyButtonLabel}
+                    title={historyButtonLabel}
+                    className={`h-10 w-10 rounded-full text-[#616363] hover:bg-[#eeeeee] hover:text-[#1a1c1c] ${
+                        isHistoryButtonActive
+                            ? "bg-[#eeeeee] text-[#1a1c1c]"
+                            : ""
+                    }`}
+                >
+                    <History className="h-5 w-5" />
+                </Button>
+            )}
             <Input
                 ref={inputRef}
                 value={input}

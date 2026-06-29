@@ -5,6 +5,7 @@ import { signOut } from "@/lib/auth";
 import toast from "react-hot-toast";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AuthProtection } from "@/components/AuthProtection";
+import BookCover from "@/components/BookCover";
 import type { Book } from "@/types/bookTypes";
 
 function formatRelativeDate(date: Date | string): string {
@@ -236,11 +237,10 @@ function Home() {
                                     className="glass-panel p-6 rounded-xl flex gap-6 items-start group cursor-pointer relative overflow-hidden"
                                 >
                                     <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                                    <div className="w-24 h-32 bg-surface-container rounded-lg shrink-0 shadow-sm flex items-center justify-center relative overflow-hidden book-cover">
-                                        <span className="material-symbols-outlined text-4xl text-on-surface-variant">
-                                            menu_book
-                                        </span>
-                                    </div>
+                                    <BookCover
+                                        book={recentBook}
+                                        className="h-32 w-24 shrink-0 rounded-lg book-cover"
+                                    />
                                     <div className="flex-1 relative z-10">
                                         <span className="text-xs font-semibold text-primary uppercase tracking-wider mb-2 inline-block">
                                             Recently Added
@@ -315,46 +315,53 @@ function Home() {
                                     <div
                                         key={book.id}
                                         onClick={() => handleBookClick(book)}
-                                        className="bg-surface rounded-xl p-5 border border-surface-container-highest hover:border-outline-variant transition-colors group cursor-pointer flex flex-col justify-between h-48 book-cover"
+                                        className="bg-surface rounded-xl p-4 border border-surface-container-highest hover:border-outline-variant transition-colors group cursor-pointer flex gap-4 h-52 book-cover"
                                     >
-                                        <div>
-                                            <div className="flex justify-between items-start mb-3">
-                                                <span
-                                                    className={`px-2.5 py-1 rounded text-xs font-semibold tracking-wide uppercase ${
-                                                        book.fileType === "epub"
-                                                            ? "bg-primary/10 text-primary"
-                                                            : "bg-secondary/10 text-secondary"
-                                                    }`}
-                                                >
-                                                    .{book.fileType ?? "epub"}
-                                                </span>
-                                                <button
-                                                    className="text-on-surface-variant opacity-0 group-hover:opacity-100 transition-opacity hover:text-error"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        deleteItem(book.id);
-                                                    }}
-                                                    title="Delete"
-                                                >
-                                                    <span className="material-symbols-outlined text-lg">
-                                                        delete
+                                        <BookCover
+                                            book={book}
+                                            className="h-full w-28 shrink-0 rounded-lg"
+                                            iconClassName="text-3xl"
+                                        />
+                                        <div className="flex min-w-0 flex-1 flex-col justify-between">
+                                            <div>
+                                                <div className="flex justify-between items-start mb-3 gap-2">
+                                                    <span
+                                                        className={`px-2.5 py-1 rounded text-xs font-semibold tracking-wide uppercase ${
+                                                            book.fileType === "epub"
+                                                                ? "bg-primary/10 text-primary"
+                                                                : "bg-secondary/10 text-secondary"
+                                                        }`}
+                                                    >
+                                                        .{book.fileType ?? "epub"}
                                                     </span>
-                                                </button>
+                                                    <button
+                                                        className="text-on-surface-variant opacity-0 group-hover:opacity-100 transition-opacity hover:text-error"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            deleteItem(book.id);
+                                                        }}
+                                                        title="Delete"
+                                                    >
+                                                        <span className="material-symbols-outlined text-lg">
+                                                            delete
+                                                        </span>
+                                                    </button>
+                                                </div>
+                                                <h4 className="text-base font-semibold text-on-surface line-clamp-3 leading-snug">
+                                                    {book.title}
+                                                </h4>
                                             </div>
-                                            <h4 className="text-base font-semibold text-on-surface line-clamp-2 leading-snug">
-                                                {book.title}
-                                            </h4>
-                                        </div>
-                                        <div className="flex items-center gap-2 mt-4 text-on-surface-variant">
-                                            <span
-                                                className="material-symbols-outlined"
-                                                style={{ fontSize: "16px" }}
-                                            >
-                                                calendar_today
-                                            </span>
-                                            <span className="text-xs font-semibold">
-                                                {formatRelativeDate(book.createdAt)}
-                                            </span>
+                                            <div className="flex items-center gap-2 mt-4 text-on-surface-variant">
+                                                <span
+                                                    className="material-symbols-outlined"
+                                                    style={{ fontSize: "16px" }}
+                                                >
+                                                    calendar_today
+                                                </span>
+                                                <span className="text-xs font-semibold">
+                                                    {formatRelativeDate(book.createdAt)}
+                                                </span>
+                                            </div>
                                         </div>
                                     </div>
                                 ))}

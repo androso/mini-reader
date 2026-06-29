@@ -4,8 +4,9 @@ import { useQuery } from "@tanstack/react-query";
 const useSelectedConversation = (chatState: ChatState, bookId: string) => {
     return useQuery({
         queryKey: [
+            "conversation",
+            bookId,
             chatState.currentConversation?.id,
-            chatState.currentConversation?.createdAt,
             chatState.currentConversation?.lastMessageAt,
         ],
         queryFn: async () => {
@@ -24,7 +25,7 @@ const useSelectedConversation = (chatState: ChatState, bookId: string) => {
             }
             return response.json();
         },
-        enabled: !!chatState.currentConversation,
+        enabled: !!bookId && !!chatState.currentConversation?.id,
     });
 };
 

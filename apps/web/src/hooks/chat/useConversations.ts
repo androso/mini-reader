@@ -1,5 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
 import { useCallback } from "react";
+import { type Conversation } from "@/components/reader/ChatHistory";
+
+export const conversationsQueryKey = (bookId: string) => [
+    "conversations",
+    bookId,
+];
+
+export type ConversationsResponse = {
+    conversations: Conversation[];
+};
 
 const useConversations = (bookId: string) => {
     const fetchConversations = useCallback(async () => {
@@ -15,13 +25,11 @@ const useConversations = (bookId: string) => {
         if (!response.ok) {
             throw new Error("Failed to fetch conversations");
         }
-        return response.json();
+        return response.json() as Promise<ConversationsResponse>;
     }, [bookId]);
 
     return useQuery({
-        queryKey: [
-            `${process.env.NEXT_PUBLIC_API_URL}/api/book/${bookId}/conversations`,
-        ],
+        queryKey: conversationsQueryKey(bookId),
         queryFn: fetchConversations,
         enabled: !!bookId,
     });

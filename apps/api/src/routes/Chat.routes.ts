@@ -34,10 +34,44 @@ import {
     withBookChatTrace,
     type TraceObservation,
 } from "../observability/langfuse";
+import { isValidResourceType } from "../services/ConversationScope";
 
 const router = Router();
 const oaiService = new OpenAIService();
 const log = createLogger("chat");
+
+const findScopedConversation = async ({
+    conversationId,
+    userId,
+    resourceType,
+    resourceId,
+}: {
+    conversationId: string;
+    userId: string;
+    resourceType: "book" | "article";
+    resourceId: string;
+}) => {
+    const [conversation] = await db
+        .select()
+        .from(Conversations)
+        .where(
+            and(
+                eq(Conversations.id, conversationId),
+                eq(Conversations.userId, userId),
+                eq(Conversations.resourceType, resourceType),
+                eq(Conversations.resourceId, resourceId)
+            )
+        );
+
+    return conversation ?? null;
+};
+
+const touchConversation = async (conversationId: string) => {
+    await db
+        .update(Conversations)
+        .set({ lastMessageAt: new Date() })
+        .where(eq(Conversations.id, conversationId));
+};
 
 const getErrorDetail = (error: unknown) => {
     if (!error || typeof error !== "object") return String(error);
@@ -431,6 +465,7 @@ const saveAssistantMessage = async (
             content,
             contextSources,
         });
+        await touchConversation(conversationId);
         saveSpan.update({
             output: {
                 saved: true,
@@ -584,10 +619,7 @@ router.post(
     "/:resourceType/:id/conversations",
     authenticate,
     async (req: Request, res) => {
-        if (
-            req.params.resourceType !== "book" &&
-            req.params.resourceType !== "article"
-        ) {
+        if (!isValidResourceType(req.params.resourceType)) {
             res.status(400).send({
                 error: "Invalid resource type",
             });
@@ -636,6 +668,7 @@ router.post(
                 role: "user",
                 content: message,
             });
+            await touchConversation(conversation.id);
 
             await runBookChatTraceIfNeeded(
                 {
@@ -679,11 +712,24 @@ router.get(
     "/:resourceType/:id/conversations",
     authenticate,
     async (req: Request, res) => {
+        if (!isValidResourceType(req.params.resourceType)) {
+            res.status(400).send({
+                error: "Invalid resource type",
+            });
+            return;
+        }
+
         try {
             const conversations = await db
                 .select()
                 .from(Conversations)
-                .where(eq(Conversations.userId, req.user.id))
+                .where(
+                    and(
+                        eq(Conversations.userId, req.user.id),
+                        eq(Conversations.resourceType, req.params.resourceType),
+                        eq(Conversations.resourceId, req.params.id)
+                    )
+                )
                 .orderBy(desc(Conversations.lastMessageAt));
             res.status(200).send({
                 conversations,
@@ -709,7 +755,12 @@ router.post(
                 rid: resourceId,
                 cid: conversationId,
             } = req.params;
-            if (!resourceType || !resourceId || !conversationId) {
+            if (
+                !resourceType ||
+                !resourceId ||
+                !conversationId ||
+                !isValidResourceType(resourceType)
+            ) {
                 res.status(400).send({
                     error: "Invalid request",
                 });
@@ -734,6 +785,20 @@ router.post(
                 return;
             }
 
+            const conversation = await findScopedConversation({
+                conversationId,
+                userId: req.user.id,
+                resourceType,
+                resourceId,
+            });
+
+            if (!conversation) {
+                res.status(404).send({
+                    error: "Conversation not found",
+                });
+                return;
+            }
+
             res.setHeader("Content-Type", "text/event-stream");
             res.setHeader("Cache-Control", "no-cache");
             res.setHeader("Connection", "keep-alive");
@@ -744,6 +809,7 @@ router.post(
                 role: lastMessage.role,
                 content: lastMessage.content,
             });
+            await touchConversation(conversationId);
 
             await runBookChatTraceIfNeeded(
                 {
@@ -787,12 +853,21 @@ router.get(
     "/:resourceType/:id/conversations/:conversationId",
     authenticate,
     async (req: Request, res) => {
+        if (!isValidResourceType(req.params.resourceType)) {
+            res.status(400).send({
+                error: "Invalid resource type",
+            });
+            return;
+        }
+
         try {
             const conversationId = req.params.conversationId;
-            const [conversation] = await db
-                .select()
-                .from(Conversations)
-                .where(eq(Conversations.id, conversationId));
+            const conversation = await findScopedConversation({
+                conversationId,
+                userId: req.user.id,
+                resourceType: req.params.resourceType,
+                resourceId: req.params.id,
+            });
 
             if (!conversation) {
                 res.status(404).send({
