@@ -7,6 +7,7 @@ import { useWindowSize } from "@/hooks/useWindowSize";
 import { ChatInterface } from "@/components/reader/ChatInterface";
 import { ArrowLeft, ArrowLeftRight, GripVertical } from "lucide-react";
 import {
+    useCallback,
     useEffect,
     useRef,
     useState,
@@ -18,8 +19,12 @@ import type { HighlightContext } from "@/types/highlightContext";
 type ChatSidebarSide = "left" | "right";
 
 const CHAT_SIDEBAR_STORAGE_KEY = "reader.chatSidebarSide";
-const CHAT_SIDEBAR_DRAG_THRESHOLD = 8;
-const CHAT_SIDEBAR_HINT_DURATION_MS = 1100;
+const CHAT_PANE_WIDTH_STORAGE_KEY = "reader.chatPaneWidthPercent";
+const DEFAULT_CHAT_PANE_WIDTH_PERCENT = 40;
+const CHAT_PANE_MIN_WIDTH_PX = 360;
+const VIEWER_PANE_MIN_WIDTH_PX = 420;
+const CHAT_PANE_MAX_WIDTH_PERCENT = 70;
+const KEYBOARD_RESIZE_STEP_PERCENT = 5;
 
 const isChatSidebarSide = (value: string | null): value is ChatSidebarSide =>
     value === "left" || value === "right";
@@ -37,33 +42,104 @@ export default function Reader() {
         useState<HighlightContext | null>(null);
     const [chatSidebarSide, setChatSidebarSideState] =
         useState<ChatSidebarSide>("left");
-    const [isSidebarDragHintVisible, setIsSidebarDragHintVisible] =
-        useState(false);
-    const readerShellRef = useRef<HTMLDivElement>(null);
-    const sidebarDragStartXRef = useRef<number | null>(null);
-    const sidebarHasDraggedRef = useRef(false);
-    const sidebarSuppressClickRef = useRef(false);
-    const sidebarHintTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
-        null
+    const [chatPaneWidthPercent, setChatPaneWidthPercentState] = useState(
+        DEFAULT_CHAT_PANE_WIDTH_PERCENT
     );
+    const [isResizingChatPane, setIsResizingChatPane] = useState(false);
+    const readerShellRef = useRef<HTMLDivElement>(null);
+    const isResizingChatPaneRef = useRef(false);
     const isPdf = fileType === "pdf" || bookFileKey?.startsWith("pdf-");
     const bookUrl = `${process.env.NEXT_PUBLIC_API_URL}/api/books/${bookFileKey}`;
+
+    const getShellSizing = useCallback(() => {
+        const shell = readerShellRef.current;
+        if (!shell || typeof window === "undefined") return null;
+
+        const rect = shell.getBoundingClientRect();
+        const styles = window.getComputedStyle(shell);
+        const gap = parseFloat(styles.columnGap || styles.gap || "0") || 0;
+        const availableWidth = Math.max(1, rect.width - gap);
+
+        return {
+            availableWidth,
+            rect,
+        };
+    }, []);
+
+    const getChatPaneWidthBounds = useCallback(() => {
+        const shellSizing = getShellSizing();
+        if (!shellSizing) {
+            return {
+                min: 0,
+                max: CHAT_PANE_MAX_WIDTH_PERCENT,
+            };
+        }
+
+        const min = Math.min(
+            CHAT_PANE_MAX_WIDTH_PERCENT,
+            (CHAT_PANE_MIN_WIDTH_PX / shellSizing.availableWidth) * 100
+        );
+        const max = Math.min(
+            CHAT_PANE_MAX_WIDTH_PERCENT,
+            ((shellSizing.availableWidth - VIEWER_PANE_MIN_WIDTH_PX) /
+                shellSizing.availableWidth) *
+                100
+        );
+
+        return {
+            min,
+            max: Math.max(min, max),
+        };
+    }, [getShellSizing]);
+
+    const clampChatPaneWidthPercent = useCallback(
+        (
+            widthPercent: number,
+            fallbackWidthPercent = DEFAULT_CHAT_PANE_WIDTH_PERCENT
+        ) => {
+            if (!Number.isFinite(widthPercent)) {
+                return fallbackWidthPercent;
+            }
+
+            const { min, max } = getChatPaneWidthBounds();
+            return Math.min(Math.max(widthPercent, min), max);
+        },
+        [getChatPaneWidthBounds]
+    );
+
+    const setChatPaneWidthPercent = (widthPercent: number) => {
+        const nextWidth = clampChatPaneWidthPercent(
+            widthPercent,
+            chatPaneWidthPercent
+        );
+
+        setChatPaneWidthPercentState(nextWidth);
+        localStorage.setItem(CHAT_PANE_WIDTH_STORAGE_KEY, String(nextWidth));
+    };
 
     useEffect(() => {
         const storedSide = localStorage.getItem(CHAT_SIDEBAR_STORAGE_KEY);
         if (isChatSidebarSide(storedSide)) {
             setChatSidebarSideState(storedSide);
         }
-    }, []);
 
-    useEffect(
-        () => () => {
-            if (sidebarHintTimeoutRef.current) {
-                clearTimeout(sidebarHintTimeoutRef.current);
-            }
-        },
-        []
-    );
+        const storedWidthValue = localStorage.getItem(
+            CHAT_PANE_WIDTH_STORAGE_KEY
+        );
+        const storedWidth =
+            storedWidthValue === null ? null : Number(storedWidthValue);
+        if (storedWidth !== null && Number.isFinite(storedWidth)) {
+            setChatPaneWidthPercentState((currentWidth) =>
+                clampChatPaneWidthPercent(storedWidth, currentWidth)
+            );
+        }
+    }, [clampChatPaneWidthPercent]);
+
+    useEffect(() => {
+        setChatPaneWidthPercentState((currentWidth) =>
+            clampChatPaneWidthPercent(currentWidth, currentWidth)
+        );
+    }, [clampChatPaneWidthPercent, width]);
 
     const setChatSidebarSide = (side: ChatSidebarSide) => {
         setChatSidebarSideState(side);
@@ -72,30 +148,6 @@ export default function Reader() {
 
     const toggleChatSidebarSide = () => {
         setChatSidebarSide(chatSidebarSide === "left" ? "right" : "left");
-    };
-
-    const clearSidebarHintTimeout = () => {
-        if (sidebarHintTimeoutRef.current) {
-            clearTimeout(sidebarHintTimeoutRef.current);
-            sidebarHintTimeoutRef.current = null;
-        }
-    };
-
-    const showSidebarDragHint = (durationMs?: number) => {
-        clearSidebarHintTimeout();
-        setIsSidebarDragHintVisible(true);
-
-        if (durationMs) {
-            sidebarHintTimeoutRef.current = setTimeout(() => {
-                setIsSidebarDragHintVisible(false);
-                sidebarHintTimeoutRef.current = null;
-            }, durationMs);
-        }
-    };
-
-    const hideSidebarDragHint = () => {
-        clearSidebarHintTimeout();
-        setIsSidebarDragHintVisible(false);
     };
 
     const handleBack = () => {
@@ -107,115 +159,83 @@ export default function Reader() {
         router.push("/");
     };
 
-    const handleSidebarPointerDown = (
-        event: PointerEvent<HTMLButtonElement>
-    ) => {
+    const resizeChatPaneFromPointer = (clientX: number) => {
+        const shellSizing = getShellSizing();
+        if (!shellSizing) return;
+
+        const chatWidthPx =
+            chatSidebarSide === "left"
+                ? clientX - shellSizing.rect.left
+                : shellSizing.rect.right - clientX;
+
+        setChatPaneWidthPercent(
+            (chatWidthPx / shellSizing.availableWidth) * 100
+        );
+    };
+
+    const handleResizePointerDown = (event: PointerEvent<HTMLDivElement>) => {
         if (event.button !== 0) return;
 
-        sidebarDragStartXRef.current = event.clientX;
-        sidebarHasDraggedRef.current = false;
-        showSidebarDragHint();
+        event.preventDefault();
+        isResizingChatPaneRef.current = true;
+        setIsResizingChatPane(true);
+        resizeChatPaneFromPointer(event.clientX);
         event.currentTarget.setPointerCapture(event.pointerId);
     };
 
-    const handleSidebarPointerMove = (
-        event: PointerEvent<HTMLButtonElement>
-    ) => {
-        const startX = sidebarDragStartXRef.current;
-        if (startX === null) return;
+    const handleResizePointerMove = (event: PointerEvent<HTMLDivElement>) => {
+        if (!isResizingChatPaneRef.current) return;
 
-        if (
-            Math.abs(event.clientX - startX) >= CHAT_SIDEBAR_DRAG_THRESHOLD
-        ) {
-            sidebarHasDraggedRef.current = true;
-        }
+        resizeChatPaneFromPointer(event.clientX);
     };
 
-    const handleSidebarPointerUp = (
-        event: PointerEvent<HTMLButtonElement>
-    ) => {
-        const startX = sidebarDragStartXRef.current;
-        sidebarDragStartXRef.current = null;
-
-        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-            event.currentTarget.releasePointerCapture(event.pointerId);
-        }
-
-        const didDrag = sidebarHasDraggedRef.current;
-        sidebarSuppressClickRef.current = didDrag;
-
-        if (startX === null) {
-            hideSidebarDragHint();
-            return;
-        }
-
-        if (!didDrag) {
-            showSidebarDragHint(CHAT_SIDEBAR_HINT_DURATION_MS);
-            return;
-        }
-
-        const shell = readerShellRef.current;
-        if (!shell) {
-            hideSidebarDragHint();
-            return;
-        }
-
-        const { left, width: shellWidth } = shell.getBoundingClientRect();
-        const midpoint = left + shellWidth / 2;
-        setChatSidebarSide(event.clientX < midpoint ? "left" : "right");
-        hideSidebarDragHint();
-    };
-
-    const handleSidebarPointerCancel = (
-        event: PointerEvent<HTMLButtonElement>
-    ) => {
-        sidebarDragStartXRef.current = null;
-        sidebarHasDraggedRef.current = false;
-        hideSidebarDragHint();
+    const handleResizePointerUp = (event: PointerEvent<HTMLDivElement>) => {
+        isResizingChatPaneRef.current = false;
+        setIsResizingChatPane(false);
 
         if (event.currentTarget.hasPointerCapture(event.pointerId)) {
             event.currentTarget.releasePointerCapture(event.pointerId);
         }
     };
 
-    const handleSidebarHandleClick = () => {
-        if (sidebarSuppressClickRef.current) {
-            sidebarSuppressClickRef.current = false;
-            return;
-        }
-
-        requestAnimationFrame(() => {
-            showSidebarDragHint(CHAT_SIDEBAR_HINT_DURATION_MS);
-        });
-    };
-
-    const handleSidebarHandleKeyDown = (
-        event: KeyboardEvent<HTMLButtonElement>
+    const handleResizePointerCancel = (
+        event: PointerEvent<HTMLDivElement>
     ) => {
-        if (event.key === "ArrowLeft") {
-            event.preventDefault();
-            setChatSidebarSide("left");
-            return;
-        }
+        isResizingChatPaneRef.current = false;
+        setIsResizingChatPane(false);
 
-        if (event.key === "ArrowRight") {
-            event.preventDefault();
-            setChatSidebarSide("right");
-            return;
-        }
-
-        if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            toggleChatSidebarSide();
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+            event.currentTarget.releasePointerCapture(event.pointerId);
         }
     };
+
+    const resetChatPaneWidth = () => {
+        setChatPaneWidthPercent(DEFAULT_CHAT_PANE_WIDTH_PERCENT);
+    };
+
+    const handleResizeKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+        if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+            event.preventDefault();
+            const direction = event.key === "ArrowRight" ? 1 : -1;
+            const chatSideMultiplier = chatSidebarSide === "left" ? 1 : -1;
+            setChatPaneWidthPercent(
+                chatPaneWidthPercent +
+                    direction *
+                        chatSideMultiplier *
+                        KEYBOARD_RESIZE_STEP_PERCENT
+            );
+        }
+    };
+
+    const widthBounds = getChatPaneWidthBounds();
 
     const desktopChatPane = (
         <div
             key="desktop-chat-pane"
-            className={`relative w-[40%] min-w-[360px] overflow-visible ${
+            className={`relative min-w-[360px] shrink-0 overflow-visible ${
                 chatSidebarSide === "left" ? "order-1" : "order-3"
             }`}
+            style={{ flexBasis: `${chatPaneWidthPercent}%` }}
         >
             <div className="h-full overflow-hidden rounded-xl bg-[#343541]">
                 <ChatInterface
@@ -226,38 +246,51 @@ export default function Reader() {
                     onClearHighlightContext={() => setHighlightContext(null)}
                 />
             </div>
-            <button
-                type="button"
-                onPointerDown={handleSidebarPointerDown}
-                onPointerMove={handleSidebarPointerMove}
-                onPointerUp={handleSidebarPointerUp}
-                onPointerCancel={handleSidebarPointerCancel}
-                onClick={handleSidebarHandleClick}
-                onKeyDown={handleSidebarHandleKeyDown}
-                aria-label={`Move chat sidebar ${chatSidebarSide === "left" ? "right" : "left"}`}
-                className={`absolute top-1/2 z-[75] flex h-16 w-5 -translate-y-1/2 cursor-grab touch-none items-center justify-center rounded-full border border-white/10 bg-[#2b2c32] text-white/75 shadow-lg transition-colors hover:bg-[#25262d] hover:text-white active:cursor-grabbing ${
-                    chatSidebarSide === "left" ? "-right-2.5" : "-left-2.5"
+            <div
+                className={`absolute top-1/2 z-[75] flex w-7 -translate-y-1/2 flex-col items-center gap-1 rounded-full border border-white/10 bg-[#2b2c32] p-1 text-white/75 shadow-lg ${
+                    chatSidebarSide === "left" ? "-right-3.5" : "-left-3.5"
                 }`}
             >
-                {isSidebarDragHintVisible && (
-                    <span
-                        aria-hidden="true"
-                        className="pointer-events-none absolute left-1/2 top-1/2 flex h-8 w-20 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-[#2b2c32]/95 text-white shadow-xl"
-                    >
-                        <span className="absolute left-2 h-1.5 w-1.5 animate-ping rounded-full bg-white/80" />
-                        <ArrowLeftRight className="h-4 w-4 animate-pulse" />
-                        <span className="absolute right-2 h-1.5 w-1.5 animate-ping rounded-full bg-white/80" />
-                    </span>
-                )}
-                <GripVertical className="h-4 w-4" />
-            </button>
+                <button
+                    type="button"
+                    onClick={toggleChatSidebarSide}
+                    aria-label={`Move chat sidebar ${chatSidebarSide === "left" ? "right" : "left"}`}
+                    title={`Move chat sidebar ${chatSidebarSide === "left" ? "right" : "left"}`}
+                    className="flex h-6 w-6 items-center justify-center rounded-full text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+                >
+                    <ArrowLeftRight className="h-3.5 w-3.5" />
+                </button>
+                <div
+                    role="separator"
+                    aria-label="Resize chat and book panels"
+                    aria-orientation="vertical"
+                    aria-valuemin={Math.round(widthBounds.min)}
+                    aria-valuemax={Math.round(widthBounds.max)}
+                    aria-valuenow={Math.round(chatPaneWidthPercent)}
+                    tabIndex={0}
+                    onPointerDown={handleResizePointerDown}
+                    onPointerMove={handleResizePointerMove}
+                    onPointerUp={handleResizePointerUp}
+                    onPointerCancel={handleResizePointerCancel}
+                    onDoubleClick={resetChatPaneWidth}
+                    onKeyDown={handleResizeKeyDown}
+                    className={`flex h-14 w-6 touch-none items-center justify-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-white/35 ${
+                        isResizingChatPane
+                            ? "cursor-col-resize bg-white/15 text-white"
+                            : "cursor-col-resize hover:bg-white/10 hover:text-white"
+                    }`}
+                    title="Drag to resize panels. Double-click to reset."
+                >
+                    <GripVertical className="h-4 w-4" />
+                </div>
+            </div>
         </div>
     );
 
     const desktopViewerPane = (
         <div
             key="desktop-viewer-pane"
-            className="relative order-2 w-[60%] overflow-hidden rounded-xl bg-[#f9f9f9]"
+            className="relative order-2 min-w-[420px] flex-1 overflow-hidden rounded-xl bg-[#f9f9f9]"
         >
             {isPdf ? (
                 <PdfReader url={bookUrl} />
@@ -281,7 +314,7 @@ export default function Reader() {
                 ref={readerShellRef}
                 className={`relative flex h-[100dvh] w-full overflow-hidden bg-transparent shadow-2xl md:h-[95dvh] md:w-[95vw] md:gap-3 md:rounded-xl ${
                     isMobile ? "flex-col" : "justify-center"
-                }`}
+                } ${isResizingChatPane ? "select-none" : ""}`}
             >
                 {isMobile ? (
                     <div className="relative h-full w-full overflow-hidden bg-[#f9f9f9]">
