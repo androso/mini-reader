@@ -276,10 +276,10 @@ export default function Reader() {
     );
 
     return (
-        <div className="min-h-[100dvh] bg-[#2b2b31] p-0 text-[#1a1c1c] md:flex md:items-center md:justify-center md:p-8">
+        <div className="min-h-[100dvh] bg-[#2b2b31] p-0 text-[#1a1c1c] md:flex md:items-center md:justify-center md:p-[2.5dvh]">
             <div
                 ref={readerShellRef}
-                className={`relative flex h-[100dvh] w-full overflow-hidden bg-transparent shadow-2xl md:h-[90vh] md:max-w-[1400px] md:gap-3 md:rounded-xl ${
+                className={`relative flex h-[100dvh] w-full overflow-hidden bg-transparent shadow-2xl md:h-[95dvh] md:w-[95vw] md:gap-3 md:rounded-xl ${
                     isMobile ? "flex-col" : "justify-center"
                 }`}
             >

@@ -1,7 +1,7 @@
 import { ScrollArea } from "@radix-ui/react-scroll-area";
 import { Message } from "./MessageList";
 import { Button } from "../ui/button";
-import { MessageSquareText, Plus } from "lucide-react";
+import { MessageSquareText, PanelLeftClose, Plus } from "lucide-react";
 
 export type Conversation = {
     id: string;
@@ -32,6 +32,7 @@ function ChatHistory({
     isLoading,
     isError,
     onNewConversation,
+    onHideHistory,
     onSelectConversation,
 }: {
     conversations: Conversation[];
@@ -39,20 +40,34 @@ function ChatHistory({
     isLoading?: boolean;
     isError?: boolean;
     onNewConversation: () => void;
+    onHideHistory?: () => void;
     onSelectConversation: (conversation: Conversation) => void;
 }) {
     return (
         <div className="h-full border-r border-white/10 bg-[#2f3039] text-white">
-            <div className="border-b border-white/10 p-4">
-                <Button
-                    onClick={onNewConversation}
-                    size="sm"
-                    variant="outline"
-                    className="w-full justify-start gap-2 border-white/15 bg-transparent text-[#f1f1f1] hover:bg-white/10 hover:text-white"
-                >
-                    <Plus className="h-4 w-4 shrink-0" />
-                    <span className="truncate">New chat</span>
-                </Button>
+            <div className="border-b border-white/10 p-4 md:px-8 md:pb-4 md:pt-6">
+                <div className="flex items-center gap-2">
+                    {onHideHistory && (
+                        <button
+                            type="button"
+                            onClick={onHideHistory}
+                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+                            aria-label="Hide previous chats"
+                            title="Hide previous chats"
+                        >
+                            <PanelLeftClose className="h-[18px] w-[18px]" />
+                        </button>
+                    )}
+                    <Button
+                        onClick={onNewConversation}
+                        size="sm"
+                        variant="outline"
+                        className="min-w-0 flex-1 justify-start gap-2 border-white/15 bg-transparent text-[#f1f1f1] hover:bg-white/10 hover:text-white"
+                    >
+                        <Plus className="h-4 w-4 shrink-0" />
+                        <span className="truncate">New chat</span>
+                    </Button>
+                </div>
             </div>
             <ScrollArea className="h-full">
                 <div className="pb-16">

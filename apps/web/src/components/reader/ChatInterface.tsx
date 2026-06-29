@@ -9,7 +9,6 @@ import {
     Quote,
     X,
     PanelLeftOpen,
-    PanelLeftClose,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import MessageList, { Message } from "./MessageList";
@@ -103,49 +102,36 @@ export function ChatInterface({
                         isLoading={conversationsQuery.isLoading}
                         isError={conversationsQuery.isError}
                         onNewConversation={startNewConversation}
+                        onHideHistory={() => setIsDesktopHistoryVisible(false)}
                         onSelectConversation={handleSelectConversation}
                     />
                 </div>
             )}
             <ChatLayout isMobile={isMobile} isExpanded={chatState.isExpanded}>
                 {!isMobile && onBack && (
-                    <div className="flex shrink-0 items-center gap-2 px-6 pt-6 md:px-8 md:pt-8">
-                        <button
-                            type="button"
-                            onClick={() =>
-                                setIsDesktopHistoryVisible((isVisible) => {
-                                    if (!isVisible) {
-                                        refetchConversations();
-                                    }
-
-                                    return !isVisible;
-                                })
-                            }
-                            className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-[#f1f1f1] transition-colors hover:bg-white/10 hover:text-white"
-                            aria-label={
-                                isDesktopHistoryVisible
-                                    ? "Hide previous chats"
-                                    : "Show previous chats"
-                            }
-                            title={
-                                isDesktopHistoryVisible
-                                    ? "Hide previous chats"
-                                    : "Show previous chats"
-                            }
-                        >
-                            {isDesktopHistoryVisible ? (
-                                <PanelLeftClose className="h-5 w-5" />
-                            ) : (
-                                <PanelLeftOpen className="h-5 w-5" />
-                            )}
-                        </button>
+                    <div className="flex shrink-0 items-center gap-1 px-6 pt-6 md:px-8 md:pt-8">
+                        {!isDesktopHistoryVisible && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    refetchConversations();
+                                    setIsDesktopHistoryVisible(true);
+                                }}
+                                className="flex h-8 w-8 items-center justify-center rounded-md text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+                                aria-label="Show previous chats"
+                                title="Show previous chats"
+                            >
+                                <PanelLeftOpen className="h-[18px] w-[18px]" />
+                            </button>
+                        )}
                         <button
                             type="button"
                             onClick={onBack}
-                            className="group flex items-center gap-2 rounded-lg p-2 pr-3 text-sm font-semibold text-[#f1f1f1] transition-colors hover:bg-white/10 hover:text-white"
+                            className="flex h-8 w-8 items-center justify-center rounded-md text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+                            aria-label="Back"
+                            title="Back"
                         >
-                            <ArrowLeft className="h-5 w-5 transition-transform group-hover:-translate-x-1" />
-                            <span>Back</span>
+                            <ArrowLeft className="h-[18px] w-[18px]" />
                         </button>
                     </div>
                 )}
