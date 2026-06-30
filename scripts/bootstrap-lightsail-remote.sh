@@ -46,13 +46,23 @@ fi
 
 target="${SSH_USER}@${static_ip}"
 printf 'Waiting for SSH on %s...\n' "$target"
+last_ssh_error="$(mktemp)"
 for attempt in $(seq 1 "$SSH_WAIT_ATTEMPTS"); do
-    if ssh "${ssh_args[@]}" "$target" "true" >/dev/null 2>&1; then
+    if ssh "${ssh_args[@]}" "$target" "true" >/dev/null 2>"$last_ssh_error"; then
+        rm -f "$last_ssh_error"
         break
     fi
     if [ "$attempt" = "$SSH_WAIT_ATTEMPTS" ]; then
         printf 'SSH did not become available on %s after %s attempts.\n' "$target" "$SSH_WAIT_ATTEMPTS" >&2
+        printf 'Last SSH error:\n' >&2
+        sed 's/^/  /' "$last_ssh_error" >&2
+        rm -f "$last_ssh_error"
+        printf '\nCheck that the Lightsail SSH key for %s is available locally and pass it with SSH_KEY=/path/to/key.pem.\n' "$AWS_REGION" >&2
+        printf 'You can also test manually with: ssh %s %s\n' "${ssh_args[*]}" "$target" >&2
         exit 1
+    fi
+    if [ $((attempt % 6)) -eq 0 ]; then
+        printf 'Still waiting for SSH on %s (%s/%s attempts)...\n' "$target" "$attempt" "$SSH_WAIT_ATTEMPTS"
     fi
     sleep "$SSH_WAIT_SECONDS"
 done

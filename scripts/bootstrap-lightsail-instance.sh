@@ -41,7 +41,25 @@ export DEBIAN_FRONTEND=noninteractive
 
 install -d -m 0755 /etc/apt/keyrings
 apt-get update -o Acquire::Retries=5
-apt-get install -y awscli ca-certificates curl debian-keyring debian-archive-keyring gettext-base git gnupg ufw
+apt-get install -y ca-certificates curl debian-keyring debian-archive-keyring gettext-base git gnupg unzip ufw
+
+if ! command -v aws >/dev/null 2>&1; then
+    aws_cli_arch="$(uname -m)"
+    case "$aws_cli_arch" in
+        x86_64) aws_cli_arch="x86_64" ;;
+        aarch64 | arm64) aws_cli_arch="aarch64" ;;
+        *)
+            printf 'Unsupported architecture for AWS CLI install: %s\n' "$aws_cli_arch" >&2
+            exit 1
+            ;;
+    esac
+    aws_cli_tmp="$(mktemp -d)"
+    curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-${aws_cli_arch}.zip" \
+        -o "$aws_cli_tmp/awscliv2.zip"
+    unzip -q "$aws_cli_tmp/awscliv2.zip" -d "$aws_cli_tmp"
+    "$aws_cli_tmp/aws/install" --update
+    rm -rf "$aws_cli_tmp"
+fi
 
 if [ ! -f /etc/apt/keyrings/docker.gpg ]; then
     curl -fsSL https://download.docker.com/linux/ubuntu/gpg \

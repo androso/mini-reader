@@ -95,7 +95,7 @@ sudo tail -f /var/log/cloud-init-output.log
 
 The bootstrap process:
 
-1. installs Docker, Docker Compose, Caddy, Git, AWS CLI, UFW, and support packages;
+1. installs Docker, Docker Compose, Caddy, Git, AWS CLI v2, UFW, and support packages;
 2. creates a 4GB swap file;
 3. clones the configured repo and branch into `/opt/reader`;
 4. writes `/opt/reader/.env.prod`;
