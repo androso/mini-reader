@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [ -z "${READER_BOOTSTRAP_LOG_ACTIVE:-}" ]; then
+    export READER_BOOTSTRAP_LOG_ACTIVE=1
+    exec > >(tee -a /var/log/reader-bootstrap.log) 2>&1
+fi
+
+echo "Reader host bootstrap started at $(date -Is)"
+
 READER_ROOT="${READER_ROOT:-/opt/reader}"
 READER_USER="${READER_USER:-ubuntu}"
 READER_GROUP="${READER_GROUP:-ubuntu}"
@@ -33,7 +40,7 @@ done
 export DEBIAN_FRONTEND=noninteractive
 
 install -d -m 0755 /etc/apt/keyrings
-apt-get update
+apt-get update -o Acquire::Retries=5
 apt-get install -y awscli ca-certificates curl debian-keyring debian-archive-keyring gettext-base git gnupg ufw
 
 if [ ! -f /etc/apt/keyrings/docker.gpg ]; then
@@ -54,7 +61,7 @@ fi
 curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
     >/etc/apt/sources.list.d/caddy-stable.list
 
-apt-get update
+apt-get update -o Acquire::Retries=5
 apt-get install -y caddy containerd.io docker-buildx-plugin docker-ce docker-ce-cli docker-compose-plugin
 usermod -aG docker "$READER_USER" || true
 
@@ -141,3 +148,5 @@ cat >"$cron_file" <<CRON
 15 3 * * * $READER_USER cd $READER_ROOT && ./scripts/backup-lightsail-db.sh >> $READER_ROOT/backups/backup.log 2>&1
 CRON
 chmod 0644 "$cron_file"
+
+echo "Reader host bootstrap finished at $(date -Is)"

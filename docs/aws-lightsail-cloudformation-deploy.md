@@ -59,6 +59,13 @@ writes it into `/opt/reader/.env.prod`. It is not emitted as a stack output.
 SSH to the instance and watch the bootstrap logs:
 
 ```bash
+sudo tail -f /var/log/reader-bootstrap.log
+```
+
+The generic cloud-init log is also useful when the launch script fails before
+the Reader bootstrap logger starts:
+
+```bash
 sudo tail -f /var/log/cloud-init-output.log
 ```
 
