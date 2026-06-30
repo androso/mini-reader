@@ -1,5 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "./queryClient";
+import { apiUrl } from "./api";
 
 export interface User {
     id: string;
@@ -10,18 +11,15 @@ export interface User {
 
 export function useUser() {
     return useQuery({
-        queryKey: [`${process.env.NEXT_PUBLIC_API_URL}/api/user`],
+        queryKey: [apiUrl("/api/user")],
         queryFn: async () => {
             const token = localStorage.getItem("token");
             if (!token) return null;
-            const response = await fetch(
-                `${process.env.NEXT_PUBLIC_API_URL}/api/user`,
-                {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                    },
-                }
-            );
+            const response = await fetch(apiUrl("/api/user"), {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            });
             if (!response.ok) {
                 throw new Error("Network response was not ok");
             }
@@ -36,16 +34,13 @@ export function useGoogleSignIn() {
     return useMutation({
         mutationFn: async (token: string) => {
             try {
-                const res = await fetch(
-                    `${process.env.NEXT_PUBLIC_API_URL}/api/auth/google`,
-                    {
-                        method: "POST",
-                        headers: {
-                            "Content-Type": "application/json",
-                        },
-                        body: JSON.stringify({ token }),
-                    }
-                );
+                const res = await fetch(apiUrl("/api/auth/google"), {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ token }),
+                });
 
                 if (!res.ok) {
                     throw new Error("Authentication failed");
@@ -63,7 +58,7 @@ export function useGoogleSignIn() {
         onSuccess: () => {
             try {
                 queryClient.invalidateQueries({
-                    queryKey: [`${process.env.NEXT_PUBLIC_API_URL}/api/user`],
+                    queryKey: [apiUrl("/api/user")],
                 });
             } catch (error) {
                 console.error("Error in onSuccess callback:", error);
@@ -76,12 +71,9 @@ export function useDevSignIn() {
     return useMutation({
         mutationFn: async () => {
             try {
-                const res = await fetch(
-                    `${process.env.NEXT_PUBLIC_API_URL}/api/auth/dev`,
-                    {
-                        method: "POST",
-                    }
-                );
+                const res = await fetch(apiUrl("/api/auth/dev"), {
+                    method: "POST",
+                });
 
                 if (!res.ok) {
                     const errorText = await res.text();
@@ -102,7 +94,7 @@ export function useDevSignIn() {
         onSuccess: () => {
             try {
                 queryClient.invalidateQueries({
-                    queryKey: [`${process.env.NEXT_PUBLIC_API_URL}/api/user`],
+                    queryKey: [apiUrl("/api/user")],
                 });
             } catch (error) {
                 console.error(

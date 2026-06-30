@@ -15,6 +15,7 @@ import {
     type PointerEvent,
 } from "react";
 import type { HighlightContext } from "@/types/highlightContext";
+import { apiUrl } from "@/lib/api";
 
 type ChatSidebarSide = "left" | "right";
 
@@ -49,7 +50,7 @@ export default function Reader() {
     const readerShellRef = useRef<HTMLDivElement>(null);
     const isResizingChatPaneRef = useRef(false);
     const isPdf = fileType === "pdf" || bookFileKey?.startsWith("pdf-");
-    const bookUrl = `${process.env.NEXT_PUBLIC_API_URL}/api/books/${bookFileKey}`;
+    const bookUrl = apiUrl(`/api/books/${bookFileKey}`);
 
     const getShellSizing = useCallback(() => {
         const shell = readerShellRef.current;
@@ -198,9 +199,7 @@ export default function Reader() {
         }
     };
 
-    const handleResizePointerCancel = (
-        event: PointerEvent<HTMLDivElement>
-    ) => {
+    const handleResizePointerCancel = (event: PointerEvent<HTMLDivElement>) => {
         isResizingChatPaneRef.current = false;
         setIsResizingChatPane(false);
 

@@ -1,0 +1,19 @@
+${READER_DOMAIN} {
+    encode zstd gzip
+
+    handle /api/* {
+        reverse_proxy 127.0.0.1:${API_PORT}
+    }
+
+    handle /health {
+        reverse_proxy 127.0.0.1:${API_PORT}
+    }
+
+    handle /api-docs* {
+        reverse_proxy 127.0.0.1:${API_PORT}
+    }
+
+    handle {
+        reverse_proxy 127.0.0.1:${WEB_PORT}
+    }
+}

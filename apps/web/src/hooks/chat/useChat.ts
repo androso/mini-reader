@@ -5,6 +5,7 @@ import { Message } from "@/components/reader/MessageList";
 import type { HighlightContext } from "@/types/highlightContext";
 import { useQueryClient } from "@tanstack/react-query";
 import { conversationsQueryKey } from "./useConversations";
+import { apiUrl } from "@/lib/api";
 
 export interface ChatState {
     messages: Message[];
@@ -210,8 +211,10 @@ export const useChat = (bookId: string) => {
             try {
                 const token = localStorage.getItem("token");
                 const endpoint = chatState.currentConversation
-                    ? `${process.env.NEXT_PUBLIC_API_URL}/api/book/${bookId}/conversations/${chatState.currentConversation.id}/messages`
-                    : `${process.env.NEXT_PUBLIC_API_URL}/api/book/${bookId}/conversations`;
+                    ? apiUrl(
+                          `/api/book/${bookId}/conversations/${chatState.currentConversation.id}/messages`
+                      )
+                    : apiUrl(`/api/book/${bookId}/conversations`);
 
                 setChatState((prev) => ({
                     ...prev,
@@ -258,8 +261,7 @@ export const useChat = (bookId: string) => {
                         ...prev,
                         currentConversation: {
                             id: conversationId,
-                            title:
-                                userMessage.content.substring(0, 50) + "...",
+                            title: userMessage.content.substring(0, 50) + "...",
                             createdAt: new Date().toISOString().split("T")[0],
                             messages: prev.messages,
                             lastMessageAt: new Date().toISOString(),

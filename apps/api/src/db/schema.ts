@@ -10,11 +10,28 @@ import {
     ForeignKey,
     uniqueIndex,
     jsonb,
+    customType,
 } from "drizzle-orm/pg-core";
+
+const vector = customType<{ data: number[] | null; driverData: string | null }>(
+    {
+        dataType() {
+            return "vector(1536)";
+        },
+        toDriver(value) {
+            if (!value) return null;
+            return `[${value.join(",")}]`;
+        },
+    }
+);
 
 export const messageRoleEnum = pgEnum("message_role", ["user", "assistant"]);
 export const resourceTypeEnum = pgEnum("resource_type", ["book", "article"]);
 export const fileTypeEnum = pgEnum("file_type", ["epub", "pdf"]);
+export const bookProcessingJobStatusEnum = pgEnum(
+    "book_processing_job_status",
+    ["queued", "processing", "retrying", "completed", "failed"]
+);
 
 export const Users = pgTable("users", {
     id: uuid("id").defaultRandom().primaryKey(),
@@ -50,6 +67,7 @@ export const BookSearchChunks = pgTable(
         collectionName: text("collection_name").notNull(),
         chunkIndex: integer("chunk_index").notNull(),
         content: text("content").notNull(),
+        embedding: vector("embedding"),
         createdAt: timestamp("created_at").defaultNow().notNull(),
     },
     (table) => [
@@ -57,6 +75,33 @@ export const BookSearchChunks = pgTable(
             table.collectionName,
             table.chunkIndex
         ),
+    ]
+);
+
+export const BookProcessingJobs = pgTable(
+    "book_processing_jobs",
+    {
+        id: text("id").primaryKey(),
+        bookId: uuid("book_id")
+            .references(() => Books.id, { onDelete: "cascade" })
+            .notNull(),
+        userId: uuid("user_id").notNull(),
+        fileKey: text("file_key").notNull(),
+        fileType: fileTypeEnum("file_type").notNull(),
+        status: bookProcessingJobStatusEnum("status")
+            .default("queued")
+            .notNull(),
+        attempts: integer("attempts").default(0).notNull(),
+        maxAttempts: integer("max_attempts").default(3).notNull(),
+        lastError: text("last_error"),
+        availableAt: timestamp("available_at").defaultNow().notNull(),
+        lockedAt: timestamp("locked_at"),
+        completedAt: timestamp("completed_at"),
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+        updatedAt: timestamp("updated_at").defaultNow().notNull(),
+    },
+    (table) => [
+        uniqueIndex("book_processing_jobs_book_id_idx").on(table.bookId),
     ]
 );
 

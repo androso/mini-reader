@@ -407,10 +407,16 @@ importers:
       openai:
         specifier: ^4.77.0
         version: 4.77.0(zod@3.25.76)
+      pg:
+        specifier: ^8.21.0
+        version: 8.21.0
     devDependencies:
       '@types/node':
         specifier: ^22.10.2
         version: 22.10.2
+      '@types/pg':
+        specifier: ^8.20.0
+        version: 8.20.0
       typescript:
         specifier: ^5.7.2
         version: 5.7.2

@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { apiUrl } from "@/lib/api";
 
 export type BookProcessingStatus = {
     bookId: string;
@@ -14,7 +15,7 @@ export const useBookProcessingStatus = (bookId: string) => {
         queryFn: async (): Promise<BookProcessingStatus> => {
             const token = localStorage.getItem("token");
             const response = await fetch(
-                `${process.env.NEXT_PUBLIC_API_URL}/api/books/${bookId}/status`,
+                apiUrl(`/api/books/${bookId}/status`),
                 {
                     headers: {
                         Authorization: `Bearer ${token}`,

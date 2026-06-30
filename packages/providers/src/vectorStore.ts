@@ -1,5 +1,6 @@
 import { ChromaClient, type IEmbeddingFunction } from "chromadb";
 import OpenAI from "openai";
+import { Pool } from "pg";
 import { createLogger } from "./logger";
 
 const log = createLogger("chroma");
@@ -525,4 +526,323 @@ export class ChromaVectorStore implements VectorStoreProvider {
     }
 }
 
-export const vectorStore: VectorStoreProvider = new ChromaVectorStore();
+const embeddingToPgVector = (embedding: number[]) => `[${embedding.join(",")}]`;
+
+export class PgVectorStore implements VectorStoreProvider {
+    private pool: Pool | null = null;
+    private readonly openai: OpenAI;
+    private readonly embeddingModel: string;
+
+    constructor() {
+        this.embeddingModel =
+            process.env.OPENAI_EMBEDDING_MODEL ||
+            DEFAULT_OPENAI_EMBEDDING_MODEL;
+
+        const openAiOptions: NonNullable<
+            ConstructorParameters<typeof OpenAI>[0]
+        > = {
+            apiKey: process.env.OPENAI_API_KEY || "",
+            maxRetries: 0,
+            defaultHeaders: {
+                "Accept-Encoding": "identity",
+            },
+        };
+
+        if (typeof globalThis.fetch === "function") {
+            openAiOptions.fetch = globalThis.fetch.bind(
+                globalThis
+            ) as NonNullable<typeof openAiOptions.fetch>;
+        }
+
+        this.openai = new OpenAI(openAiOptions);
+
+        log.info("Initialized Postgres vector store", {
+            embeddingModel: this.embeddingModel,
+            embeddingFetch:
+                typeof globalThis.fetch === "function"
+                    ? "globalThis.fetch"
+                    : "openai-sdk-default",
+            embeddingAcceptEncoding: "identity",
+        });
+    }
+
+    private getPool() {
+        if (!this.pool) {
+            if (!process.env.DATABASE_URL) {
+                throw new Error(
+                    "Missing required DATABASE_URL environment variable"
+                );
+            }
+            this.pool = new Pool({
+                connectionString: process.env.DATABASE_URL,
+            });
+        }
+
+        return this.pool;
+    }
+
+    async createCollection(name: string): Promise<{ name: string }> {
+        log.debug("Postgres vector collections are row-scoped", { name });
+        return { name };
+    }
+
+    async getOrCreateCollection(name: string): Promise<{ name: string }> {
+        return this.createCollection(name);
+    }
+
+    async getCollection(name: string): Promise<{ name: string } | null> {
+        const result = await this.getPool().query(
+            `
+                SELECT 1
+                FROM book_search_chunks
+                WHERE collection_name = $1
+                LIMIT 1
+            `,
+            [name]
+        );
+        return result.rowCount ? { name } : null;
+    }
+
+    async resetCollection(name: string): Promise<void> {
+        log.info("Resetting Postgres vector collection", { name });
+        await this.getPool().query(
+            "DELETE FROM book_search_chunks WHERE collection_name = $1",
+            [name]
+        );
+    }
+
+    async addDocuments(collectionName: string, documents: string[]) {
+        const start = Date.now();
+        const validDocuments = documents
+            .map((content, chunkIndex) => ({ content, chunkIndex }))
+            .filter(
+                (document) =>
+                    document.content &&
+                    document.content.length > 0 &&
+                    document.content.length < 4000
+            );
+        const invalidCount = documents.length - validDocuments.length;
+        if (invalidCount > 0) {
+            log.warn("Filtered invalid documents", {
+                collectionName,
+                invalidCount,
+                totalCount: documents.length,
+            });
+        }
+
+        const batchSize = parsePositiveIntegerEnv(
+            "VECTOR_STORE_BATCH_SIZE",
+            50
+        );
+        const batchRetryAttempts = parsePositiveIntegerEnv(
+            "VECTOR_STORE_BATCH_RETRY_ATTEMPTS",
+            4
+        );
+        const batchRetryDelayMs = parsePositiveIntegerEnv(
+            "VECTOR_STORE_BATCH_RETRY_DELAY_MS",
+            1000
+        );
+
+        for (let i = 0; i < validDocuments.length; i += batchSize) {
+            const batchDocuments = validDocuments.slice(i, i + batchSize);
+            const batchContent = batchDocuments.map(
+                (document) => document.content
+            );
+            const embeddings = await withRetry(
+                () =>
+                    this.createEmbeddings(batchContent, {
+                        collectionName,
+                        batchIndex: i / batchSize,
+                    }),
+                {
+                    attempts: batchRetryAttempts,
+                    delayMs: batchRetryDelayMs,
+                    label: `OpenAI embeddings for ${collectionName} batch ${
+                        i / batchSize
+                    }`,
+                }
+            );
+
+            await withRetry(
+                () =>
+                    this.upsertBatch(
+                        collectionName,
+                        batchDocuments,
+                        embeddings
+                    ),
+                {
+                    attempts: batchRetryAttempts,
+                    delayMs: batchRetryDelayMs,
+                    label: `Postgres vector upsert for ${collectionName} batch ${
+                        i / batchSize
+                    }`,
+                }
+            );
+        }
+
+        log.info("Documents added to Postgres vector store", {
+            collectionName,
+            documentCount: validDocuments.length,
+            durationMs: Date.now() - start,
+        });
+    }
+
+    private async upsertBatch(
+        collectionName: string,
+        documents: { content: string; chunkIndex: number }[],
+        embeddings: number[][]
+    ) {
+        const client = await this.getPool().connect();
+        try {
+            await client.query("BEGIN");
+            for (let index = 0; index < documents.length; index += 1) {
+                const document = documents[index];
+                await client.query(
+                    `
+                        INSERT INTO book_search_chunks (
+                            id,
+                            collection_name,
+                            chunk_index,
+                            content,
+                            embedding
+                        )
+                        VALUES ($1, $2, $3, $4, $5::vector)
+                        ON CONFLICT (collection_name, chunk_index) DO UPDATE
+                        SET
+                            content = EXCLUDED.content,
+                            embedding = EXCLUDED.embedding
+                    `,
+                    [
+                        `${collectionName}_${document.chunkIndex}`,
+                        collectionName,
+                        document.chunkIndex,
+                        document.content,
+                        embeddingToPgVector(embeddings[index]),
+                    ]
+                );
+            }
+            await client.query("COMMIT");
+        } catch (error) {
+            await client.query("ROLLBACK");
+            throw error;
+        } finally {
+            client.release();
+        }
+    }
+
+    private async createEmbeddings(
+        input: string[],
+        context: { collectionName: string; batchIndex?: number }
+    ): Promise<number[][]> {
+        const start = Date.now();
+        log.info("Creating OpenAI embeddings", {
+            ...context,
+            inputCount: input.length,
+            model: this.embeddingModel,
+        });
+
+        const { data: response, request_id: requestId } =
+            await this.openai.embeddings
+                .create({
+                    model: this.embeddingModel,
+                    input,
+                    encoding_format: "float",
+                })
+                .withResponse();
+
+        const embeddings = response.data.map(
+            (item: { embedding: number[] }) => item.embedding
+        );
+        if (embeddings.length !== input.length) {
+            throw new Error(
+                `OpenAI returned ${embeddings.length} embeddings for ${input.length} inputs`
+            );
+        }
+
+        log.info("OpenAI embeddings created", {
+            ...context,
+            inputCount: input.length,
+            requestId,
+            promptTokens: response.usage?.prompt_tokens,
+            totalTokens: response.usage?.total_tokens,
+            durationMs: Date.now() - start,
+        });
+
+        return embeddings;
+    }
+
+    async queryCollection(collectionName: string, query: string, nResults = 3) {
+        const [queryEmbedding] = await this.createEmbeddings([query], {
+            collectionName,
+            batchIndex: 0,
+        });
+        const results = await this.getPool().query<{
+            id: string;
+            content: string;
+            distance: number;
+        }>(
+            `
+                SELECT
+                    id,
+                    content,
+                    embedding <=> $2::vector AS distance
+                FROM book_search_chunks
+                WHERE collection_name = $1
+                  AND embedding IS NOT NULL
+                ORDER BY embedding <=> $2::vector
+                LIMIT $3
+            `,
+            [collectionName, embeddingToPgVector(queryEmbedding), nResults]
+        );
+
+        return {
+            ids: [results.rows.map((row) => row.id)],
+            documents: [results.rows.map((row) => row.content)],
+            distances: [results.rows.map((row) => Number(row.distance))],
+        };
+    }
+
+    async searchDocuments(
+        collectionName: string,
+        query: string,
+        nResults = 20
+    ): Promise<VectorSearchResult[]> {
+        const start = Date.now();
+        const results = await this.queryCollection(
+            collectionName,
+            query,
+            nResults
+        );
+        const ids = results.ids[0] || [];
+        const documents = results.documents[0] || [];
+        const distances = results.distances[0] || [];
+
+        const mapped = documents.map((content, index) => ({
+            id: ids[index] || `${collectionName}_${index}`,
+            content,
+            rank: index + 1,
+            distance: distances[index],
+        }));
+
+        log.info("Postgres vector search complete", {
+            collectionName,
+            nResults,
+            returnedCount: mapped.length,
+            durationMs: Date.now() - start,
+        });
+        return mapped;
+    }
+
+    async deleteCollection(name: string): Promise<boolean> {
+        await this.getPool().query(
+            "DELETE FROM book_search_chunks WHERE collection_name = $1",
+            [name]
+        );
+        return true;
+    }
+}
+
+export const vectorStore: VectorStoreProvider =
+    process.env.VECTOR_STORE_DRIVER === "chroma"
+        ? new ChromaVectorStore()
+        : new PgVectorStore();

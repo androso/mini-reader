@@ -1,16 +1,50 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: Reader production infrastructure, deployable from a clean AWS account
-Metadata:
-  Source:
-    Region: us-east-1
-    Runbook: docs/aws-cloudformation-rebuild.md
-    Mode: clean-account-redeployment
+Description: Reader production Lightsail deployment for a single low-cost instance
 
 Parameters:
-  JwtSecretValue:
+  DomainName:
+    Type: String
+    Description: Public hostname for Reader, for example reader.example.com.
+  RepoUrl:
+    Type: String
+    Description: Git repository URL cloned onto the Lightsail instance.
+  RepoBranch:
+    Type: String
+    Default: main
+    Description: Git branch to deploy on first boot.
+  InstanceBlueprintId:
+    Type: String
+    Default: ubuntu_24_04
+  InstanceBundleId:
+    Type: String
+    Default: nano_2_0
+    Description: Lightsail bundle id. nano_2_0 is the 2GB plan.
+  AvailabilityZone:
+    Type: String
+    Default: ""
+    Description: Optional Lightsail availability zone, for example us-east-1a.
+  ExistingBucketName:
+    Type: String
+    Default: ""
+    Description: Leave empty to create a Reader uploads/backups bucket.
+  AppApiPort:
+    Type: Number
+    Default: 3000
+  AppWebPort:
+    Type: Number
+    Default: 3001
+  GoogleClientId:
+    Type: String
+  GoogleClientSecretValue:
     Type: String
     NoEcho: true
   OpenAiApiKeySecretValue:
+    Type: String
+    NoEcho: true
+  JwtSecretValue:
+    Type: String
+    NoEcho: true
+  PostgresPasswordValue:
     Type: String
     NoEcho: true
   LangfusePublicKey:
@@ -36,174 +70,170 @@ Parameters:
     Type: Number
     Default: 500
     MinValue: 20
-  GoogleClientId:
-    Type: String
-  GoogleClientSecretValue:
-    Type: String
-    NoEcho: true
-  ChromaServerAuthnCredentialsSecretValue:
-    Type: String
-    NoEcho: true
-  ChromaClientAuthCredentialsSecretValue:
-    Type: String
-    NoEcho: true
-  FrontendUrl:
-    Type: String
-  ApiDesiredCount:
-    Type: Number
-    Default: 0
-    MinValue: 0
-  WorkerDesiredCount:
-    Type: Number
-    Default: 0
-    MinValue: 0
-  WebDesiredCount:
-    Type: Number
-    Default: 0
-    MinValue: 0
-  ChromaDesiredCount:
-    Type: Number
-    Default: 0
-    MinValue: 0
-  ChromaImage:
-    Type: String
-    Default: chromadb/chroma:1.0.15
-  DatabaseDeletionProtection:
-    Type: String
-    Default: "true"
-    AllowedValues:
-      - "true"
-      - "false"
+
+Conditions:
+  CreateUploadsBucket: !Equals [!Ref ExistingBucketName, ""]
+  HasAvailabilityZone: !Not [!Equals [!Ref AvailabilityZone, ""]]
 
 Resources:
-  NetworkStack:
-    Type: AWS::CloudFormation::Stack
+  UploadsBucket:
+    Type: AWS::S3::Bucket
+    Condition: CreateUploadsBucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      TemplateURL: nested/network.yaml
+      BucketName: !Sub reader-prod-${AWS::AccountId}-${AWS::Region}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
       Tags:
         - Key: project
           Value: reader
-        - Key: Name
-          Value: reader-prod-network
 
-  DataStack:
-    Type: AWS::CloudFormation::Stack
+  S3AccessUser:
+    Type: AWS::IAM::User
     Properties:
-      TemplateURL: nested/data.yaml
-      Parameters:
-        JwtSecretValue: !Ref JwtSecretValue
-        OpenAiApiKeySecretValue: !Ref OpenAiApiKeySecretValue
-        LangfuseSecretKeyValue: !Ref LangfuseSecretKeyValue
-        GoogleClientSecretValue: !Ref GoogleClientSecretValue
-        ChromaServerAuthnCredentialsSecretValue: !Ref ChromaServerAuthnCredentialsSecretValue
-        ChromaClientAuthCredentialsSecretValue: !Ref ChromaClientAuthCredentialsSecretValue
-        DatabaseDeletionProtection: !Ref DatabaseDeletionProtection
-        VpcId: !GetAtt NetworkStack.Outputs.VpcId
-        PrivateSubnetIds: !GetAtt NetworkStack.Outputs.PrivateSubnetIds
-        RdsSecurityGroupId: !GetAtt NetworkStack.Outputs.RdsSecurityGroupId
-        RedisSecurityGroupId: !GetAtt NetworkStack.Outputs.RedisSecurityGroupId
-        EfsSecurityGroupId: !GetAtt NetworkStack.Outputs.EfsSecurityGroupId
-      Tags:
-        - Key: project
-          Value: reader
-        - Key: Name
-          Value: reader-prod-data
+      UserName: !Sub ${AWS::StackName}-lightsail-s3
+      Policies:
+        - PolicyName: reader-lightsail-s3-access
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource: !Sub
+                  - arn:${AWS::Partition}:s3:::${BucketName}/*
+                  - BucketName: !If
+                      - CreateUploadsBucket
+                      - !Ref UploadsBucket
+                      - !Ref ExistingBucketName
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource: !Sub
+                  - arn:${AWS::Partition}:s3:::${BucketName}
+                  - BucketName: !If
+                      - CreateUploadsBucket
+                      - !Ref UploadsBucket
+                      - !Ref ExistingBucketName
 
-  CiStack:
-    Type: AWS::CloudFormation::Stack
+  S3AccessKey:
+    Type: AWS::IAM::AccessKey
     Properties:
-      TemplateURL: nested/ci.yaml
-      Parameters:
-        DeployStackName: !Ref AWS::StackName
-      Tags:
-        - Key: project
-          Value: reader
-        - Key: Name
-          Value: reader-prod-ci
+      UserName: !Ref S3AccessUser
 
-  EcsStack:
-    Type: AWS::CloudFormation::Stack
+  ReaderStaticIp:
+    Type: AWS::Lightsail::StaticIp
+    Properties:
+      StaticIpName: !Sub ${AWS::StackName}-ip
+      AttachedTo: !Ref ReaderInstance
+
+  ReaderInstance:
+    Type: AWS::Lightsail::Instance
     DependsOn:
-      - CiStack
+      - S3AccessKey
     Properties:
-      TemplateURL: nested/ecs.yaml
-      Parameters:
-        FrontendUrl: !Ref FrontendUrl
-        GoogleClientId: !Ref GoogleClientId
-        LangfusePublicKey: !Ref LangfusePublicKey
-        LangfuseBaseUrl: !Ref LangfuseBaseUrl
-        LangfuseSampleRate: !Ref LangfuseSampleRate
-        LangfuseCaptureContent: !Ref LangfuseCaptureContent
-        LangfuseMaxCaptureChars: !Ref LangfuseMaxCaptureChars
-        ApiDesiredCount: !Ref ApiDesiredCount
-        WorkerDesiredCount: !Ref WorkerDesiredCount
-        WebDesiredCount: !Ref WebDesiredCount
-        ChromaDesiredCount: !Ref ChromaDesiredCount
-        ChromaImage: !Ref ChromaImage
-        VpcId: !GetAtt NetworkStack.Outputs.VpcId
-        PublicSubnetIds: !GetAtt NetworkStack.Outputs.PublicSubnetIds
-        PrivateSubnetIds: !GetAtt NetworkStack.Outputs.PrivateSubnetIds
-        ApiAlbSecurityGroupId: !GetAtt NetworkStack.Outputs.ApiAlbSecurityGroupId
-        WebAlbSecurityGroupId: !GetAtt NetworkStack.Outputs.WebAlbSecurityGroupId
-        EcsTasksSecurityGroupId: !GetAtt NetworkStack.Outputs.EcsTasksSecurityGroupId
-        WebTaskSecurityGroupId: !GetAtt NetworkStack.Outputs.WebTaskSecurityGroupId
-        ChromaSecurityGroupId: !GetAtt NetworkStack.Outputs.ChromaSecurityGroupId
-        UploadsBucketName: !GetAtt DataStack.Outputs.UploadsBucketName
-        UploadsBucketArn: !GetAtt DataStack.Outputs.UploadsBucketArn
-        DatabaseUrlSecretArn: !GetAtt DataStack.Outputs.DatabaseUrlSecretArn
-        RedisUrlSecretArn: !GetAtt DataStack.Outputs.RedisUrlSecretArn
-        JwtSecretArn: !GetAtt DataStack.Outputs.JwtSecretArn
-        OpenAiApiKeySecretArn: !GetAtt DataStack.Outputs.OpenAiApiKeySecretArn
-        LangfuseSecretKeySecretArn: !GetAtt DataStack.Outputs.LangfuseSecretKeySecretArn
-        ChromaServerAuthnCredentialsSecretArn: !GetAtt DataStack.Outputs.ChromaServerAuthnCredentialsSecretArn
-        ChromaClientAuthCredentialsSecretArn: !GetAtt DataStack.Outputs.ChromaClientAuthCredentialsSecretArn
-        GoogleClientSecretSecretArn: !GetAtt DataStack.Outputs.GoogleClientSecretSecretArn
-        ChromaFileSystemId: !GetAtt DataStack.Outputs.ChromaFileSystemId
-        ChromaDiscoveryServiceArn: !GetAtt DataStack.Outputs.ChromaDiscoveryServiceArn
+      InstanceName: !Sub ${AWS::StackName}-app
+      BlueprintId: !Ref InstanceBlueprintId
+      BundleId: !Ref InstanceBundleId
+      AvailabilityZone: !If
+        - HasAvailabilityZone
+        - !Ref AvailabilityZone
+        - !Ref AWS::NoValue
+      Networking:
+        Ports:
+          - FromPort: 22
+            ToPort: 22
+            Protocol: tcp
+            Cidrs:
+              - 0.0.0.0/0
+          - FromPort: 80
+            ToPort: 80
+            Protocol: tcp
+            Cidrs:
+              - 0.0.0.0/0
+          - FromPort: 443
+            ToPort: 443
+            Protocol: tcp
+            Cidrs:
+              - 0.0.0.0/0
       Tags:
         - Key: project
           Value: reader
-        - Key: Name
-          Value: reader-prod-ecs
+      UserData: !Sub
+          - |
+            #!/usr/bin/env bash
+            set -euo pipefail
+
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update
+            apt-get install -y ca-certificates curl git
+
+            install -d -o ubuntu -g ubuntu /opt/reader
+            if [ ! -d /opt/reader/.git ]; then
+              runuser -u ubuntu -- git clone --branch '${RepoBranch}' --single-branch '${RepoUrl}' /opt/reader
+            fi
+
+            export READER_DOMAIN='${DomainName}'
+            export REPO_BRANCH='${RepoBranch}'
+            export POSTGRES_USER='reader'
+            export POSTGRES_PASSWORD='${PostgresPasswordValue}'
+            export POSTGRES_DB='reader'
+            export JWT_SECRET='${JwtSecretValue}'
+            export FRONTEND_URL='https://${DomainName}'
+            export API_PORT='${AppApiPort}'
+            export WEB_PORT='${AppWebPort}'
+            export NEXT_PUBLIC_GOOGLE_CLIENT_ID='${GoogleClientId}'
+            export GOOGLE_CLIENT_ID='${GoogleClientId}'
+            export GOOGLE_CLIENT_SECRET='${GoogleClientSecretValue}'
+            export OPENAI_API_KEY='${OpenAiApiKeySecretValue}'
+            export S3_REGION='${AWS::Region}'
+            export S3_BUCKET_NAME='${BucketName}'
+            export AWS_ACCESS_KEY_ID='${S3AccessKey}'
+            export AWS_SECRET_ACCESS_KEY='${S3SecretAccessKey}'
+            export LANGFUSE_PUBLIC_KEY='${LangfusePublicKey}'
+            export LANGFUSE_SECRET_KEY='${LangfuseSecretKeyValue}'
+            export LANGFUSE_BASE_URL='${LangfuseBaseUrl}'
+            export LANGFUSE_SAMPLE_RATE='${LangfuseSampleRate}'
+            export LANGFUSE_CAPTURE_CONTENT='${LangfuseCaptureContent}'
+            export LANGFUSE_MAX_CAPTURE_CHARS='${LangfuseMaxCaptureChars}'
+
+            cd /opt/reader
+            bash scripts/bootstrap-lightsail-instance.sh
+          - BucketName: !If
+              - CreateUploadsBucket
+              - !Ref UploadsBucket
+              - !Ref ExistingBucketName
+            S3SecretAccessKey: !GetAtt S3AccessKey.SecretAccessKey
 
 Outputs:
   AWSRegion:
     Value: !Ref AWS::Region
-  AWSAccountId:
-    Value: !Ref AWS::AccountId
-  ECSCluster:
-    Value: !GetAtt EcsStack.Outputs.ECSCluster
-  ECSApiService:
-    Value: !GetAtt EcsStack.Outputs.ECSApiService
-  ECSWorkerService:
-    Value: !GetAtt EcsStack.Outputs.ECSWorkerService
-  ECSWebService:
-    Value: !GetAtt EcsStack.Outputs.ECSWebService
-  ECSMigrationTaskDefinition:
-    Value: !GetAtt EcsStack.Outputs.ECSMigrationTaskDefinition
-  ECSPrivateSubnetIds:
-    Value: !GetAtt NetworkStack.Outputs.PrivateSubnetIds
-  ECSTaskSecurityGroupId:
-    Value: !GetAtt NetworkStack.Outputs.EcsTasksSecurityGroupId
-  ApiAlbDnsName:
-    Value: !GetAtt EcsStack.Outputs.ApiAlbDnsName
-  WebAlbDnsName:
-    Value: !GetAtt EcsStack.Outputs.WebAlbDnsName
-  ApiHealthUrl:
-    Value: !GetAtt EcsStack.Outputs.ApiHealthUrl
-  ApiBaseUrl:
-    Value: !GetAtt EcsStack.Outputs.ApiBaseUrl
-  NextPublicGoogleClientId:
-    Value: !Ref GoogleClientId
-  WebUrl:
-    Value: !GetAtt EcsStack.Outputs.WebUrl
+  LightsailInstanceName:
+    Value: !Ref ReaderInstance
+  StaticIpAddress:
+    Value: !GetAtt ReaderStaticIp.IpAddress
+  AppUrl:
+    Value: !Sub https://${DomainName}
+  SshCommand:
+    Value: !Sub
+      - ssh ubuntu@${IpAddress}
+      - IpAddress: !GetAtt ReaderStaticIp.IpAddress
   S3BucketName:
-    Value: !GetAtt DataStack.Outputs.UploadsBucketName
-  RdsEndpoint:
-    Value: !GetAtt DataStack.Outputs.RdsEndpoint
-  RedisEndpoint:
-    Value: !GetAtt DataStack.Outputs.RedisEndpoint
-  ChromaUrl:
-    Value: http://chroma.reader-prod.local:8000
-  GitHubActionsDeployRoleArn:
-    Value: !GetAtt CiStack.Outputs.GitHubActionsDeployRoleArn
+    Value: !If
+      - CreateUploadsBucket
+      - !Ref UploadsBucket
+      - !Ref ExistingBucketName
+  S3AccessKeyId:
+    Value: !Ref S3AccessKey

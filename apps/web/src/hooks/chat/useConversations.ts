@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { type Conversation } from "@/components/reader/ChatHistory";
+import { apiUrl } from "@/lib/api";
 
 export const conversationsQueryKey = (bookId: string) => [
     "conversations",
@@ -15,7 +16,7 @@ const useConversations = (bookId: string) => {
     const fetchConversations = useCallback(async () => {
         const token = localStorage.getItem("token");
         const response = await fetch(
-            `${process.env.NEXT_PUBLIC_API_URL}/api/book/${bookId}/conversations`,
+            apiUrl(`/api/book/${bookId}/conversations`),
             {
                 headers: {
                     Authorization: `Bearer ${token}`,

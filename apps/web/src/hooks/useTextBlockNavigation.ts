@@ -1,4 +1,5 @@
 import { TextBlock } from "@/types/EpubReader";
+import { apiUrl } from "@/lib/api";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 
 export const useTextBlockNavigation = (
@@ -15,16 +16,13 @@ export const useTextBlockNavigation = (
 
     const fetchProgress = async (bookId: string) => {
         try {
-            const response = await fetch(
-                `${process.env.NEXT_PUBLIC_API_URL}/api/${bookId}/progress`,
-                {
-                    method: "GET",
-                    headers: {
-                        Authorization: `Bearer ${localStorage.getItem("token")}`,
-                        "Content-Type": "application/json",
-                    },
-                }
-            );
+            const response = await fetch(apiUrl(`/api/${bookId}/progress`), {
+                method: "GET",
+                headers: {
+                    Authorization: `Bearer ${localStorage.getItem("token")}`,
+                    "Content-Type": "application/json",
+                },
+            });
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
@@ -54,20 +52,17 @@ export const useTextBlockNavigation = (
         }
         const bookId = window.location.pathname.split("/")[2];
         try {
-            const response = await fetch(
-                `${process.env.NEXT_PUBLIC_API_URL}/api/${bookId}/progress`,
-                {
-                    method: "POST",
-                    headers: {
-                        Authorization: `Bearer ${localStorage.getItem("token")}`,
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({
-                        progress_block: textBlockId,
-                        progress_chapter: textBlockId.split("-")[0], // assuming format like "c01-block-16"
-                    }),
-                }
-            );
+            const response = await fetch(apiUrl(`/api/${bookId}/progress`), {
+                method: "POST",
+                headers: {
+                    Authorization: `Bearer ${localStorage.getItem("token")}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    progress_block: textBlockId,
+                    progress_chapter: textBlockId.split("-")[0], // assuming format like "c01-block-16"
+                }),
+            });
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }

@@ -1,5 +1,6 @@
 import { type ChatState } from "@/hooks/chat/useChat";
 import { useQuery } from "@tanstack/react-query";
+import { apiUrl } from "@/lib/api";
 
 const useSelectedConversation = (chatState: ChatState, bookId: string) => {
     return useQuery({
@@ -13,7 +14,9 @@ const useSelectedConversation = (chatState: ChatState, bookId: string) => {
             if (!chatState.currentConversation?.id) return null;
             const token = localStorage.getItem("token");
             const response = await fetch(
-                `${process.env.NEXT_PUBLIC_API_URL}/api/book/${bookId}/conversations/${chatState.currentConversation.id}`,
+                apiUrl(
+                    `/api/book/${bookId}/conversations/${chatState.currentConversation.id}`
+                ),
                 {
                     headers: {
                         Authorization: `Bearer ${token}`,

@@ -4,7 +4,7 @@
     "private": true,
     "description": "Reader platform monorepo",
     "scripts": {
-        "dev": "pnpm --parallel --filter @reader/api --filter @reader/web --filter @reader/worker dev",
+        "dev": "pnpm --parallel --filter @reader/api --filter @reader/web dev",
         "build": "pnpm --filter @reader/epub --filter @reader/providers --filter @reader/processing --filter @reader/jobs --filter @reader/api --filter @reader/worker build",
         "test": "pnpm --filter @reader/epub test && pnpm --filter @reader/processing test && pnpm --filter @reader/api test && pnpm --filter @reader/worker test",
         "api:dev": "pnpm --filter @reader/api dev",

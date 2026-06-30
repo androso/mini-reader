@@ -84,8 +84,8 @@ const upload = multer({
  *     tags: [Books]
  *     security:
  *       - bearerAuth: []
- *     summary: Upload and process EPUB file
- *     description: Uploads an EPUB file, creates embeddings, and stores in ChromaDB
+ *     summary: Upload EPUB or PDF file
+ *     description: Uploads an EPUB or PDF file and queues asynchronous embedding generation.
  *     requestBody:
  *       required: true
  *       content:
@@ -96,10 +96,10 @@ const upload = multer({
  *               file:
  *                 type: string
  *                 format: binary
- *                 description: EPUB file to upload (max 80MB)
+ *                 description: EPUB or PDF file to upload (max 80MB)
  *     responses:
- *       200:
- *         description: File successfully uploaded and processed
+ *       202:
+ *         description: File successfully uploaded and accepted for processing
  *         content:
  *           application/json:
  *             schema:
@@ -110,10 +110,12 @@ const upload = multer({
  *                   example: "File upload successful"
  *                 book:
  *                   $ref: '#/components/schemas/Book'
- *                 collection:
+ *                 processStatus:
  *                   type: string
- *                   description: ChromaDB collection name
- *                   example: "book_1ba8cd628f61"
+ *                   example: "processing"
+ *                 fileType:
+ *                   type: string
+ *                   example: "application/epub+zip"
  *       401:
  *         description: Authentication failed
  *         content:
