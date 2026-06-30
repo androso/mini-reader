@@ -171,57 +171,6 @@ Resources:
       Tags:
         - Key: project
           Value: reader
-      UserData: !Sub
-          - |
-            #!/usr/bin/env bash
-            set -euo pipefail
-
-            exec > >(tee -a /var/log/reader-bootstrap.log) 2>&1
-            echo "Reader bootstrap started at $(date -Is)"
-
-            install -d -o ubuntu -g ubuntu /opt/reader
-            echo "Created /opt/reader"
-
-            export DEBIAN_FRONTEND=noninteractive
-            apt-get update -o Acquire::Retries=5
-            apt-get install -y ca-certificates curl git
-
-            if [ ! -d /opt/reader/.git ]; then
-              runuser -u ubuntu -- git clone --branch '${RepoBranch}' --single-branch '${RepoUrl}' /opt/reader
-            fi
-
-            export READER_DOMAIN='${DomainName}'
-            export REPO_BRANCH='${RepoBranch}'
-            export POSTGRES_USER='reader'
-            export POSTGRES_PASSWORD='${PostgresPasswordValue}'
-            export POSTGRES_DB='reader'
-            export JWT_SECRET='${JwtSecretValue}'
-            export FRONTEND_URL='https://${DomainName}'
-            export API_PORT='${AppApiPort}'
-            export WEB_PORT='${AppWebPort}'
-            export NEXT_PUBLIC_GOOGLE_CLIENT_ID='${GoogleClientId}'
-            export GOOGLE_CLIENT_ID='${GoogleClientId}'
-            export GOOGLE_CLIENT_SECRET='${GoogleClientSecretValue}'
-            export OPENAI_API_KEY='${OpenAiApiKeySecretValue}'
-            export S3_REGION='${AWS::Region}'
-            export S3_BUCKET_NAME='${BucketName}'
-            export AWS_ACCESS_KEY_ID='${S3AccessKey}'
-            export AWS_SECRET_ACCESS_KEY='${S3SecretAccessKey}'
-            export LANGFUSE_PUBLIC_KEY='${LangfusePublicKey}'
-            export LANGFUSE_SECRET_KEY='${LangfuseSecretKeyValue}'
-            export LANGFUSE_BASE_URL='${LangfuseBaseUrl}'
-            export LANGFUSE_SAMPLE_RATE='${LangfuseSampleRate}'
-            export LANGFUSE_CAPTURE_CONTENT='${LangfuseCaptureContent}'
-            export LANGFUSE_MAX_CAPTURE_CHARS='${LangfuseMaxCaptureChars}'
-
-            cd /opt/reader
-            bash scripts/bootstrap-lightsail-instance.sh
-            echo "Reader bootstrap finished at $(date -Is)"
-          - BucketName: !If
-              - CreateUploadsBucket
-              - !Ref UploadsBucket
-              - !Ref ExistingBucketName
-            S3SecretAccessKey: !GetAtt S3AccessKey.SecretAccessKey
 
 Outputs:
   AWSRegion:
@@ -243,3 +192,5 @@ Outputs:
       - !Ref ExistingBucketName
   S3AccessKeyId:
     Value: !Ref S3AccessKey
+  S3SecretAccessKey:
+    Value: !GetAtt S3AccessKey.SecretAccessKey

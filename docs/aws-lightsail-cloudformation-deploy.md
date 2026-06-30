@@ -51,10 +51,34 @@ Important outputs:
 - `S3BucketName`: upload and backup bucket.
 - `S3AccessKeyId`: generated IAM access key id used by the instance.
 
-CloudFormation passes the matching secret access key to first-boot user data and
-writes it into `/opt/reader/.env.prod`. It is not emitted as a stack output.
+The deploy script reads stack outputs and then bootstraps the instance over SSH.
+This is intentional: Lightsail launch user data can be opaque when it fails, so
+the app setup runs as a visible SSH step instead.
 
-## 3. First boot
+## 3. Bootstrap
+
+By default, `./scripts/deploy-cloudformation.sh` waits for SSH and then runs
+`./scripts/bootstrap-lightsail-remote.sh`. If you need to use a specific SSH key,
+set `SSH_KEY`:
+
+```bash
+AWS_REGION=us-east-1 STACK_NAME=reader-prod SSH_KEY=~/.ssh/your-key.pem \
+  ./scripts/deploy-cloudformation.sh
+```
+
+To create only AWS resources and skip app setup:
+
+```bash
+RUN_REMOTE_BOOTSTRAP=false AWS_REGION=us-east-1 STACK_NAME=reader-prod \
+  ./scripts/deploy-cloudformation.sh
+```
+
+Then run bootstrap later:
+
+```bash
+AWS_REGION=us-east-1 STACK_NAME=reader-prod SSH_KEY=~/.ssh/your-key.pem \
+  ./scripts/bootstrap-lightsail-remote.sh
+```
 
 SSH to the instance and watch the bootstrap logs:
 

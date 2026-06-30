@@ -24,5 +24,12 @@ aws cloudformation deploy \
 aws cloudformation describe-stacks \
     --region "$AWS_REGION" \
     --stack-name "$STACK_NAME" \
-    --query 'Stacks[0].Outputs' \
+    --query "Stacks[0].Outputs[?OutputKey!='S3SecretAccessKey']" \
     --output table
+
+if [ "${RUN_REMOTE_BOOTSTRAP:-true}" = "true" ]; then
+    AWS_REGION="$AWS_REGION" \
+        STACK_NAME="$STACK_NAME" \
+        PARAMETERS_FILE="$PARAMETERS_FILE_ABS" \
+        ./scripts/bootstrap-lightsail-remote.sh
+fi
