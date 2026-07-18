@@ -43,8 +43,7 @@ export const verifyGoogleToken = async (
             name: data.name ?? data.email,
             picture: data.picture,
         };
-    } catch (e) {
-        console.error(e);
+    } catch {
         throw new Error("Failed to verify token");
     }
 };
