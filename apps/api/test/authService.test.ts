@@ -47,3 +47,19 @@ test("verifyGoogleToken rejects a token for a mismatched audience", async () => 
         /Failed to verify token/
     );
 });
+
+test("verifyGoogleToken does not log verifier errors containing the submitted token", async (t) => {
+    const { verifyGoogleToken } = await import("../src/services/AuthService");
+    const submittedToken = "header.payload.signature";
+    const errorLog = t.mock.method(console, "error");
+    const verifier = {
+        async verifyIdToken() {
+            throw new Error(`Invalid token: ${submittedToken}`);
+        },
+    };
+
+    await assert.rejects(verifyGoogleToken(submittedToken, verifier), {
+        message: "Failed to verify token",
+    });
+    assert.equal(errorLog.mock.callCount(), 0);
+});
