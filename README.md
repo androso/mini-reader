@@ -1,7 +1,32 @@
 # Reader Platform
 
-Reader Platform is a pnpm workspace for the Reader API, web app, in-process
-book processor, and shared ingestion packages.
+Reader Platform is a compact fork of
+[`androso/reader-backend`](https://github.com/androso/reader-backend). It keeps
+the Reader API, web app, book ingestion, and shared packages in a pnpm
+workspace, but is designed to run in a simple environment with fewer services
+and less deployment machinery than the upstream repository.
+
+## Fork scope
+
+This fork favors one small deployment over upstream's production-oriented
+service split. The normal runtime starts the API and web app, runs book
+processing inside the API through a Postgres-backed queue, and can use local
+Postgres with pgvector. The Redis/BullMQ worker remains available only for
+explicit legacy worker runs.
+
+This fork does not track every upstream feature. Upstream currently contains
+additional security hardening, RAG evaluation and reranking work, and
+ECS-oriented AWS automation. Port upstream changes selectively: preserve
+user-facing behavior and data safety, but do not add Redis, a mandatory
+separate worker, or multi-service infrastructure unless the compact deployment
+actually requires it.
+
+Selected upstream product, security, storage, and data-integrity improvements
+are tracked in the
+[`Compact upstream parity` milestone](https://github.com/androso/reader-monorepo/milestone/1).
+That milestone adapts behavior to this repository; it does not bring over the
+upstream RAG evaluation system, reranking and shadow infrastructure, or ECS
+deployment stack.
 
 ## Layout
 
