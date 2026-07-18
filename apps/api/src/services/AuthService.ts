@@ -10,39 +10,40 @@ if (!process.env.JWT_SECRET) {
 
 if (
     process.env.NODE_ENV === "production" &&
-    (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET)
+    !process.env.GOOGLE_CLIENT_ID
 ) {
-    throw new Error("Missing required Google auth environment variables");
+    throw new Error("Missing required GOOGLE_CLIENT_ID environment variable");
 }
 
-const client = new OAuth2Client({
-    clientId: process.env.GOOGLE_CLIENT_ID,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-});
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
-export const verifyGoogleToken = async (token: string) => {
+type GoogleIdTokenVerifier = Pick<OAuth2Client, "verifyIdToken">;
+
+export const verifyGoogleToken = async (
+    idToken: string,
+    verifier: GoogleIdTokenVerifier = client
+) => {
     try {
-        const response = await fetch(
-            "https://www.googleapis.com/oauth2/v3/userinfo",
-            {
-                headers: { Authorization: `Bearer ${token}` },
-            }
-        );
-
-        if (!response.ok) {
-            throw new Error("Failed to verify token");
+        if (!idToken || !process.env.GOOGLE_CLIENT_ID) {
+            throw new Error("Google ID token or client ID is missing");
         }
 
-        const data = await response.json();
+        const ticket = await verifier.verifyIdToken({
+            idToken,
+            audience: process.env.GOOGLE_CLIENT_ID,
+        });
+        const data = ticket.getPayload();
+        if (!data?.sub || !data.email) {
+            throw new Error("Google ID token is missing required identity claims");
+        }
 
         return {
             sub: data.sub,
             email: data.email,
-            name: data.name,
+            name: data.name ?? data.email,
             picture: data.picture,
         };
-    } catch (e) {
-        console.error(e);
+    } catch {
         throw new Error("Failed to verify token");
     }
 };

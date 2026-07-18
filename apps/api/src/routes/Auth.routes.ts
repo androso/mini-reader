@@ -15,8 +15,8 @@ const router: Router = express.Router();
  *   post:
  *     tags:
  *       - Auth
- *     summary: Authenticate user with Google OAuth token
- *     description: Validates Google OAuth token and creates/updates user in database
+ *     summary: Authenticate user with a Google ID token
+ *     description: Verifies a Google ID token and creates/updates user in database
  *     requestBody:
  *       required: true
  *       content:
@@ -24,12 +24,12 @@ const router: Router = express.Router();
  *           schema:
  *             type: object
  *             properties:
- *               token:
+ *               idToken:
  *                 type: string
  *                 description: Google OAuth ID token
  *                 example: "eyJhbGciOiJSUzI1NiIsImtpZCI6IjFiZDY3..."
  *             required:
- *               - token
+ *               - idToken
  *     responses:
  *       200:
  *         description: Authentication successful
@@ -58,8 +58,8 @@ const router: Router = express.Router();
 
 router.post("/google", async (req, res) => {
     try {
-        const { token } = req.body;
-        const payload = await verifyGoogleToken(token);
+        const { idToken } = req.body;
+        const payload = await verifyGoogleToken(idToken);
         const [existingUser] = await db
             .select()
             .from(Users)

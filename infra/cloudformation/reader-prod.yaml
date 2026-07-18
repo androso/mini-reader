@@ -38,6 +38,8 @@ Parameters:
   GoogleClientSecretValue:
     Type: String
     NoEcho: true
+    Default: ""
+    Description: Deprecated compatibility input; ignored by the deployment.
   OpenAiApiKeySecretValue:
     Type: String
     NoEcho: true
