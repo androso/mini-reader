@@ -30,11 +30,6 @@ const upload = multer({
 /**
  * @swagger
  * components:
- *   securitySchemes:
- *     bearerAuth:
- *       type: http
- *       scheme: bearer
- *       bearerFormat: JWT
  *   schemas:
  *     User:
  *       type: object
@@ -82,8 +77,6 @@ const upload = multer({
  * /api/books:
  *   post:
  *     tags: [Books]
- *     security:
- *       - bearerAuth: []
  *     summary: Upload EPUB or PDF file
  *     description: Uploads an EPUB or PDF file and queues asynchronous embedding generation.
  *     requestBody:
@@ -125,7 +118,7 @@ const upload = multer({
  *               properties:
  *                 message:
  *                   type: string
- *                   example: "No token provided or invalid token"
+ *                   example: "No session provided or invalid session"
  *       400:
  *         description: Bad request
  *         content:
@@ -275,8 +268,6 @@ router.post("/", authenticate, upload.single("file"), async (req, res) => {
  * /api/books:
  *   get:
  *     tags: [Books]
- *     security:
- *       - bearerAuth: []
  *     summary: Get all books uploaded by user
  *     description: Get all books uploaded by the user
  *     responses:
@@ -313,7 +304,7 @@ router.post("/", authenticate, upload.single("file"), async (req, res) => {
  *               properties:
  *                 message:
  *                   type: string
- *                   example: "No token provided"
+ *                   example: "No session provided"
  */
 router.get("/", authenticate, async (req, res) => {
     const booksList = await db
@@ -367,8 +358,6 @@ router.get("/:id/status", authenticate, async (req, res) => {
  * /api/books/{id}:
  *   get:
  *     tags: [Books]
- *     security:
- *       - bearerAuth: []
  *     summary: Get book by id
  *     description: Get book by id
  *     parameters:
@@ -395,7 +384,7 @@ router.get("/:id/status", authenticate, async (req, res) => {
  *               properties:
  *                 message:
  *                   type: string
- *                   example: "No token provided"
+ *                   example: "No session provided"
  *       500:
  *         description: Internal server error
  *         content:

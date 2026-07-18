@@ -47,9 +47,8 @@ function Home() {
     const { data: booksData } = useQuery({
         queryKey: [apiUrl("/api/books")],
         queryFn: async () => {
-            const token = localStorage.getItem("token");
             const response = await fetch(apiUrl("/api/books"), {
-                headers: { Authorization: `Bearer ${token}` },
+                credentials: "include",
             });
             if (!response.ok) throw new Error("Network response was not ok");
             return response.json();
@@ -62,10 +61,9 @@ function Home() {
         mutationFn: async (file: File) => {
             const formData = new FormData();
             formData.append("file", file);
-            const token = localStorage.getItem("token");
             const response = await fetch(apiUrl("/api/books"), {
-                headers: { Authorization: `Bearer ${token}` },
                 method: "POST",
+                credentials: "include",
                 body: formData,
             });
             if (!response.ok) throw new Error("Failed to upload file");
@@ -82,10 +80,9 @@ function Home() {
 
     const { mutate: deleteItem } = useMutation({
         mutationFn: async (itemId: string) => {
-            const token = localStorage.getItem("token");
             const response = await fetch(apiUrl(`/api/books/${itemId}`), {
-                headers: { Authorization: `Bearer ${token}` },
                 method: "DELETE",
+                credentials: "include",
             });
             if (!response.ok) throw new Error("Failed deleting file");
             return response;
@@ -233,8 +230,8 @@ function Home() {
                             {isUploading ? "Uploading..." : "Upload File"}
                         </button>
                         <button
-                            onClick={() => {
-                                signOut();
+                            onClick={async () => {
+                                await signOut();
                                 router.push("/login");
                             }}
                             className="bg-error text-on-error text-sm font-semibold px-6 py-2.5 rounded-full hover:bg-error-container hover:text-on-error-container transition-colors shadow-sm"

@@ -14,13 +14,10 @@ export type ConversationsResponse = {
 
 const useConversations = (bookId: string) => {
     const fetchConversations = useCallback(async () => {
-        const token = localStorage.getItem("token");
         const response = await fetch(
             apiUrl(`/api/book/${bookId}/conversations`),
             {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
+                credentials: "include",
             }
         );
         if (!response.ok) {

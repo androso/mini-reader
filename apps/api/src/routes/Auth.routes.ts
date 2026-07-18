@@ -7,7 +7,10 @@ import {
 import { db } from "../db";
 import { Users } from "../db/schema";
 import { eq } from "drizzle-orm";
+import { clearAuthCookies, setAuthCookie } from "../utils/authCookie";
 const router: Router = express.Router();
+
+export const authResponse = <T>(user: T) => ({ user });
 
 /**
  * @swagger
@@ -16,7 +19,7 @@ const router: Router = express.Router();
  *     tags:
  *       - Auth
  *     summary: Authenticate user with a Google ID token
- *     description: Verifies a Google ID token and creates/updates user in database
+ *     description: Verifies a Google ID token, creates or updates the user, and sets an HttpOnly session cookie
  *     requestBody:
  *       required: true
  *       content:
@@ -38,10 +41,6 @@ const router: Router = express.Router();
  *             schema:
  *               type: object
  *               properties:
- *                 token:
- *                   type: string
- *                   description: JWT access token
- *                   example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVC..."
  *                 user:
  *                   $ref: '#/components/schemas/User'
  *       401:
@@ -85,7 +84,8 @@ router.post("/google", async (req, res) => {
         }
 
         const jwtToken = generateToken(user);
-        res.json({ token: jwtToken, user });
+        setAuthCookie(res, jwtToken);
+        res.json(authResponse(user));
     } catch (e) {
         console.error(e);
         res.status(401).json({ message: "Authentication failed" });
@@ -101,11 +101,30 @@ router.post("/dev", async (_req, res) => {
     try {
         const user = await getOrCreateDevUser();
         const token = generateToken(user);
-        res.json({ token, user });
+        setAuthCookie(res, token);
+        res.json(authResponse(user));
     } catch (error) {
         console.error("Dev auth failed", error);
         res.status(500).json({ message: "Dev auth failed" });
     }
 });
+
+/**
+ * @swagger
+ * /auth/logout:
+ *   post:
+ *     tags:
+ *       - Auth
+ *     summary: End the current Reader session
+ *     responses:
+ *       204:
+ *         description: Session cookies cleared
+ */
+export const logout = (_req: express.Request, res: express.Response) => {
+    clearAuthCookies(res);
+    res.status(204).end();
+};
+
+router.post("/logout", logout);
 
 export default router;
