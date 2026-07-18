@@ -32,14 +32,14 @@ export function useUser() {
 
 export function useGoogleSignIn() {
     return useMutation({
-        mutationFn: async (token: string) => {
+        mutationFn: async (idToken: string) => {
             try {
                 const res = await fetch(apiUrl("/api/auth/google"), {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
                     },
-                    body: JSON.stringify({ token }),
+                    body: JSON.stringify({ idToken }),
                 });
 
                 if (!res.ok) {

@@ -95,7 +95,6 @@ const values = {
   WEB_PORT: param("AppWebPort", "3001"),
   NEXT_PUBLIC_GOOGLE_CLIENT_ID: param("GoogleClientId"),
   GOOGLE_CLIENT_ID: param("GoogleClientId"),
-  GOOGLE_CLIENT_SECRET: param("GoogleClientSecretValue"),
   OPENAI_API_KEY: param("OpenAiApiKeySecretValue"),
   S3_REGION: process.env.AWS_REGION || "us-east-1",
   S3_BUCKET_NAME: output("S3BucketName"),

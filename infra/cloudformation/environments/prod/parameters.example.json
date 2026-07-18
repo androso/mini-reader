@@ -9,7 +9,6 @@
   { "ParameterKey": "AppApiPort", "ParameterValue": "3000" },
   { "ParameterKey": "AppWebPort", "ParameterValue": "3001" },
   { "ParameterKey": "GoogleClientId", "ParameterValue": "your-google-client-id.apps.googleusercontent.com" },
-  { "ParameterKey": "GoogleClientSecretValue", "ParameterValue": "your-google-client-secret" },
   { "ParameterKey": "OpenAiApiKeySecretValue", "ParameterValue": "sk-your-openai-api-key" },
   { "ParameterKey": "JwtSecretValue", "ParameterValue": "change-me-long-random-secret" },
   { "ParameterKey": "PostgresPasswordValue", "ParameterValue": "change-me-long-random-postgres-password" },

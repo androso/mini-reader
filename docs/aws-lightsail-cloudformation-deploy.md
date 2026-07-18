@@ -25,10 +25,14 @@ Set these required values:
 - `DomainName`: the public hostname, for example `reader.example.com`
 - `RepoUrl`: the repository URL the instance can clone
 - `RepoBranch`: the branch to deploy on first boot
-- Google OAuth client id and secret
+- Google OAuth client ID, used by the browser and as the API token audience
 - OpenAI API key
 - JWT secret
 - Postgres password
+
+Existing local parameter files may still contain `GoogleClientSecretValue`.
+The template accepts that deprecated key for compatibility but ignores its
+value; new parameter files should omit it.
 
 Leave `ExistingBucketName` empty to create a bucket named
 `reader-prod-ACCOUNT-REGION`. Set it to an existing bucket name to reuse a
