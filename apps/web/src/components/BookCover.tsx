@@ -115,13 +115,10 @@ export default function BookCover({
 
         const loadCover = async () => {
             try {
-                const token = localStorage.getItem("token");
                 const response = await fetch(
                     apiUrl(`/api/books/${book.fileKey}`),
                     {
-                        headers: {
-                            Authorization: `Bearer ${token}`,
-                        },
+                        credentials: "include",
                     }
                 );
                 if (!response.ok) return;

@@ -209,7 +209,6 @@ export const useChat = (bookId: string) => {
             setInput("");
 
             try {
-                const token = localStorage.getItem("token");
                 const endpoint = chatState.currentConversation
                     ? apiUrl(
                           `/api/book/${bookId}/conversations/${chatState.currentConversation.id}/messages`
@@ -226,8 +225,8 @@ export const useChat = (bookId: string) => {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
-                        Authorization: `Bearer ${token}`,
                     },
+                    credentials: "include",
                     body: JSON.stringify({
                         message: userMessage.content,
                         role: "user",
