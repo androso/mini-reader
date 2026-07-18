@@ -30,6 +30,10 @@ Set these required values:
 - JWT secret
 - Postgres password
 
+Existing local parameter files may still contain `GoogleClientSecretValue`.
+The template accepts that deprecated key for compatibility but ignores its
+value; new parameter files should omit it.
+
 Leave `ExistingBucketName` empty to create a bucket named
 `reader-prod-ACCOUNT-REGION`. Set it to an existing bucket name to reuse a
 bucket instead.
