@@ -35,6 +35,11 @@ Parameters:
     Default: 3001
   GoogleClientId:
     Type: String
+  GoogleClientSecretValue:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: Deprecated compatibility input; ignored by the deployment.
   OpenAiApiKeySecretValue:
     Type: String
     NoEcho: true
