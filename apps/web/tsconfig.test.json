@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "incremental": false,
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "noEmit": false,
+    "outDir": "../../.tmp/apps-web-test",
+    "rootDir": ".",
+    "types": ["node"]
+  },
+  "include": ["src/hooks/imageObjectUrlRegistry.ts", "test/**/*.ts"]
+}
