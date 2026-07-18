@@ -35,9 +35,6 @@ Parameters:
     Default: 3001
   GoogleClientId:
     Type: String
-  GoogleClientSecretValue:
-    Type: String
-    NoEcho: true
   OpenAiApiKeySecretValue:
     Type: String
     NoEcho: true
