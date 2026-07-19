@@ -14,9 +14,11 @@ import {
     frontendCorsOptions,
 } from "./middleware/csrf";
 import { terminalErrorHandler } from "./middleware/errorHandler";
+import { authRateLimit } from "./middleware/rateLimit";
 dotenv.config();
 
 const app = express();
+app.set("trust proxy", "loopback");
 const frontendOrigin = configuredFrontendOrigin();
 
 if (!frontendOrigin) {
@@ -39,7 +41,7 @@ app.get("/", (req, res) => {
 app.use("/health", healthRoutes);
 
 // auth routes
-app.use("/api/auth", authRoutes);
+app.use("/api/auth", authRateLimit, authRoutes);
 app.use("/api/user", userRoutes);
 app.use("/api/books", bookRoutes);
 app.use("/api", chatRoutes);
