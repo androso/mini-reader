@@ -9,6 +9,7 @@ import {
     foreignKey,
     ForeignKey,
     uniqueIndex,
+    index,
     jsonb,
     customType,
 } from "drizzle-orm/pg-core";
@@ -102,6 +103,10 @@ export const BookProcessingJobs = pgTable(
     },
     (table) => [
         uniqueIndex("book_processing_jobs_book_id_idx").on(table.bookId),
+        index("book_processing_jobs_due_idx").on(
+            table.status,
+            table.availableAt
+        ),
     ]
 );
 
