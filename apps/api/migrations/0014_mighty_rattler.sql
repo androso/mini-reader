@@ -37,7 +37,7 @@ USING (
 		SELECT
 			"ctid",
 			row_number() OVER (
-				PARTITION BY "user_id", "book_id"
+				PARTITION BY "user_id", "book_id"::uuid
 				ORDER BY "updated_at" DESC, "last_read_at" DESC, "created_at" DESC, "ctid" DESC
 			) AS "row_number"
 		FROM "progress"
