@@ -76,20 +76,51 @@ test("development sessions use a non-secure reader_session cookie", () => {
     }
 });
 
-test("authentication reads either session cookie and prefers production", () => {
-    assert.equal(
-        getAuthToken({
-            headers: {
-                cookie: `${DEV_AUTH_COOKIE}=dev-token; ${PROD_AUTH_COOKIE}=prod%20token`,
-            },
-        }),
-        "prod token"
-    );
-    assert.equal(
-        getAuthToken({ headers: { cookie: `${DEV_AUTH_COOKIE}=dev-token` } }),
-        "dev-token"
-    );
-    assert.equal(getAuthToken({ headers: {} }), undefined);
+test("production authentication accepts only the __Host session cookie", () => {
+    const previous = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    try {
+        assert.equal(
+            getAuthToken({
+                headers: {
+                    cookie: `${DEV_AUTH_COOKIE}=dev-token; ${PROD_AUTH_COOKIE}=prod%20token`,
+                },
+            }),
+            "prod token"
+        );
+        assert.equal(
+            getAuthToken({
+                headers: { cookie: `${DEV_AUTH_COOKIE}=dev-token` },
+            }),
+            undefined
+        );
+    } finally {
+        process.env.NODE_ENV = previous;
+    }
+});
+
+test("non-production authentication accepts only the development session cookie", () => {
+    const previous = process.env.NODE_ENV;
+    process.env.NODE_ENV = "test";
+    try {
+        assert.equal(
+            getAuthToken({
+                headers: {
+                    cookie: `${PROD_AUTH_COOKIE}=prod-token; ${DEV_AUTH_COOKIE}=dev-token`,
+                },
+            }),
+            "dev-token"
+        );
+        assert.equal(
+            getAuthToken({
+                headers: { cookie: `${PROD_AUTH_COOKIE}=prod-token` },
+            }),
+            undefined
+        );
+        assert.equal(getAuthToken({ headers: {} }), undefined);
+    } finally {
+        process.env.NODE_ENV = previous;
+    }
 });
 
 test("logout cookie clearing covers production and development names", () => {

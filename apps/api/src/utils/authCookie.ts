@@ -29,7 +29,7 @@ export const parseCookies = (header?: string): Record<string, string> =>
 
 export const getAuthToken = (req: Pick<Request, "headers">) => {
     const cookies = parseCookies(req.headers.cookie);
-    return cookies[PROD_AUTH_COOKIE] ?? cookies[DEV_AUTH_COOKIE];
+    return cookies[getAuthCookieName()];
 };
 
 const cookieOptions = (secure: boolean) =>
