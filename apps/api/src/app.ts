@@ -27,10 +27,10 @@ if (!frontendOrigin) {
 
 app.use(cors(frontendCorsOptions()));
 
+app.use(enforceTrustedOrigin);
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(logger);
-app.use(enforceTrustedOrigin);
 
 app.get("/", (req, res) => {
     res.send("Hello World");
