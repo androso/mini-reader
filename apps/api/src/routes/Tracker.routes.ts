@@ -7,6 +7,18 @@ import { asyncHandler } from "../middleware/asyncHandler";
 
 export type TrackerDatabase = Pick<typeof db, "select" | "insert">;
 
+const UUID_PATTERN =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const isUuid = (value: string): boolean => UUID_PATTERN.test(value);
+
+const isNonEmptyString = (value: unknown): value is string =>
+    typeof value === "string" && value.trim().length > 0;
+
+const sendBookNotFound = (res: Response): void => {
+    res.status(404).json({ message: "Book not found" });
+};
+
 export const createTrackerRouter = (database: TrackerDatabase = db) => {
     const router = Router();
 
@@ -18,6 +30,11 @@ export const createTrackerRouter = (database: TrackerDatabase = db) => {
                 const user_id = req.user.id;
                 const bookId = req.params.rid;
 
+                if (!isUuid(bookId)) {
+                    sendBookNotFound(res);
+                    return;
+                }
+
                 // First get the book to ensure it exists
                 const [book] = await database
                     .select()
@@ -27,7 +44,7 @@ export const createTrackerRouter = (database: TrackerDatabase = db) => {
                     );
 
                 if (!book) {
-                    res.status(404).json({ message: "Book not found" });
+                    sendBookNotFound(res);
                     return;
                 }
 
@@ -66,11 +83,21 @@ export const createTrackerRouter = (database: TrackerDatabase = db) => {
             try {
                 const user_id = req.user.id;
                 const bookId = req.params.rid;
-                const { progress_block, progress_chapter } = req.body;
 
-                if (!progress_block) {
+                if (!isUuid(bookId)) {
+                    sendBookNotFound(res);
+                    return;
+                }
+
+                const { progress_block, progress_chapter } = req.body ?? {};
+
+                if (
+                    !isNonEmptyString(progress_block) ||
+                    !isNonEmptyString(progress_chapter)
+                ) {
                     res.status(400).json({
-                        message: "Progress Block is required",
+                        message:
+                            "Progress Block and Progress Chapter are required",
                     });
                     return;
                 }
@@ -84,7 +111,7 @@ export const createTrackerRouter = (database: TrackerDatabase = db) => {
                     );
 
                 if (!book) {
-                    res.status(404).json({ message: "Book not found" });
+                    sendBookNotFound(res);
                     return;
                 }
 

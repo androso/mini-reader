@@ -184,6 +184,24 @@ test("returns the initial null state for an owned book without progress", async 
     assert.deepEqual(mock.calls, ["select:books", "select:progress"]);
 });
 
+for (const method of ["get", "post"] as const) {
+    test(`${method.toUpperCase()} returns the missing-book 404 for a malformed book id without querying`, async () => {
+        const mock = createDatabase({});
+        const result = await invoke(mock.database, method, {
+            user: { id: "10000000-0000-4000-8000-000000000001" },
+            params: { rid: "legacy-file-key.epub" },
+            body: {
+                progress_block: "c01-block-1",
+                progress_chapter: "c01",
+            },
+        });
+
+        assert.equal(result.statusCode, 404);
+        assert.deepEqual(result.body, { message: "Book not found" });
+        assert.deepEqual(mock.calls, []);
+    });
+}
+
 for (const scenario of ["missing", "non-owned"] as const) {
     test(`returns 404 for a ${scenario} book before reading progress`, async () => {
         const mock = createDatabase({ bookRows: [] });
@@ -224,6 +242,47 @@ test("upserts owner progress after ownership resolution using the composite key"
     assert.equal(mock.conflictSet?.progressPosition, "c02-block-4");
     assert.equal(mock.conflictSet?.progressChapter, "c02");
 });
+
+const invalidProgressValues: Array<[string, unknown]> = [
+    ["missing", undefined],
+    ["empty", ""],
+    ["blank", "   "],
+    ["array", ["c01"]],
+    ["object", { value: "c01" }],
+    ["number", 1],
+    ["boolean", true],
+    ["null", null],
+];
+
+for (const field of ["progress_block", "progress_chapter"] as const) {
+    for (const [description, invalidValue] of invalidProgressValues) {
+        test(`rejects ${description} ${field} before persistence`, async () => {
+            const bookId = "20000000-0000-4000-8000-000000000001";
+            const mock = createDatabase({ bookRows: [{ id: bookId }] });
+            const body: Record<string, unknown> = {
+                progress_block: "c01-block-1",
+                progress_chapter: "c01",
+            };
+            if (invalidValue === undefined) {
+                delete body[field];
+            } else {
+                body[field] = invalidValue;
+            }
+
+            const result = await invoke(mock.database, "post", {
+                user: { id: "10000000-0000-4000-8000-000000000001" },
+                params: { rid: bookId },
+                body,
+            });
+
+            assert.equal(result.statusCode, 400);
+            assert.deepEqual(result.body, {
+                message: "Progress Block and Progress Chapter are required",
+            });
+            assert.deepEqual(mock.calls, []);
+        });
+    }
+}
 
 test("does not write progress when the book is missing or non-owned", async () => {
     const mock = createDatabase({ bookRows: [] });
