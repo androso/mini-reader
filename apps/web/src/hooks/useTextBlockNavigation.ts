@@ -4,7 +4,8 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 
 export const useTextBlockNavigation = (
     flatTextBlocks: TextBlock[],
-    contentRef: React.RefObject<HTMLDivElement | null>
+    contentRef: React.RefObject<HTMLDivElement | null>,
+    bookId: string
 ) => {
     const [isLoading, setIsLoading] = useState(true);
     const [activeTextBlockId, setActiveTextBlockId] = useState<string | null>(
@@ -14,7 +15,7 @@ export const useTextBlockNavigation = (
     const [isManualScroll, setIsManualScroll] = useState(false);
     const scrollTimeout = useRef<NodeJS.Timeout | null>(null);
 
-    const fetchProgress = async (bookId: string) => {
+    const fetchProgress = useCallback(async () => {
         try {
             const response = await fetch(apiUrl(`/api/${bookId}/progress`), {
                 method: "GET",
@@ -39,47 +40,44 @@ export const useTextBlockNavigation = (
             console.error("An error ocurred while progress was fetched", error);
             return null;
         }
-    };
+    }, [bookId]);
 
     //save progress
-    const [hasInitialProgress, setHasInitialProgress] = useState(false);
-
-    const saveProgress = async (textBlockId: string) => {
-        console.log("saveProgress", { hasInitialProgress });
-        if (!textBlockId) {
-            console.log("no textblock id");
-            return;
-        }
-        const bookId = window.location.pathname.split("/")[2];
-        try {
-            const response = await fetch(apiUrl(`/api/${bookId}/progress`), {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                credentials: "include",
-                body: JSON.stringify({
-                    progress_block: textBlockId,
-                    progress_chapter: textBlockId.split("-")[0], // assuming format like "c01-block-16"
-                }),
-            });
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+    const saveProgress = useCallback(
+        async (textBlockId: string) => {
+            if (!textBlockId) {
+                return;
             }
-        } catch (error) {
-            console.error("Progress cant be saved", error);
-        }
-    };
+            try {
+                const response = await fetch(
+                    apiUrl(`/api/${bookId}/progress`),
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                        credentials: "include",
+                        body: JSON.stringify({
+                            progress_block: textBlockId,
+                            progress_chapter: textBlockId.split("-")[0], // assuming format like "c01-block-16"
+                        }),
+                    }
+                );
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+            } catch (error) {
+                console.error("Progress cant be saved", error);
+            }
+        },
+        [bookId]
+    );
 
     useEffect(() => {
         if (!activeTextBlockId && flatTextBlocks.length > 0) {
-            const bookId = window.location.pathname.split("/")[2];
             const initializeProgress = async () => {
                 try {
-                    const storedId = await fetchProgress(bookId);
-                    if (storedId) {
-                        setHasInitialProgress(true);
-                    }
+                    const storedId = await fetchProgress();
                     setActiveTextBlockId(storedId || flatTextBlocks[0].id);
                     const element = document.getElementById(
                         storedId || flatTextBlocks[0].id
@@ -97,36 +95,39 @@ export const useTextBlockNavigation = (
             //this retrieves the progress from the server
             initializeProgress();
         }
-    }, [flatTextBlocks]);
+    }, [activeTextBlockId, fetchProgress, flatTextBlocks]);
 
-    const getVisibilityRatio = useCallback((element: HTMLElement) => {
-        const rect = element.getBoundingClientRect();
-        const $parentElement = contentRef.current?.parentElement;
-        const parentRect = $parentElement?.getBoundingClientRect();
-        const elementRect = element.getBoundingClientRect();
+    const getVisibilityRatio = useCallback(
+        (element: HTMLElement) => {
+            const rect = element.getBoundingClientRect();
+            const $parentElement = contentRef.current?.parentElement;
+            const parentRect = $parentElement?.getBoundingClientRect();
+            const elementRect = element.getBoundingClientRect();
 
-        // adjust coordinates of element relative to parent
-        const relativeTop = elementRect.top - parentRect!.top;
-        const relativeBottom = elementRect.bottom - parentRect!.top;
-        const windowHeight = $parentElement!.clientHeight;
+            // adjust coordinates of element relative to parent
+            const relativeTop = elementRect.top - parentRect!.top;
+            const relativeBottom = elementRect.bottom - parentRect!.top;
+            const windowHeight = $parentElement!.clientHeight;
 
-        // If element is not in viewport at all
-        if (relativeBottom < 0 || relativeTop > windowHeight) {
-            return 0;
-        }
-        if (
-            (relativeTop >= 0 && relativeBottom > windowHeight) ||
-            (relativeBottom < windowHeight && relativeTop <= 0)
-        ) {
-            return 0;
-        }
+            // If element is not in viewport at all
+            if (relativeBottom < 0 || relativeTop > windowHeight) {
+                return 0;
+            }
+            if (
+                (relativeTop >= 0 && relativeBottom > windowHeight) ||
+                (relativeBottom < windowHeight && relativeTop <= 0)
+            ) {
+                return 0;
+            }
 
-        // Calculate the visible height of the element
-        const visibleHeight =
-            Math.min(rect.bottom, windowHeight) - Math.max(rect.top, 0);
-        const ratio = visibleHeight / rect.height;
-        return Math.max(0, Math.min(1, ratio));
-    }, []);
+            // Calculate the visible height of the element
+            const visibleHeight =
+                Math.min(rect.bottom, windowHeight) - Math.max(rect.top, 0);
+            const ratio = visibleHeight / rect.height;
+            return Math.max(0, Math.min(1, ratio));
+        },
+        [contentRef]
+    );
 
     const findMostVisibleBlock = useCallback(() => {
         if (!flatTextBlocks) return null;
@@ -156,16 +157,14 @@ export const useTextBlockNavigation = (
             scrollTimeout.current = setTimeout(() => {
                 const mostVisibleId = findMostVisibleBlock();
                 if (mostVisibleId) {
-                    console.log({ mostVisibleId });
                     saveProgress(mostVisibleId);
                     if (mostVisibleId !== activeTextBlockId) {
-                        console.log({ mostVisibleId, activeTextBlockId });
                         setActiveTextBlockId(mostVisibleId);
                     }
                 }
             }, 300);
         }
-    }, [activeTextBlockId, isManualScroll]);
+    }, [activeTextBlockId, findMostVisibleBlock, isManualScroll, saveProgress]);
 
     // scroll listener
     useEffect(() => {
@@ -179,7 +178,7 @@ export const useTextBlockNavigation = (
                 clearTimeout(scrollTimeout.current);
             }
         };
-    }, [handleScroll]);
+    }, [contentRef, handleScroll]);
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -217,7 +216,7 @@ export const useTextBlockNavigation = (
 
         document.addEventListener("keydown", handleKeyDown);
         return () => document.removeEventListener("keydown", handleKeyDown);
-    }, [flatTextBlocks, activeTextBlockId]);
+    }, [activeTextBlockId, flatTextBlocks, saveProgress]);
 
     return {
         activeTextBlockId,
