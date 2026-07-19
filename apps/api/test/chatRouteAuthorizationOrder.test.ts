@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { NextFunction, Request, RequestHandler, Response } from "express";
+import { chatRateLimit } from "../src/middleware/rateLimit";
 import { db } from "../src/db";
 import { Books, Conversations, Messages } from "../src/db/schema";
 import { hybridBookSearchService } from "../src/services/HybridBookSearchService";
@@ -32,8 +33,13 @@ const routeHandler = (path: string, method: "get" | "post") => {
             candidate.route?.path === path && candidate.route.methods[method]
     );
     assert.ok(layer?.route);
-    assert.equal(layer.route.stack.length, 2, "authenticate must remain first");
-    return layer.route.stack[1].handle;
+    assert.equal(
+        layer.route.stack.length,
+        3,
+        "authenticate and chat rate limit must precede the handler"
+    );
+    assert.equal(layer.route.stack[1].handle, chatRateLimit);
+    return layer.route.stack[2].handle;
 };
 
 const invoke = async (

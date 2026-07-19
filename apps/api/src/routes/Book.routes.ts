@@ -34,6 +34,7 @@ import {
     BookDeletionNotFoundError,
     deleteOwnedBook,
 } from "../services/BookDeletionService";
+import { uploadRateLimit } from "../middleware/rateLimit";
 
 const log = createLogger("books");
 
@@ -164,6 +165,7 @@ const upload = multer({
 router.post(
     "/",
     authenticate,
+    uploadRateLimit,
     upload.single("file"),
     asyncHandler(async (req, res) => {
         const requestStart = Date.now();
