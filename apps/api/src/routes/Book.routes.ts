@@ -13,16 +13,12 @@ import { asyncHandler } from "../middleware/asyncHandler";
 import { db } from "../db";
 import { Books } from "../db/schema";
 import { eq, sql } from "drizzle-orm";
-import { createHash, extractMetadata } from "../utils/bookUtils";
-import { PDFUtils } from "../utils/pdfUtils";
 import { bookSearchChunkStore } from "../services/BookSearchChunkStore";
 import { hybridBookSearchService } from "../services/HybridBookSearchService";
 import { handleBookProcessingEnqueue } from "../services/BookProcessingEnqueueService";
 import { handleBookFileDelivery } from "../services/BookFileDelivery";
-import {
-    publicBookSelection,
-    toPublicBook,
-} from "../services/PublicBook";
+import { publicBookSelection, toPublicBook } from "../services/PublicBook";
+import { createBookUploadPlan } from "../utils/bookUpload";
 
 const log = createLogger("books");
 
@@ -167,7 +163,6 @@ router.post(
                 res.status(400).json({ error: "No file uploaded" });
                 return;
             }
-            let fileName;
             const mimeType = req.file.mimetype;
             const fileBuffer = req.file.buffer;
             // Validate file type
@@ -183,63 +178,39 @@ router.post(
                 });
                 return;
             }
-            if (mimeType === "application/pdf") {
-                log.info("Extracting PDF metadata for upload", {
-                    userId: req.user.id,
-                    fileName: req.file.originalname,
-                });
-                const pdfUtils = new PDFUtils();
-                const hash = await pdfUtils.pdfMetadata(fileBuffer);
-                if (!hash) throw new Error("Could not generate hash for PDF");
-                fileName = `pdf-${hash.slice(0, 12)}`;
-            } else {
-                log.info("Extracting EPUB metadata for upload", {
-                    userId: req.user.id,
-                    fileName: req.file.originalname,
-                });
-                const metadata = await extractMetadata(fileBuffer);
-                if (!metadata)
-                    throw new Error("Could not extract EPUB metadata");
-                fileName = `epub-${createHash(metadata).slice(0, 12)}`;
-            }
+            const fileType = mimeType === "application/pdf" ? "pdf" : "epub";
+            const uploadPlan = createBookUploadPlan(
+                req.user.id,
+                req.file.originalname,
+                fileType
+            );
 
             log.info("Uploading file to storage", {
                 userId: req.user.id,
-                fileName,
+                bookId: uploadPlan.book.id,
+                fileKey: uploadPlan.book.fileKey,
                 mimeType,
             });
-            await uploadFile(fileName, fileBuffer);
+            await uploadFile(uploadPlan.book.fileKey, fileBuffer);
             log.info("File uploaded to storage", {
                 userId: req.user.id,
-                fileName,
+                bookId: uploadPlan.book.id,
+                fileKey: uploadPlan.book.fileKey,
             });
-            const fileType = mimeType === "application/pdf" ? "pdf" : "epub";
 
             const [book] = await db
                 .insert(Books)
-                .values({
-                    title: req.file.originalname,
-                    userId: req.user.id,
-                    fileKey: fileName,
-                    fileType,
-                    processingStatus: "processing",
-                    processingError: null,
-                })
+                .values(uploadPlan.book)
                 .returning();
             log.info("Book record created", {
                 bookId: book.id,
                 userId: req.user.id,
-                fileKey: fileName,
+                fileKey: book.fileKey,
                 fileType,
             });
 
             try {
-                await handleBookProcessingEnqueue({
-                    bookId: book.id,
-                    userId: book.userId,
-                    fileKey: book.fileKey,
-                    fileType,
-                });
+                await handleBookProcessingEnqueue(uploadPlan.job);
             } catch (error) {
                 log.error("Book processing enqueue failed", {
                     bookId: book.id,
@@ -261,7 +232,7 @@ router.post(
             log.info("Book upload accepted", {
                 bookId: book.id,
                 durationMs: duration,
-                fileName,
+                fileKey: book.fileKey,
             });
             res.status(202).json({
                 message: "File upload accepted for processing",
