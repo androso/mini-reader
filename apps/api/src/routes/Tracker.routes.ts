@@ -27,13 +27,13 @@ router.get(
     asyncHandler(async (req: Request, res: Response) => {
         try {
             const user_id = req.user.id;
-            const book_id = req.params.rid;
+            const bookId = req.params.rid;
 
             // First get the book to ensure it exists
             const [book] = await db
                 .select()
                 .from(Books)
-                .where(eq(Books.fileKey, book_id));
+                .where(eq(Books.id, bookId));
 
             if (!book) {
                 res.status(404).json({ message: "Book not found" });
@@ -75,7 +75,7 @@ router.post(
     asyncHandler(async (req: Request, res: Response) => {
         try {
             const user_id = req.user.id;
-            const file_key = req.params.rid;
+            const bookId = req.params.rid;
             const { progress_block, progress_chapter } = req.body;
 
             if (!progress_block) {
@@ -83,11 +83,11 @@ router.post(
                 return;
             }
 
-            // Get book by file key
+            // Resolve the public book identity without exposing its storage key.
             const [book] = await db
                 .select()
                 .from(Books)
-                .where(eq(Books.fileKey, file_key));
+                .where(eq(Books.id, bookId));
 
             if (!book) {
                 res.status(404).json({ message: "Book not found" });
