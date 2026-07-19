@@ -79,6 +79,7 @@ test(
                 const newBookA = "20000000-0000-4000-8000-000000000002";
                 const bookB = "20000000-0000-4000-8000-000000000003";
                 const directBook = "20000000-0000-4000-8000-000000000004";
+                const equivalentBook = "abcdefab-cdef-4abc-8def-abcdefabcdef";
                 const orphanBook = "20000000-0000-4000-8000-000000000099";
 
                 await database.query(
@@ -87,11 +88,20 @@ test(
                 );
                 await database.query(
                     `INSERT INTO "books" ("id", "user_id", "file_key", "created_at") VALUES
-                        ($1, $5, 'shared-key', '2025-01-01'),
-                        ($2, $5, 'shared-key', '2025-02-01'),
-                        ($3, $6, 'shared-key', '2025-03-01'),
-                        ($4, $5, 'direct-key', '2025-04-01')`,
-                    [oldBookA, newBookA, bookB, directBook, userA, userB]
+                        ($1, $6, 'shared-key', '2025-01-01'),
+                        ($2, $6, 'shared-key', '2025-02-01'),
+                        ($3, $7, 'shared-key', '2025-03-01'),
+                        ($4, $6, 'direct-key', '2025-04-01'),
+                        ($5, $6, 'equivalent-key', '2025-05-01')`,
+                    [
+                        oldBookA,
+                        newBookA,
+                        bookB,
+                        directBook,
+                        equivalentBook,
+                        userA,
+                        userB,
+                    ]
                 );
 
                 const insertProgress = async (
@@ -161,6 +171,18 @@ test(
                 );
                 await insertProgress(
                     userA,
+                    equivalentBook,
+                    "older-equivalent-spelling",
+                    "2025-06-01T00:00:00Z"
+                );
+                await insertProgress(
+                    userA,
+                    "ABCDEFABCDEF4ABC8DEFABCDEFABCDEF",
+                    "newer-equivalent-spelling",
+                    "2025-07-01T00:00:00Z"
+                );
+                await insertProgress(
+                    userA,
                     directBook,
                     "kept-by-ctid",
                     "2025-05-01T00:00:00Z",
@@ -206,6 +228,11 @@ test(
                         user_id: userA,
                         book_id: directBook,
                         progress_position: "kept-by-ctid",
+                    },
+                    {
+                        user_id: userA,
+                        book_id: equivalentBook,
+                        progress_position: "newer-equivalent-spelling",
                     },
                     {
                         user_id: userB,
