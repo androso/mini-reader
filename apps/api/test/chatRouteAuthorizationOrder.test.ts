@@ -39,7 +39,8 @@ const routeHandler = (path: string, method: "get" | "post") => {
 const invoke = async (
     handler: RequestHandler,
     req: Partial<Request>,
-    responseOverrides: Partial<Response> = {}
+    responseOverrides: Partial<Response> = {},
+    onResponseCreated?: (response: Response) => void
 ) => {
     const writes: string[] = [];
     const headers: Array<[string, string]> = [];
@@ -48,6 +49,8 @@ const invoke = async (
     let nextError: unknown;
     let headersSent = false;
     let writableEnded = false;
+    let destroyed = false;
+    const listeners = new Map<string, Set<() => void>>();
     let settled = false;
     let resolve!: () => void;
     const completed = new Promise<void>((done) => {
@@ -64,6 +67,25 @@ const invoke = async (
         },
         get writableEnded() {
             return writableEnded;
+        },
+        get destroyed() {
+            return destroyed;
+        },
+        once(event: string, listener: () => void) {
+            listeners.set(event, new Set([listener]));
+            return this;
+        },
+        off(event: string, listener: () => void) {
+            listeners.get(event)?.delete(listener);
+            return this;
+        },
+        emit(event: string) {
+            if (event === "close") destroyed = true;
+            const eventListeners = [...(listeners.get(event) ?? [])];
+            listeners.delete(event);
+            eventListeners.forEach((listener) => listener());
+            if (event === "close") finish();
+            return eventListeners.length > 0;
         },
         status(code: number) {
             statusCode = code;
@@ -92,6 +114,7 @@ const invoke = async (
         },
         ...responseOverrides,
     } as unknown as Response;
+    onResponseCreated?.(response);
     const next: NextFunction = (error?: unknown) => {
         nextError = error;
         finish();
@@ -628,6 +651,189 @@ test("mounted append route persists and terminates a failed partial stream", asy
         hybridBookSearchService.search = originalSearch;
         OpenAIService.prototype.generateStreamResponse = originalGenerate;
         console.error = originalConsoleError;
+    }
+});
+
+test("mounted append route aborts on close and never writes after destruction", async () => {
+    const handler = routeHandler(
+        "/:resourceType/:rid/conversations/:cid/messages",
+        "post"
+    );
+    const originalSelect = db.select;
+    const originalInsert = db.insert;
+    const originalUpdate = db.update;
+    const originalSearch = hybridBookSearchService.search;
+    const originalGenerate = OpenAIService.prototype.generateStreamResponse;
+    const insertedMessages: unknown[] = [];
+    let response: Response | undefined;
+    let modelCalls = 0;
+    let generationSignal: AbortSignal | undefined;
+
+    const request = {
+        params: {
+            resourceType: "book",
+            rid: "book-1",
+            cid: "conversation-1",
+        },
+        body: { message: "Question" },
+        user: {
+            id: "user-1",
+            email: "owner@example.com",
+            name: "Owner",
+            googleId: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        },
+    };
+
+    try {
+        db.select = (() => ({
+            from: (table: unknown) => ({
+                where: () => {
+                    if (table === Messages) {
+                        return { orderBy: async () => [] };
+                    }
+                    if (table === Conversations) {
+                        return Promise.resolve([{ id: "conversation-1" }]);
+                    }
+                    assert.equal(table, Books);
+                    return Promise.resolve([
+                        {
+                            id: "book-1",
+                            userId: "user-1",
+                            processingStatus: "ready",
+                            processingError: null,
+                            collectionName: "book_collection",
+                        },
+                    ]);
+                },
+            }),
+        })) as unknown as typeof db.select;
+        db.insert = ((table: unknown) => ({
+            values: async (values: unknown) => {
+                assert.equal(table, Messages);
+                insertedMessages.push(values);
+            },
+        })) as unknown as typeof db.insert;
+        db.update = (() => ({
+            set: () => ({ where: async () => undefined }),
+        })) as unknown as typeof db.update;
+
+        hybridBookSearchService.search = async () => {
+            response?.emit("close");
+            return [];
+        };
+        OpenAIService.prototype.generateStreamResponse = async () => {
+            modelCalls++;
+            return (async function* () {})();
+        };
+
+        const closedDuringRetrieval = await invoke(
+            handler,
+            request,
+            {},
+            (createdResponse) => {
+                response = createdResponse;
+            }
+        );
+        await new Promise<void>((resolve) => setImmediate(resolve));
+
+        assert.equal(modelCalls, 0);
+        assert.deepEqual(closedDuringRetrieval.writes, []);
+        assert.deepEqual(insertedMessages, [
+            {
+                conversationId: "conversation-1",
+                role: "user",
+                content: "Question",
+            },
+        ]);
+
+        insertedMessages.length = 0;
+        response = undefined;
+        hybridBookSearchService.search = async () => [
+            {
+                id: "chunk-1",
+                chunkIndex: 0,
+                content: "context",
+                score: 1,
+                bestRank: 1,
+            },
+        ];
+        OpenAIService.prototype.generateStreamResponse = async (
+            _messages,
+            _systemPrompt,
+            options
+        ) => {
+            modelCalls++;
+            generationSignal = options?.signal;
+            return (async function* () {
+                yield {
+                    choices: [
+                        {
+                            delta: { content: "partial" },
+                            finish_reason: null,
+                        },
+                    ],
+                } as never;
+                response?.emit("close");
+                const abortError = new Error("request cancelled");
+                abortError.name = "AbortError";
+                throw abortError;
+            })();
+        };
+
+        const closedDuringGeneration = await invoke(
+            handler,
+            request,
+            {},
+            (createdResponse) => {
+                response = createdResponse;
+            }
+        );
+        for (
+            let attempt = 0;
+            insertedMessages.length < 2 && attempt < 20;
+            attempt++
+        ) {
+            await new Promise<void>((resolve) => setImmediate(resolve));
+        }
+        await new Promise<void>((resolve) => setImmediate(resolve));
+
+        assert.equal(modelCalls, 1);
+        assert.equal(generationSignal?.aborted, true);
+        assert.equal(closedDuringGeneration.response.destroyed, true);
+        assert.deepEqual(closedDuringGeneration.writes, [
+            `data: ${JSON.stringify({ content: "partial" })}\n\n`,
+        ]);
+        assert.deepEqual(insertedMessages, [
+            {
+                conversationId: "conversation-1",
+                role: "user",
+                content: "Question",
+            },
+            {
+                conversationId: "conversation-1",
+                role: "assistant",
+                content: "partial",
+                contextSources: [
+                    {
+                        id: "chunk-1",
+                        chunkIndex: 0,
+                        score: 1,
+                        bestRank: 1,
+                        excerpt: "context",
+                    },
+                ],
+                completionStatus: "cancelled",
+                finishReason: null,
+            },
+        ]);
+    } finally {
+        db.select = originalSelect;
+        db.insert = originalInsert;
+        db.update = originalUpdate;
+        hybridBookSearchService.search = originalSearch;
+        OpenAIService.prototype.generateStreamResponse = originalGenerate;
     }
 });
 

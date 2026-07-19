@@ -446,6 +446,7 @@ const streamAssistantResponse = async ({
     routeName,
     model,
     traceOpenAI,
+    responseAbort,
 }: {
     messages: ChatMessage[];
     res: Response;
@@ -457,6 +458,7 @@ const streamAssistantResponse = async ({
     routeName: string;
     model: OpenAIChatModel;
     traceOpenAI: boolean;
+    responseAbort: ReturnType<typeof createResponseAbortController>;
 }) => {
     const openAiSpan = trace.startObservation("openai_chat_stream", {
         input: {
@@ -466,8 +468,6 @@ const streamAssistantResponse = async ({
             messageCount: messages.length,
         },
     });
-
-    const responseAbort = createResponseAbortController(res);
 
     let accumulatedResponse = "";
     let finishReason: string | null = null;
@@ -504,7 +504,8 @@ const streamAssistantResponse = async ({
         );
 
         for await (const chunk of textStream) {
-            if (responseAbort.wasClosed() || res.writableEnded) break;
+            if (responseAbort.wasClosed() || res.destroyed || res.writableEnded)
+                break;
             const choice = chunk.choices[0];
             if (choice?.finish_reason) {
                 finishReason = choice.finish_reason;
@@ -558,7 +559,6 @@ const streamAssistantResponse = async ({
             });
         }
     } finally {
-        responseAbort.cleanup();
         openAiSpan.end();
     }
 
@@ -568,6 +568,7 @@ const streamAssistantResponse = async ({
             finishReason,
             aborted:
                 responseAbort.wasClosed() ||
+                res.destroyed ||
                 responseAbort.controller.signal.aborted ||
                 caughtAbortError,
             failed: streamFailed,
@@ -646,80 +647,91 @@ const runChatCompletion = async ({
     highlightContext: HighlightContext | null;
     trace: TraceObservation;
 }) => {
-    const retrievalQuery = buildRetrievalQuery(query, highlightContext);
-    const ragResult = await buildRagMessages(
-        resourceType,
-        resourceId,
-        userId,
-        messages,
-        retrievalQuery,
-        highlightContext,
-        trace
-    );
-    if (ragResult.status === "processing") {
-        trace.setTraceIO({ output: { status: "processing" } });
-        writeChatStatusAndEnd(res, {
-            error: "Document context is still processing. Please try again shortly.",
-            status: "processing",
-        });
-        return;
-    }
-    if (ragResult.status === "failed") {
-        trace.setTraceIO({
-            output: { status: "failed", error: ragResult.error },
-        });
-        writeChatStatusAndEnd(res, {
-            error: ragResult.error || "Document text processing failed.",
-            status: "failed",
-        });
-        return;
-    }
+    const responseAbort = createResponseAbortController(res);
+    const responseClosed = () =>
+        responseAbort.wasClosed() || res.destroyed || res.writableEnded;
 
-    const outcome = await streamAssistantResponse({
-        messages: ragResult.messages,
-        res,
-        trace,
-        userId,
-        conversationId,
-        resourceType,
-        resourceId,
-        routeName,
-        model,
-        traceOpenAI: resourceType === "book",
-    });
+    try {
+        const retrievalQuery = buildRetrievalQuery(query, highlightContext);
+        const ragResult = await buildRagMessages(
+            resourceType,
+            resourceId,
+            userId,
+            messages,
+            retrievalQuery,
+            highlightContext,
+            trace
+        );
+        if (responseClosed()) return;
 
-    await saveAssistantMessage(
-        conversationId,
-        outcome.content,
-        ragResult.sources,
-        outcome.status,
-        outcome.finishReason,
-        trace
-    );
-    trace.setTraceIO({
-        output: {
-            status: outcome.status,
-            finishReason: outcome.finishReason,
-            assistantResponseLength: outcome.content.length,
-            sourceCount: ragResult.sources?.length ?? 0,
-        },
-    });
-
-    if (!res.writableEnded) {
-        if (ragResult.sources?.length) {
-            res.write(
-                `data: ${JSON.stringify({ type: "sources", sources: ragResult.sources })}\n\n`
-            );
+        if (ragResult.status === "processing") {
+            trace.setTraceIO({ output: { status: "processing" } });
+            writeChatStatusAndEnd(res, {
+                error: "Document context is still processing. Please try again shortly.",
+                status: "processing",
+            });
+            return;
         }
-        res.write(
-            `data: ${JSON.stringify({
-                type: "terminal",
+        if (ragResult.status === "failed") {
+            trace.setTraceIO({
+                output: { status: "failed", error: ragResult.error },
+            });
+            writeChatStatusAndEnd(res, {
+                error: ragResult.error || "Document text processing failed.",
+                status: "failed",
+            });
+            return;
+        }
+
+        const outcome = await streamAssistantResponse({
+            messages: ragResult.messages,
+            res,
+            trace,
+            userId,
+            conversationId,
+            resourceType,
+            resourceId,
+            routeName,
+            model,
+            traceOpenAI: resourceType === "book",
+            responseAbort,
+        });
+
+        await saveAssistantMessage(
+            conversationId,
+            outcome.content,
+            ragResult.sources,
+            outcome.status,
+            outcome.finishReason,
+            trace
+        );
+        trace.setTraceIO({
+            output: {
                 status: outcome.status,
                 finishReason: outcome.finishReason,
-            })}\n\n`
-        );
-        res.write("data: [DONE]\n\n");
-        res.end();
+                assistantResponseLength: outcome.content.length,
+                sourceCount: ragResult.sources?.length ?? 0,
+            },
+        });
+
+        if (!responseClosed()) {
+            if (ragResult.sources?.length) {
+                res.write(
+                    `data: ${JSON.stringify({ type: "sources", sources: ragResult.sources })}\n\n`
+                );
+            }
+            res.write(
+                `data: ${JSON.stringify({
+                    type: "terminal",
+                    status: outcome.status,
+                    finishReason: outcome.finishReason,
+                })}\n\n`
+            );
+            res.write("data: [DONE]\n\n");
+            res.end();
+        }
+    } finally {
+        responseAbort.cleanup();
     }
 };
 
