@@ -8,6 +8,7 @@ import { AuthProtection } from "@/components/AuthProtection";
 import BookCover from "@/components/BookCover";
 import type { Book } from "@/types/bookTypes";
 import { apiUrl } from "@/lib/api";
+import { createReaderPath } from "@/lib/bookReaderRouting";
 
 function formatRelativeDate(date: Date | string): string {
     const d = new Date(date);
@@ -125,7 +126,7 @@ function Home() {
             : sortedBooks.filter((b) => b.fileType === filter);
 
     const handleBookClick = (book: Book) => {
-        router.push(`/read/${book.id}?type=${book.fileType ?? ""}`);
+        router.push(createReaderPath(book));
     };
 
     const navLinkClass = (active: boolean) =>

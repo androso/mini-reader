@@ -92,6 +92,13 @@
       "when": 1782831711015,
       "tag": "0012_lightsail_pgvector_jobs",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1784424751044,
+      "tag": "0013_backfill_legacy_book_file_types",
+      "breakpoints": true
     }
   ]
 }
