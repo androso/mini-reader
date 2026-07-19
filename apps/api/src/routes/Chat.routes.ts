@@ -652,6 +652,8 @@ const runChatCompletion = async ({
         responseAbort.wasClosed() || res.destroyed || res.writableEnded;
 
     try {
+        if (responseClosed()) return;
+
         const retrievalQuery = buildRetrievalQuery(query, highlightContext);
         const ragResult = await buildRagMessages(
             resourceType,
