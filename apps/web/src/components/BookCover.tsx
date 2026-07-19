@@ -1,10 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import JSZip from "jszip";
 import type { Book } from "@/types/bookTypes";
 import { apiUrl } from "@/lib/api";
 import { resolveRelativePath } from "@/lib/utils";
+import {
+    fetchProtectedEpubCover,
+    startLazyBookCoverLoad,
+    type VisibilityObserverFactory,
+} from "./bookCoverLoading";
 
 interface BookCoverProps {
     book: Book;
@@ -103,52 +108,52 @@ export default function BookCover({
     iconClassName = "text-4xl",
 }: BookCoverProps) {
     const [coverUrl, setCoverUrl] = useState<string | null>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        if (book.fileType !== "epub") {
-            setCoverUrl(null);
-            return;
-        }
+        const target = containerRef.current;
+        if (!target) return;
 
-        let isCancelled = false;
-        let objectUrl: string | null = null;
+        const createObserver: VisibilityObserverFactory | undefined =
+            typeof IntersectionObserver === "undefined"
+                ? undefined
+                : (onEntries, observerOptions) => {
+                      const observer = new IntersectionObserver(
+                          (entries) => onEntries(entries),
+                          observerOptions
+                      );
+                      return {
+                          disconnect: () => observer.disconnect(),
+                          observe: (element) =>
+                              observer.observe(element as Element),
+                      };
+                  };
 
-        const loadCover = async () => {
-            try {
-                const response = await fetch(
-                    apiUrl(`/api/books/${book.id}`),
-                    {
-                        credentials: "include",
-                    }
-                );
-                if (!response.ok) return;
-
-                objectUrl = await extractEpubCoverUrl(await response.blob());
-                if (!isCancelled) {
-                    setCoverUrl(objectUrl);
-                } else if (objectUrl) {
-                    URL.revokeObjectURL(objectUrl);
-                }
-            } catch (error) {
+        return startLazyBookCoverLoad({
+            fileType: book.fileType,
+            target,
+            createObserver,
+            createAbortController: () => new AbortController(),
+            loadCover: (signal) =>
+                fetchProtectedEpubCover(book.id, signal, {
+                    buildApiUrl: apiUrl,
+                    extractCoverUrl: extractEpubCoverUrl,
+                    fetch,
+                }),
+            onCoverUrl: setCoverUrl,
+            onError: (error) => {
                 console.warn("Failed to load EPUB cover", {
                     bookId: book.id,
                     error,
                 });
-            }
-        };
-
-        loadCover();
-
-        return () => {
-            isCancelled = true;
-            if (objectUrl) {
-                URL.revokeObjectURL(objectUrl);
-            }
-        };
+            },
+            revokeObjectUrl: URL.revokeObjectURL,
+        });
     }, [book.fileType, book.id]);
 
     return (
         <div
+            ref={containerRef}
             className={`relative flex items-center justify-center overflow-hidden bg-surface-container shadow-sm ${className}`}
         >
             {coverUrl ? (
