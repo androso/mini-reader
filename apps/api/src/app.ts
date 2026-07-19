@@ -18,7 +18,8 @@ import { authRateLimit } from "./middleware/rateLimit";
 dotenv.config();
 
 const app = express();
-app.set("trust proxy", "loopback");
+// Caddy is the only trusted hop; Docker may expose it as a bridge gateway.
+app.set("trust proxy", 1);
 const frontendOrigin = configuredFrontendOrigin();
 
 if (!frontendOrigin) {

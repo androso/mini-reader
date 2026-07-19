@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { NextFunction, Request, RequestHandler, Response } from "express";
+import type {
+    Express,
+    NextFunction,
+    Request,
+    RequestHandler,
+    Response,
+} from "express";
 import {
     FixedWindowRateLimiter,
     authRateLimit,
@@ -160,7 +166,24 @@ type RouteLayer = {
     };
 };
 
-test("the app trusts only loopback proxies and limits auth before its router", async () => {
+const resolveClientAddress = (
+    app: Express,
+    remoteAddress: string,
+    forwardedFor: string
+) => {
+    const request = Object.create(app.request) as Request;
+    const socket = { remoteAddress };
+    Object.defineProperties(request, {
+        app: { value: app },
+        connection: { value: socket },
+        headers: { value: { "x-forwarded-for": forwardedFor } },
+        socket: { value: socket },
+    });
+
+    return { ip: request.ip, ips: request.ips };
+};
+
+test("the app trusts exactly one proxy hop and limits auth before its router", async () => {
     process.env.JWT_SECRET ??= "rate-limit-test-secret";
     process.env.GOOGLE_CLIENT_ID ??= "reader-web.apps.googleusercontent.com";
     process.env.OPENAI_API_KEY ??= "rate-limit-test-key";
@@ -174,10 +197,24 @@ test("the app trusts only loopback proxies and limits auth before its router", a
         index: number
     ) => boolean;
 
-    assert.equal(trustProxy("127.0.0.1", 0), true);
-    assert.equal(trustProxy("::1", 0), true);
-    assert.equal(trustProxy("10.0.0.4", 0), false);
-    assert.equal(trustProxy("203.0.113.4", 0), false);
+    for (const address of ["172.18.0.1", "10.0.0.4", "203.0.113.4"]) {
+        assert.equal(trustProxy(address, 0), true);
+        assert.equal(trustProxy(address, 1), false);
+        assert.equal(trustProxy(address, 2), false);
+    }
+
+    assert.deepEqual(resolveClientAddress(app, "172.18.0.1", "198.51.100.25"), {
+        ip: "198.51.100.25",
+        ips: ["198.51.100.25"],
+    });
+    assert.deepEqual(resolveClientAddress(app, "172.18.0.1", "198.51.100.26"), {
+        ip: "198.51.100.26",
+        ips: ["198.51.100.26"],
+    });
+    assert.deepEqual(
+        resolveClientAddress(app, "172.18.0.1", "198.51.100.25, 10.0.0.4"),
+        { ip: "10.0.0.4", ips: ["10.0.0.4"] }
+    );
 
     const stack = (
         app as unknown as {
