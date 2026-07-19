@@ -19,9 +19,9 @@ export const useTextBlockNavigation = (
             const response = await fetch(apiUrl(`/api/${bookId}/progress`), {
                 method: "GET",
                 headers: {
-                    Authorization: `Bearer ${localStorage.getItem("token")}`,
                     "Content-Type": "application/json",
                 },
+                credentials: "include",
             });
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
@@ -55,9 +55,9 @@ export const useTextBlockNavigation = (
             const response = await fetch(apiUrl(`/api/${bookId}/progress`), {
                 method: "POST",
                 headers: {
-                    Authorization: `Bearer ${localStorage.getItem("token")}`,
                     "Content-Type": "application/json",
                 },
+                credentials: "include",
                 body: JSON.stringify({
                     progress_block: textBlockId,
                     progress_chapter: textBlockId.split("-")[0], // assuming format like "c01-block-16"

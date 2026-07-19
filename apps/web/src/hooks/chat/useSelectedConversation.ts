@@ -12,15 +12,12 @@ const useSelectedConversation = (chatState: ChatState, bookId: string) => {
         ],
         queryFn: async () => {
             if (!chatState.currentConversation?.id) return null;
-            const token = localStorage.getItem("token");
             const response = await fetch(
                 apiUrl(
                     `/api/book/${bookId}/conversations/${chatState.currentConversation.id}`
                 ),
                 {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                    },
+                    credentials: "include",
                 }
             );
             if (!response.ok) {

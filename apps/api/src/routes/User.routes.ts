@@ -11,8 +11,6 @@ const router = Router();
  *       - User
  *     summary: Get current user information
  *     description: Retrieves the authenticated user's information
- *     security:
- *       - bearerAuth: []
  *     responses:
  *       200:
  *         description: Successfully retrieved user information
@@ -32,7 +30,7 @@ const router = Router();
  *               properties:
  *                 message:
  *                   type: string
- *                   example: "No token provided or invalid token"
+ *                   example: "No session provided or invalid session"
  *       500:
  *         description: Internal server error
  *         content:

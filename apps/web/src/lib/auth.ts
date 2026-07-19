@@ -13,12 +13,8 @@ export function useUser() {
     return useQuery({
         queryKey: [apiUrl("/api/user")],
         queryFn: async () => {
-            const token = localStorage.getItem("token");
-            if (!token) return null;
             const response = await fetch(apiUrl("/api/user"), {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
+                credentials: "include",
             });
             if (!response.ok) {
                 throw new Error("Network response was not ok");
@@ -39,6 +35,7 @@ export function useGoogleSignIn() {
                     headers: {
                         "Content-Type": "application/json",
                     },
+                    credentials: "include",
                     body: JSON.stringify({ idToken }),
                 });
 
@@ -47,8 +44,6 @@ export function useGoogleSignIn() {
                 }
 
                 const data = await res.json();
-                localStorage.setItem("token", data.token);
-                localStorage.setItem("user", JSON.stringify(data.user));
                 return data;
             } catch (error) {
                 console.error("Error in Google sign-in mutation:", error);
@@ -73,6 +68,7 @@ export function useDevSignIn() {
             try {
                 const res = await fetch(apiUrl("/api/auth/dev"), {
                     method: "POST",
+                    credentials: "include",
                 });
 
                 if (!res.ok) {
@@ -83,8 +79,6 @@ export function useDevSignIn() {
                 }
 
                 const data = await res.json();
-                localStorage.setItem("token", data.token);
-                localStorage.setItem("user", JSON.stringify(data.user));
                 return data;
             } catch (error) {
                 console.error("Error in dev sign-in mutation:", error);
@@ -106,8 +100,13 @@ export function useDevSignIn() {
     });
 }
 
-export function signOut() {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    queryClient.clear();
+export async function signOut() {
+    try {
+        await fetch(apiUrl("/api/auth/logout"), {
+            method: "POST",
+            credentials: "include",
+        });
+    } finally {
+        queryClient.clear();
+    }
 }
