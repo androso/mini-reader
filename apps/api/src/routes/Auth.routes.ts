@@ -121,6 +121,7 @@ router.post(
  *       403: { description: Origin does not match FRONTEND_URL }
  *       404: { description: Disabled in production }
  *       429: { description: Authentication limit exceeded; Retry-After is returned }
+ *       500: { $ref: '#/components/responses/InternalError' }
  */
 router.post(
     "/dev",

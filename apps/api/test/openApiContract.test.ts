@@ -48,16 +48,31 @@ test("OpenAPI generation is independent of the process working directory", () =>
     assert.equal(path.isAbsolute(resolveSwaggerRouteGlob()), true);
 });
 
-test("OpenAPI advertises cookie sessions and public auth opt-outs", () => {
-    const spec = createOpenApiSpec() as OpenApiRecord;
-    assert.deepEqual(spec.security, [{ readerSession: [] }]);
-    assert.deepEqual(spec.components.securitySchemes.readerSession, {
-        type: "apiKey",
-        in: "cookie",
-        name: "__Host-reader_session",
-        description:
-            "Production HttpOnly session cookie. Development uses reader_session without Secure.",
-    });
+test("OpenAPI advertises the active environment cookie without global env mutation", () => {
+    const development = createOpenApiSpec({
+        nodeEnv: "development",
+    }) as OpenApiRecord;
+    const production = createOpenApiSpec({
+        nodeEnv: "production",
+    }) as OpenApiRecord;
+
+    assert.deepEqual(development.security, [{ readerSession: [] }]);
+    assert.equal(
+        development.components.securitySchemes.readerSession.name,
+        "reader_session"
+    );
+    assert.match(
+        development.components.securitySchemes.readerSession.description,
+        /alternate environment uses __Host-reader_session/
+    );
+    assert.equal(
+        production.components.securitySchemes.readerSession.name,
+        "__Host-reader_session"
+    );
+    assert.match(
+        production.components.securitySchemes.readerSession.description,
+        /alternate environment uses reader_session/
+    );
 
     for (const [pathName, method] of [
         ["/health", "get"],
@@ -65,10 +80,10 @@ test("OpenAPI advertises cookie sessions and public auth opt-outs", () => {
         ["/api/auth/dev", "post"],
         ["/api/auth/logout", "post"],
     ]) {
-        assert.deepEqual(spec.paths[pathName][method].security, []);
+        assert.deepEqual(development.paths[pathName][method].security, []);
     }
 
-    const serialized = JSON.stringify(spec).toLowerCase();
+    const serialized = JSON.stringify(development).toLowerCase();
     assert.equal(serialized.includes('"scheme":"bearer"'), false);
     assert.equal(serialized.includes('"name":"authorization"'), false);
 });
@@ -99,6 +114,12 @@ test("OpenAPI public schemas exclude private storage and execution fields", () =
         "model",
     ]);
     assert.deepEqual(spec.components.schemas.ChatRequest.required, ["message"]);
+    assert.deepEqual(spec.components.schemas.ChatRequest.properties.model, {
+        type: "string",
+        enum: ["gpt-4o-mini", "gpt-5.5-2026-04-23", "gpt-5.4-mini-2026-03-17"],
+        default: "gpt-4o-mini",
+        description: "Optional model override. Unsupported values return 400.",
+    });
 
     for (const privateField of [
         "fileKey",
@@ -133,6 +154,11 @@ test("OpenAPI public schemas exclude private storage and execution fields", () =
             "application/epub+zip"
         ]
     );
+    assert.ok(
+        spec.paths["/api/books/{bookId}"].get.responses["200"].content[
+            "application/octet-stream"
+        ]
+    );
     assert.equal(
         spec.paths["/api/books"].get.responses["200"].content[
             "application/json"
@@ -149,6 +175,62 @@ test("OpenAPI public schemas exclude private storage and execution fields", () =
         Object.keys(spec.paths).some((name) => /fileKey/i.test(name)),
         false
     );
+});
+
+test("OpenAPI exposes machine-readable chat stream events and DONE framing", () => {
+    const spec = createOpenApiSpec() as OpenApiRecord;
+    const streamSchema = spec.components.schemas.ChatStreamEvent;
+    assert.deepEqual(streamSchema.oneOf, [
+        { $ref: "#/components/schemas/ChatConversationEvent" },
+        { $ref: "#/components/schemas/ChatContentEvent" },
+        { $ref: "#/components/schemas/ChatSourcesEvent" },
+        { $ref: "#/components/schemas/ChatContextErrorEvent" },
+        { $ref: "#/components/schemas/ChatTerminalEvent" },
+    ]);
+    assert.match(streamSchema.description, /\[DONE\]/);
+
+    for (const pathName of [
+        "/api/{resourceType}/{bookId}/conversations",
+        "/api/{resourceType}/{bookId}/conversations/{conversationId}/messages",
+    ]) {
+        assert.equal(
+            spec.paths[pathName].post.responses["200"].content[
+                "text/event-stream"
+            ].schema.$ref,
+            "#/components/schemas/ChatStreamEvent"
+        );
+    }
+});
+
+test("OpenAPI references the reusable internal error response", () => {
+    const spec = createOpenApiSpec() as OpenApiRecord;
+    const operations = [
+        ["/api/auth/dev", "post"],
+        ["/api/books", "get"],
+        ["/api/books", "post"],
+        ["/api/books/{bookId}", "get"],
+        ["/api/books/{bookId}", "delete"],
+        ["/api/books/{bookId}/status", "get"],
+        ["/api/books/{bookId}/retry", "post"],
+        ["/api/{bookId}/progress", "get"],
+        ["/api/{bookId}/progress", "post"],
+        ["/api/{resourceType}/{bookId}/conversations", "get"],
+        ["/api/{resourceType}/{bookId}/conversations", "post"],
+        [
+            "/api/{resourceType}/{bookId}/conversations/{conversationId}/messages",
+            "post",
+        ],
+        ["/api/{resourceType}/{bookId}/conversations/{conversationId}", "get"],
+    ];
+
+    assert.ok(spec.components.responses.InternalError);
+    for (const [pathName, method] of operations) {
+        assert.equal(
+            spec.paths[pathName][method].responses["500"].$ref,
+            "#/components/responses/InternalError",
+            `${method.toUpperCase()} ${pathName}`
+        );
+    }
 });
 
 test("OpenAPI documents trusted-origin and rate-limit responses", () => {

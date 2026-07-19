@@ -28,7 +28,10 @@ Set these required values:
 - Google OAuth client ID, used by the browser and as the API token audience
 - OpenAI API key
 - JWT secret
-- Postgres password
+- Postgres password, using only URI-unreserved characters (`A-Z`, `a-z`, `0-9`,
+  `.`, `_`, `~`, and `-`). Compose interpolates it directly into
+  `DATABASE_URL`, so do not use reserved characters such as `/`, `?`, `#`, `@`,
+  or `:`.
 
 Existing local parameter files may still contain `GoogleClientSecretValue`.
 The template accepts that deprecated key for compatibility but ignores its

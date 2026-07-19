@@ -96,3 +96,21 @@ test("production topology remains same-origin and low-service", () => {
     assert.match(caddy, /reverse_proxy 127\.0\.0\.1:\$\{API_PORT\}/);
     assert.match(caddy, /reverse_proxy 127\.0\.0\.1:\$\{WEB_PORT\}/);
 });
+
+test("production docs constrain the interpolated Postgres password", () => {
+    const documents = [
+        read(".env.prod.example"),
+        read("docs/aws-lightsail-deploy.md"),
+        read("docs/aws-lightsail-cloudformation-deploy.md"),
+    ];
+
+    for (const document of documents) {
+        assert.match(document, /URI-unreserved/);
+        for (const allowed of ["A-Z", "a-z", "0-9"]) {
+            assert.match(document, new RegExp(allowed));
+        }
+        for (const reserved of ["/", "?", "#", "@", ":"]) {
+            assert.match(document, new RegExp(`\\${reserved}`));
+        }
+    }
+});

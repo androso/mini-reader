@@ -103,6 +103,7 @@ const upload = multer({
  *         description: Upload limit exceeded; Retry-After is returned
  *       503:
  *         description: Queue unavailable; the original is preserved as queue_failed
+ *       500: { $ref: '#/components/responses/InternalError' }
  */
 router.post(
     "/",
@@ -251,6 +252,7 @@ router.post(
  *                     $ref: '#/components/schemas/PublicBook'
  *       401:
  *         description: Missing or invalid session cookie
+ *       500: { $ref: '#/components/responses/InternalError' }
  */
 router.get(
     "/",
@@ -293,6 +295,7 @@ router.get(
  *       403: { description: Origin does not match FRONTEND_URL }
  *       409: { description: Book is not queue_failed or failed }
  *       503: { description: Queue unavailable; book returns to queue_failed }
+ *       500: { $ref: '#/components/responses/InternalError' }
  */
 router.post(
     "/:bookId/retry",
@@ -343,6 +346,7 @@ router.post(
  *             schema: { $ref: '#/components/schemas/BookStatus' }
  *       403: { description: Book belongs to another user }
  *       404: { description: Book not found }
+ *       500: { $ref: '#/components/responses/InternalError' }
  */
 router.get(
     "/:id/status",
@@ -402,8 +406,11 @@ router.get(
  *             schema:
  *               type: string
  *               format: binary
+ *           application/octet-stream:
+ *             schema: { type: string, format: binary }
  *       403: { description: Book belongs to another user }
  *       404: { description: Book not found }
+ *       500: { $ref: '#/components/responses/InternalError' }
  */
 
 router.get(
@@ -439,7 +446,8 @@ router.get(
  *       204: { description: Book and artifacts deleted }
  *       403: { description: Book belongs to another user }
  *       404: { description: Book not found }
- *       500: { description: Cleanup failed and remains retryable }
+ *       500:
+ *         $ref: '#/components/responses/InternalError'
  */
 router.delete(
     "/:id",

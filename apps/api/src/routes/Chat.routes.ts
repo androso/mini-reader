@@ -893,11 +893,12 @@ const runBookChatTraceIfNeeded = <T>(
  *         description: SSE conversation id, content/source events, and terminal outcome
  *         content:
  *           text/event-stream:
- *             schema: { type: string }
+ *             schema: { $ref: '#/components/schemas/ChatStreamEvent' }
  *       400: { description: Invalid message/model or unsupported resource type }
  *       403: { description: Untrusted Origin or book belongs to another user }
  *       404: { description: Book not found }
  *       429: { description: Chat limit exceeded; Retry-After is returned }
+ *       500: { $ref: '#/components/responses/InternalError' }
  */
 router.post(
     "/:resourceType/:id/conversations",
@@ -1025,6 +1026,7 @@ router.post(
  *       400: { description: Unsupported resource type }
  *       403: { description: Book belongs to another user }
  *       404: { description: Book not found }
+ *       500: { $ref: '#/components/responses/InternalError' }
  */
 router.get(
     "/:resourceType/:id/conversations",
@@ -1092,11 +1094,12 @@ router.get(
  *         description: SSE content/source events and terminal outcome
  *         content:
  *           text/event-stream:
- *             schema: { type: string }
+ *             schema: { $ref: '#/components/schemas/ChatStreamEvent' }
  *       400: { description: Invalid message/model or unsupported resource type }
  *       403: { description: Untrusted Origin or book belongs to another user }
  *       404: { description: Book or scoped conversation not found }
  *       429: { description: Chat limit exceeded; Retry-After is returned }
+ *       500: { $ref: '#/components/responses/InternalError' }
  */
 router.post(
     "/:resourceType/:rid/conversations/:cid/messages",
@@ -1230,6 +1233,7 @@ router.post(
  *       400: { description: Unsupported resource type }
  *       403: { description: Book belongs to another user }
  *       404: { description: Book or scoped conversation not found }
+ *       500: { $ref: '#/components/responses/InternalError' }
  */
 router.get(
     "/:resourceType/:id/conversations/:conversationId",

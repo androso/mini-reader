@@ -40,6 +40,7 @@ export const createTrackerRouter = (database: TrackerDatabase = db) => {
      *           application/json:
      *             schema: { $ref: '#/components/schemas/Progress' }
      *       404: { description: Book is missing or not owned by this user }
+     *       500: { $ref: '#/components/responses/InternalError' }
      */
     router.get(
         "/:rid/progress",
@@ -121,6 +122,7 @@ export const createTrackerRouter = (database: TrackerDatabase = db) => {
      *       400: { description: Progress fields are missing }
      *       403: { description: Origin does not match FRONTEND_URL }
      *       404: { description: Book is missing or not owned by this user }
+     *       500: { $ref: '#/components/responses/InternalError' }
      */
     router.post(
         "/:rid/progress",
