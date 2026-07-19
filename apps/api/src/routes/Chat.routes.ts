@@ -35,11 +35,55 @@ import {
     withBookChatTrace,
     type TraceObservation,
 } from "../observability/langfuse";
-import { isValidResourceType } from "../services/ConversationScope";
+import {
+    runAuthorizedChatResourceOperation,
+    runAuthorizedScopedChatConversationOperation,
+    type SupportedChatResourceType,
+} from "../services/ChatResourceAuthorization";
 
 const router = Router();
 const oaiService = new OpenAIService();
 const log = createLogger("chat");
+
+const chatResourceRepository = {
+    findBookById: async (resourceId: string) => {
+        const [book] = await db
+            .select({ id: Books.id, userId: Books.userId })
+            .from(Books)
+            .where(eq(Books.id, resourceId));
+
+        return book ?? null;
+    },
+};
+
+const runAuthorizedRequestOperation = async <T>({
+    resourceType,
+    resourceId,
+    userId,
+    res,
+    operation,
+}: {
+    resourceType: string;
+    resourceId: string;
+    userId: string;
+    res: Response;
+    operation: (resourceType: SupportedChatResourceType) => Promise<T>;
+}) => {
+    const result = await runAuthorizedChatResourceOperation({
+        resourceType,
+        resourceId,
+        userId,
+        repository: chatResourceRepository,
+        operation,
+    });
+
+    if (!result.ok) {
+        res.status(result.status).send({ error: result.error });
+        return null;
+    }
+
+    return result.value;
+};
 
 const findScopedConversation = async ({
     conversationId,
@@ -49,7 +93,7 @@ const findScopedConversation = async ({
 }: {
     conversationId: string;
     userId: string;
-    resourceType: "book" | "article";
+    resourceType: SupportedChatResourceType;
     resourceId: string;
 }) => {
     const [conversation] = await db
@@ -72,6 +116,42 @@ const touchConversation = async (conversationId: string) => {
         .update(Conversations)
         .set({ lastMessageAt: new Date() })
         .where(eq(Conversations.id, conversationId));
+};
+
+const runAuthorizedScopedRequestOperation = async <T>({
+    resourceType,
+    resourceId,
+    conversationId,
+    userId,
+    res,
+    operation,
+}: {
+    resourceType: string;
+    resourceId: string;
+    conversationId: string;
+    userId: string;
+    res: Response;
+    operation: (
+        conversation: typeof Conversations.$inferSelect,
+        resourceType: SupportedChatResourceType
+    ) => Promise<T>;
+}) => {
+    const result = await runAuthorizedScopedChatConversationOperation({
+        resourceType,
+        resourceId,
+        conversationId,
+        userId,
+        repository: chatResourceRepository,
+        findScopedConversation,
+        operation,
+    });
+
+    if (!result.ok) {
+        res.status(result.status).send({ error: result.error });
+        return null;
+    }
+
+    return result.value;
 };
 
 const getErrorDetail = (error: unknown) => {
@@ -620,13 +700,6 @@ router.post(
     "/:resourceType/:id/conversations",
     authenticate,
     asyncHandler(async (req: Request, res) => {
-        if (!isValidResourceType(req.params.resourceType)) {
-            res.status(400).send({
-                error: "Invalid resource type",
-            });
-            return;
-        }
-
         try {
             const { message, messages, model } = req.body;
             if (!message || !Array.isArray(messages)) {
@@ -646,57 +719,64 @@ router.post(
                 return;
             }
 
-            res.setHeader("Content-Type", "text/event-stream");
-            res.setHeader("Cache-Control", "no-cache");
-            res.setHeader("Connection", "keep-alive");
+            await runAuthorizedRequestOperation({
+                resourceType: req.params.resourceType,
+                resourceId: req.params.id,
+                userId: req.user.id,
+                res,
+                operation: async (resourceType) => {
+                    const [conversation] = await db
+                        .insert(Conversations)
+                        .values({
+                            userId: req.user.id,
+                            title: message.substring(0, 50) + "...",
+                            resourceType,
+                            resourceId: req.params.id,
+                        })
+                        .returning();
 
-            const [conversation] = await db
-                .insert(Conversations)
-                .values({
-                    userId: req.user.id,
-                    title: message.substring(0, 50) + "...",
-                    resourceType: req.params.resourceType,
-                    resourceId: req.params.id,
-                })
-                .returning();
+                    res.setHeader("Content-Type", "text/event-stream");
+                    res.setHeader("Cache-Control", "no-cache");
+                    res.setHeader("Connection", "keep-alive");
+                    res.write(
+                        `data: ${JSON.stringify({ type: "conversation_id", conversationId: conversation.id })}\n\n`
+                    );
 
-            res.write(
-                `data: ${JSON.stringify({ type: "conversation_id", conversationId: conversation.id })}\n\n`
-            );
-
-            await db.insert(Messages).values({
-                conversationId: conversation.id,
-                role: "user",
-                content: message,
-            });
-            await touchConversation(conversation.id);
-
-            await runBookChatTraceIfNeeded(
-                {
-                    resourceType: req.params.resourceType,
-                    resourceId: req.params.id,
-                    conversationId: conversation.id,
-                    userId: req.user.id,
-                    routeName: "create_conversation",
-                    messageCount: messages.length,
-                    queryLength: message.length,
-                    hasHighlightContext: Boolean(highlightContext),
-                },
-                (trace) =>
-                    runChatCompletion({
-                        resourceType: req.params.resourceType,
-                        resourceId: req.params.id,
+                    await db.insert(Messages).values({
                         conversationId: conversation.id,
-                        userId: req.user.id,
-                        messages,
-                        query: message,
-                        res,
-                        routeName: "create_conversation",
-                        model: chatModel,
-                        highlightContext,
-                        trace,
-                    })
-            );
+                        role: "user",
+                        content: message,
+                    });
+                    await touchConversation(conversation.id);
+
+                    await runBookChatTraceIfNeeded(
+                        {
+                            resourceType,
+                            resourceId: req.params.id,
+                            conversationId: conversation.id,
+                            userId: req.user.id,
+                            routeName: "create_conversation",
+                            messageCount: messages.length,
+                            queryLength: message.length,
+                            hasHighlightContext: Boolean(highlightContext),
+                        },
+                        (trace) =>
+                            runChatCompletion({
+                                resourceType,
+                                resourceId: req.params.id,
+                                conversationId: conversation.id,
+                                userId: req.user.id,
+                                messages,
+                                query: message,
+                                res,
+                                routeName: "create_conversation",
+                                model: chatModel,
+                                highlightContext,
+                                trace,
+                            })
+                    );
+                },
+            });
         } catch (e) {
             console.error("Error in chat stream", e);
             if (!res.writableEnded) {
@@ -713,27 +793,26 @@ router.get(
     "/:resourceType/:id/conversations",
     authenticate,
     asyncHandler(async (req: Request, res) => {
-        if (!isValidResourceType(req.params.resourceType)) {
-            res.status(400).send({
-                error: "Invalid resource type",
-            });
-            return;
-        }
-
         try {
-            const conversations = await db
-                .select()
-                .from(Conversations)
-                .where(
-                    and(
-                        eq(Conversations.userId, req.user.id),
-                        eq(Conversations.resourceType, req.params.resourceType),
-                        eq(Conversations.resourceId, req.params.id)
-                    )
-                )
-                .orderBy(desc(Conversations.lastMessageAt));
-            res.status(200).send({
-                conversations,
+            await runAuthorizedRequestOperation({
+                resourceType: req.params.resourceType,
+                resourceId: req.params.id,
+                userId: req.user.id,
+                res,
+                operation: async (resourceType) => {
+                    const conversations = await db
+                        .select()
+                        .from(Conversations)
+                        .where(
+                            and(
+                                eq(Conversations.userId, req.user.id),
+                                eq(Conversations.resourceType, resourceType),
+                                eq(Conversations.resourceId, req.params.id)
+                            )
+                        )
+                        .orderBy(desc(Conversations.lastMessageAt));
+                    res.status(200).send({ conversations });
+                },
             });
         } catch (error) {
             console.error("Error fetching conversations", error);
@@ -756,12 +835,7 @@ router.post(
                 rid: resourceId,
                 cid: conversationId,
             } = req.params;
-            if (
-                !resourceType ||
-                !resourceId ||
-                !conversationId ||
-                !isValidResourceType(resourceType)
-            ) {
+            if (!resourceType || !resourceId || !conversationId) {
                 res.status(400).send({
                     error: "Invalid request",
                 });
@@ -786,58 +860,53 @@ router.post(
                 return;
             }
 
-            const conversation = await findScopedConversation({
-                conversationId,
-                userId: req.user.id,
+            await runAuthorizedScopedRequestOperation({
                 resourceType,
                 resourceId,
-            });
-
-            if (!conversation) {
-                res.status(404).send({
-                    error: "Conversation not found",
-                });
-                return;
-            }
-
-            res.setHeader("Content-Type", "text/event-stream");
-            res.setHeader("Cache-Control", "no-cache");
-            res.setHeader("Connection", "keep-alive");
-
-            const lastMessage = messages[messages.length - 1];
-            await db.insert(Messages).values({
                 conversationId,
-                role: lastMessage.role,
-                content: lastMessage.content,
-            });
-            await touchConversation(conversationId);
+                userId: req.user.id,
+                res,
+                operation: async (_conversation, authorizedResourceType) => {
+                    res.setHeader("Content-Type", "text/event-stream");
+                    res.setHeader("Cache-Control", "no-cache");
+                    res.setHeader("Connection", "keep-alive");
 
-            await runBookChatTraceIfNeeded(
-                {
-                    resourceType,
-                    resourceId,
-                    conversationId,
-                    userId: req.user.id,
-                    routeName: "append_message",
-                    messageCount: messages.length,
-                    queryLength: lastMessage.content.length,
-                    hasHighlightContext: Boolean(highlightContext),
-                },
-                (trace) =>
-                    runChatCompletion({
-                        resourceType,
-                        resourceId,
+                    const lastMessage = messages[messages.length - 1];
+                    await db.insert(Messages).values({
                         conversationId,
-                        userId: req.user.id,
-                        messages,
-                        query: lastMessage.content,
-                        res,
-                        routeName: "append_message",
-                        model: chatModel,
-                        highlightContext,
-                        trace,
-                    })
-            );
+                        role: lastMessage.role,
+                        content: lastMessage.content,
+                    });
+                    await touchConversation(conversationId);
+
+                    await runBookChatTraceIfNeeded(
+                        {
+                            resourceType: authorizedResourceType,
+                            resourceId,
+                            conversationId,
+                            userId: req.user.id,
+                            routeName: "append_message",
+                            messageCount: messages.length,
+                            queryLength: lastMessage.content.length,
+                            hasHighlightContext: Boolean(highlightContext),
+                        },
+                        (trace) =>
+                            runChatCompletion({
+                                resourceType: authorizedResourceType,
+                                resourceId,
+                                conversationId,
+                                userId: req.user.id,
+                                messages,
+                                query: lastMessage.content,
+                                res,
+                                routeName: "append_message",
+                                model: chatModel,
+                                highlightContext,
+                                trace,
+                            })
+                    );
+                },
+            });
         } catch (error) {
             console.error("Error in chat messages", error);
             if (!res.writableEnded) {
@@ -854,37 +923,23 @@ router.get(
     "/:resourceType/:id/conversations/:conversationId",
     authenticate,
     asyncHandler(async (req: Request, res) => {
-        if (!isValidResourceType(req.params.resourceType)) {
-            res.status(400).send({
-                error: "Invalid resource type",
-            });
-            return;
-        }
-
         try {
-            const conversationId = req.params.conversationId;
-            const conversation = await findScopedConversation({
-                conversationId,
-                userId: req.user.id,
+            await runAuthorizedScopedRequestOperation({
                 resourceType: req.params.resourceType,
                 resourceId: req.params.id,
-            });
+                conversationId: req.params.conversationId,
+                userId: req.user.id,
+                res,
+                operation: async () => {
+                    const conversationId = req.params.conversationId;
+                    const messages = await db
+                        .select()
+                        .from(Messages)
+                        .where(eq(Messages.conversationId, conversationId))
+                        .orderBy(Messages.createdAt);
 
-            if (!conversation) {
-                res.status(404).send({
-                    error: "Conversation not found",
-                });
-                return;
-            }
-
-            const messages = await db
-                .select()
-                .from(Messages)
-                .where(eq(Messages.conversationId, conversationId))
-                .orderBy(Messages.createdAt);
-
-            res.send({
-                messages,
+                    res.send({ messages });
+                },
             });
         } catch (error) {
             console.error("Error fetching conversation details", error);
