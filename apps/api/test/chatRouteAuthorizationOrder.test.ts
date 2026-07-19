@@ -162,6 +162,12 @@ test("mounted create route authorizes before every downstream side effect", asyn
 
             db.select = ((selection?: unknown) => ({
                 from: (table: unknown) => {
+                    if (table === Messages) {
+                        events.push("historyLoad");
+                        return {
+                            where: () => ({ orderBy: async () => [] }),
+                        };
+                    }
                     assert.equal(table, Books);
                     return {
                         where: async () => {
@@ -223,7 +229,6 @@ test("mounted create route authorizes before every downstream side effect", asyn
                 params: { resourceType: scenario.resourceType, id: "book-1" },
                 body: {
                     message: "Question",
-                    messages: [{ role: "user", content: "Question" }],
                 },
                 user: {
                     id: "user-1",
@@ -260,6 +265,7 @@ test("mounted create route authorizes before every downstream side effect", asyn
             assert.deepEqual(events, [
                 "bookLookup",
                 "conversationInsert",
+                "historyLoad",
                 "messageInsert",
                 "bookLookup",
                 "retrieval",
@@ -357,7 +363,7 @@ test("mounted append route rejects unauthorized and mismatched scopes before sid
                     cid: "conversation-1",
                 },
                 body: {
-                    messages: [{ role: "user", content: "Question" }],
+                    message: "Question",
                 },
                 user: {
                     id: "user-1",
@@ -410,18 +416,22 @@ test("mounted append route emits an SSE error after streaming begins", async () 
     const originalGenerate = OpenAIService.prototype.generateStreamResponse;
     const originalConsoleError = console.error;
     let selects = 0;
+    const insertedMessages: unknown[] = [];
 
     try {
         console.error = () => undefined;
         db.select = (() => ({
             from: (table: unknown) => ({
-                where: async () => {
+                where: () => {
                     selects++;
+                    if (table === Messages) {
+                        return { orderBy: async () => [] };
+                    }
                     if (table === Conversations) {
-                        return [{ id: "conversation-1" }];
+                        return Promise.resolve([{ id: "conversation-1" }]);
                     }
                     assert.equal(table, Books);
-                    return [
+                    return Promise.resolve([
                         {
                             id: "book-1",
                             userId: "user-1",
@@ -429,12 +439,15 @@ test("mounted append route emits an SSE error after streaming begins", async () 
                             processingError: null,
                             collectionName: "book_collection",
                         },
-                    ];
+                    ]);
                 },
             }),
         })) as unknown as typeof db.select;
-        db.insert = (() => ({
-            values: async () => undefined,
+        db.insert = ((table: unknown) => ({
+            values: async (values: unknown) => {
+                assert.equal(table, Messages);
+                insertedMessages.push(values);
+            },
         })) as unknown as typeof db.insert;
         db.update = (() => ({
             set: () => ({ where: async () => undefined }),
@@ -469,7 +482,7 @@ test("mounted append route emits an SSE error after streaming begins", async () 
                 cid: "conversation-1",
             },
             body: {
-                messages: [{ role: "user", content: "Question" }],
+                message: "Question",
             },
             user: {
                 id: "user-1",
@@ -482,7 +495,7 @@ test("mounted append route emits an SSE error after streaming begins", async () 
         });
 
         assert.equal(result.nextError, undefined);
-        assert.equal(selects, 3);
+        assert.equal(selects, 4);
         assert.deepEqual(result.headers, [
             ["Content-Type", "text/event-stream"],
             ["Cache-Control", "no-cache"],
@@ -494,6 +507,13 @@ test("mounted append route emits an SSE error after streaming begins", async () 
         ]);
         assert.equal(result.response.headersSent, true);
         assert.equal(result.response.writableEnded, true);
+        assert.deepEqual(insertedMessages, [
+            {
+                conversationId: "conversation-1",
+                role: "user",
+                content: "Question",
+            },
+        ]);
     } finally {
         db.select = originalSelect;
         db.insert = originalInsert;
@@ -532,7 +552,6 @@ test("pre-stream create and append failures reach terminal middleware", async ()
         };
         const body = {
             message: "Question",
-            messages: [{ role: "user" as const, content: "Question" }],
         };
         const createResult = await invoke(createHandler, {
             params: { resourceType: "book", id: "book-1" },
