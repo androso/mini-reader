@@ -18,6 +18,7 @@ import { PDFUtils } from "../utils/pdfUtils";
 import { bookSearchChunkStore } from "../services/BookSearchChunkStore";
 import { hybridBookSearchService } from "../services/HybridBookSearchService";
 import { handleBookProcessingEnqueue } from "../services/BookProcessingEnqueueService";
+import { handleBookFileDelivery } from "../services/BookFileDelivery";
 
 const log = createLogger("books");
 
@@ -422,22 +423,16 @@ router.get(
     "/:id",
     authenticate,
     asyncHandler(async (req, res) => {
-        const id = req.params.id;
-
-        try {
-            const fileBuffer = await getFile(id);
-            if (id.startsWith("pdf-")) {
-                res.type("application/pdf");
-            } else if (id.startsWith("epub-")) {
-                res.type("application/epub+zip");
-            } else {
-                res.type("application/octet-stream");
-            }
-            res.send(fileBuffer);
-        } catch (er) {
-            console.error("Error fetching file", er);
-            res.status(500).json({ error: "Internal server error" });
-        }
+        await handleBookFileDelivery(req.params.id, req.user.id, res, {
+            async findBookById(bookId) {
+                const [book] = await db
+                    .select()
+                    .from(Books)
+                    .where(eq(Books.id, bookId));
+                return book;
+            },
+            getFile,
+        });
     })
 );
 // working
