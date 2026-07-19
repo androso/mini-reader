@@ -7,9 +7,13 @@ test("authenticated progress routes resolve the route value as Books.id", () => 
         ? "src/routes/Tracker.routes.ts"
         : "apps/api/src/routes/Tracker.routes.ts";
     const source = readFileSync(routePath, "utf8");
-    const authenticatedRoutes = source.slice(source.indexOf('router.get(\n    "/:rid/progress"'));
+    const authenticatedRoutes = source.slice(
+        source.indexOf('"/:rid/progress"')
+    );
 
     assert.match(authenticatedRoutes, /eq\(Books\.id, bookId\)/);
     assert.doesNotMatch(authenticatedRoutes, /Books\.fileKey/);
-    assert.match(source, /router\.get\(\n    "\/progress"/);
+    assert.doesNotMatch(source, /["']\/progress["']/);
+    assert.match(authenticatedRoutes, /eq\(Books\.userId, user_id\)/);
+    assert.match(source, /onConflictDoUpdate/);
 });
