@@ -15,47 +15,121 @@ export const PUBLIC_MESSAGE_SELECTION = {
     createdAt: Messages.createdAt,
 };
 
-const nonNegativeInteger = (value: unknown) => {
+const nonNegativeDuration = (value: unknown) => {
     const parsed = Number(value);
     return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : 0;
 };
+
+type TokenCounter =
+    | { present: false }
+    | { present: true; valid: false }
+    | { present: true; valid: true; value: number };
+
+const hasOwn = (value: object, key: PropertyKey) =>
+    Object.prototype.hasOwnProperty.call(value, key);
+
+const readTokenCounter = (
+    source: Record<string, unknown>,
+    key: string
+): TokenCounter => {
+    if (!hasOwn(source, key)) return { present: false };
+
+    const value = source[key];
+    if (
+        typeof value !== "number" ||
+        !Number.isSafeInteger(value) ||
+        value < 0
+    ) {
+        return { present: true, valid: false };
+    }
+
+    return { present: true, valid: true, value };
+};
+
+const readCachedTokenCounter = (
+    source: Record<string, unknown>,
+    key: "prompt_tokens_details" | "input_tokens_details"
+): TokenCounter => {
+    if (!hasOwn(source, key)) return { present: false };
+
+    const details = source[key];
+    if (!details || typeof details !== "object" || Array.isArray(details)) {
+        return { present: true, valid: false };
+    }
+
+    return readTokenCounter(
+        details as Record<string, unknown>,
+        "cached_tokens"
+    );
+};
+
+const invalidCounter = (counter: TokenCounter) =>
+    counter.present && !counter.valid;
+
+const counterValue = (counter: TokenCounter) =>
+    counter.present && counter.valid ? counter.value : 0;
 
 export const normalizeMessageTokenUsage = (
     usage: unknown
 ): MessageTokenUsage | null => {
     if (!usage || typeof usage !== "object") return null;
 
-    const candidate = usage as {
-        prompt_tokens?: unknown;
-        completion_tokens?: unknown;
-        total_tokens?: unknown;
-        input_tokens?: unknown;
-        output_tokens?: unknown;
-        prompt_tokens_details?: { cached_tokens?: unknown };
-        input_tokens_details?: { cached_tokens?: unknown };
-    };
-    const inputTokens = nonNegativeInteger(
-        candidate.prompt_tokens ?? candidate.input_tokens
+    const candidate = usage as Record<string, unknown>;
+    const promptTokens = readTokenCounter(candidate, "prompt_tokens");
+    const completionTokens = readTokenCounter(candidate, "completion_tokens");
+    const inputTokens = readTokenCounter(candidate, "input_tokens");
+    const outputTokens = readTokenCounter(candidate, "output_tokens");
+    const totalTokens = readTokenCounter(candidate, "total_tokens");
+    const promptCachedTokens = readCachedTokenCounter(
+        candidate,
+        "prompt_tokens_details"
     );
-    const outputTokens = nonNegativeInteger(
-        candidate.completion_tokens ?? candidate.output_tokens
+    const inputCachedTokens = readCachedTokenCounter(
+        candidate,
+        "input_tokens_details"
     );
-    const cachedInputTokens = Math.min(
+    const counters = [
+        promptTokens,
+        completionTokens,
         inputTokens,
-        nonNegativeInteger(
-            candidate.prompt_tokens_details?.cached_tokens ??
-                candidate.input_tokens_details?.cached_tokens
-        )
-    );
-    const totalTokens = nonNegativeInteger(candidate.total_tokens);
+        outputTokens,
+        totalTokens,
+        promptCachedTokens,
+        inputCachedTokens,
+    ];
+    if (counters.some(invalidCounter)) return null;
 
-    if (!inputTokens && !outputTokens && !totalTokens) return null;
+    const hasChatShape =
+        promptTokens.present ||
+        completionTokens.present ||
+        promptCachedTokens.present;
+    const hasResponsesShape =
+        inputTokens.present ||
+        outputTokens.present ||
+        inputCachedTokens.present;
+    if (hasChatShape === hasResponsesShape) return null;
+
+    const normalizedInput = hasChatShape ? promptTokens : inputTokens;
+    const normalizedOutput = hasChatShape ? completionTokens : outputTokens;
+    const normalizedCached = hasChatShape
+        ? promptCachedTokens
+        : inputCachedTokens;
+    if (!normalizedInput.present || !normalizedOutput.present) return null;
+
+    const normalizedInputValue = counterValue(normalizedInput);
+    const normalizedOutputValue = counterValue(normalizedOutput);
+    const normalizedTotalValue = totalTokens.present
+        ? counterValue(totalTokens)
+        : normalizedInputValue + normalizedOutputValue;
 
     return {
-        inputTokens,
-        cachedInputTokens,
-        outputTokens,
-        totalTokens: totalTokens || inputTokens + outputTokens,
+        inputTokens: normalizedInputValue,
+        cachedInputTokens: Math.min(
+            normalizedInputValue,
+            counterValue(normalizedCached)
+        ),
+        outputTokens: normalizedOutputValue,
+        totalTokens: normalizedTotalValue,
     };
 };
 
@@ -78,8 +152,8 @@ export const buildMessageExecutionMetadata = ({
     langfuseTraceId?: string;
 }): MessageExecutionMetadata => ({
     modelId: optionalIdentifier(modelId),
-    generationDurationMs: nonNegativeInteger(generationDurationMs),
-    totalLatencyMs: nonNegativeInteger(totalLatencyMs),
+    generationDurationMs: nonNegativeDuration(generationDurationMs),
+    totalLatencyMs: nonNegativeDuration(totalLatencyMs),
     usage: normalizeMessageTokenUsage(usage),
     langfuseTraceId: optionalIdentifier(langfuseTraceId),
 });

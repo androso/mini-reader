@@ -1,12 +1,17 @@
 import assert from "node:assert/strict";
+import { once } from "node:events";
+import type { AddressInfo } from "node:net";
 import test from "node:test";
+import express from "express";
 import type { NextFunction, Request, RequestHandler, Response } from "express";
 import { chatRateLimit } from "../src/middleware/rateLimit";
+import jwt from "jsonwebtoken";
 import { db } from "../src/db";
 import {
     Books,
     Conversations,
     Messages,
+    Users,
     type MessageExecutionMetadata,
 } from "../src/db/schema";
 import { hybridBookSearchService } from "../src/services/HybridBookSearchService";
@@ -179,6 +184,122 @@ const assertCompactExecutionMetadata = (
     assert.equal(metadata.langfuseTraceId, null);
     return metadata;
 };
+
+test("mounted conversation detail serializes only the public message projection", async () => {
+    const originalSelect = db.select;
+    const user = {
+        id: "10000000-0000-4000-8000-000000000001",
+        email: "owner@example.com",
+        name: "Owner",
+        username: null,
+        avatarUrl: null,
+        googleId: null,
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+        updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+    };
+    const storedMessage = {
+        id: "20000000-0000-4000-8000-000000000001",
+        conversationId: "30000000-0000-4000-8000-000000000001",
+        role: "assistant",
+        content: "Stored answer",
+        contextSources: [
+            {
+                id: "chunk-1",
+                chunkIndex: 0,
+                score: 0.9,
+                bestRank: 1,
+                excerpt: "Public source excerpt",
+            },
+        ],
+        completionStatus: "complete",
+        finishReason: "stop",
+        executionMetadata: {
+            modelId: "private-model",
+            generationDurationMs: 25,
+            totalLatencyMs: 40,
+            usage: {
+                inputTokens: 100,
+                cachedInputTokens: 10,
+                outputTokens: 20,
+                totalTokens: 120,
+            },
+            langfuseTraceId: "private-trace",
+        },
+        createdAt: new Date("2026-01-02T03:04:05.000Z"),
+    };
+
+    const projectRow = (
+        selection: Record<string, unknown> | undefined,
+        row: Record<string, unknown>
+    ) => {
+        assert.ok(selection, "message query must use the public projection");
+        return Object.fromEntries(
+            Object.keys(selection).map((key) => [key, row[key]])
+        );
+    };
+
+    db.select = ((selection?: Record<string, unknown>) => ({
+        from: (table: unknown) => ({
+            where: () => {
+                if (table === Users) return Promise.resolve([user]);
+                if (table === Books) {
+                    return Promise.resolve([{ id: "book-1", userId: user.id }]);
+                }
+                if (table === Conversations) {
+                    return Promise.resolve([
+                        {
+                            id: storedMessage.conversationId,
+                            userId: user.id,
+                            resourceType: "book",
+                            resourceId: "book-1",
+                        },
+                    ]);
+                }
+                assert.equal(table, Messages);
+                return {
+                    orderBy: async () => [projectRow(selection, storedMessage)],
+                };
+            },
+        }),
+    })) as unknown as typeof db.select;
+
+    const app = express();
+    app.use("/api/chat", chatRouter);
+    const server = app.listen(0, "127.0.0.1");
+
+    try {
+        await once(server, "listening");
+        const { port } = server.address() as AddressInfo;
+        const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET!);
+        const response = await fetch(
+            `http://127.0.0.1:${port}/api/chat/book/book-1/conversations/${storedMessage.conversationId}`,
+            {
+                headers: { Cookie: `reader_session=${token}` },
+            }
+        );
+
+        assert.equal(response.status, 200);
+        assert.deepEqual(await response.json(), {
+            messages: [
+                {
+                    id: storedMessage.id,
+                    conversationId: storedMessage.conversationId,
+                    role: "assistant",
+                    content: "Stored answer",
+                    contextSources: storedMessage.contextSources,
+                    completionStatus: "complete",
+                    finishReason: "stop",
+                    createdAt: "2026-01-02T03:04:05.000Z",
+                },
+            ],
+        });
+    } finally {
+        db.select = originalSelect;
+        await new Promise<void>((resolve, reject) => {
+            server.close((error) => (error ? reject(error) : resolve()));
+        });
+    }
+});
 
 test("mounted create route authorizes before every downstream side effect", async () => {
     const handler = routeHandler("/:resourceType/:id/conversations", "post");
