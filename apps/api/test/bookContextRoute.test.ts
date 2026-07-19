@@ -10,6 +10,7 @@ import {
 } from "../src/services/BookContextState";
 import { hybridBookSearchService } from "../src/services/HybridBookSearchService";
 import { OpenAIService } from "../src/services/OpenAIServices";
+import { chatRateLimit } from "../src/middleware/rateLimit";
 
 process.env.JWT_SECRET ??= "book-context-route-test-secret";
 process.env.OPENAI_API_KEY ??= "book-context-route-test-key";
@@ -36,7 +37,9 @@ const routeHandler = () => {
             candidate.route.methods.post
     );
     assert.ok(layer?.route);
-    return layer.route.stack[1].handle;
+    assert.equal(layer.route.stack.length, 3);
+    assert.equal(layer.route.stack[1].handle, chatRateLimit);
+    return layer.route.stack[2].handle;
 };
 
 const invoke = async (handler: RequestHandler) => {
