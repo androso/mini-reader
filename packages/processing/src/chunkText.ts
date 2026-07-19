@@ -4,11 +4,6 @@ export interface TextChunkerOptions {
     maxChunkSize?: number;
 }
 
-type PendingChunk = {
-    text: string;
-    separatorBefore: string;
-};
-
 const requirePositiveSafeInteger = (name: string, value: number) => {
     if (!Number.isSafeInteger(value) || value <= 0) {
         throw new Error(`${name} must be a positive safe integer`);
@@ -40,7 +35,7 @@ export class TextChunker {
         const sentences = normalized.match(/.*?[.!?]+(?:\s+|$)|.+$/g) || [
             normalized,
         ];
-        const chunks: PendingChunk[] = [];
+        const chunks: string[] = [];
         let current = "";
         let currentSeparatorBefore = "";
 
@@ -68,29 +63,26 @@ export class TextChunker {
             );
         }
 
-        return this.finalizeChunks(chunks).map((chunk) => chunk.text);
+        return this.finalizeChunks(chunks);
     }
 
-    private finalizeChunks(chunks: PendingChunk[]): PendingChunk[] {
-        const nonEmpty = chunks.filter((chunk) => chunk.text);
+    private finalizeChunks(chunks: string[]): string[] {
+        const nonEmpty = chunks.filter((chunk) => chunk.length > 0);
         if (nonEmpty.length <= 1) return nonEmpty;
 
         const tailIndex = nonEmpty.length - 1;
         const tail = nonEmpty[tailIndex];
         if (
-            tail.text.length >= this.minChunkSize ||
+            tail.length >= this.minChunkSize ||
             this.minChunkSize > this.maxChunkSize
         ) {
             return nonEmpty;
         }
 
         const previous = nonEmpty[tailIndex - 1];
-        const combined = `${previous.text}${tail.separatorBefore}${tail.text}`;
+        const combined = `${previous}${tail}`;
         if (combined.length <= this.maxChunkSize) {
-            return [
-                ...nonEmpty.slice(0, -2),
-                { text: combined, separatorBefore: previous.separatorBefore },
-            ];
+            return [...nonEmpty.slice(0, -2), combined];
         }
 
         const minimumSuffixLength = Math.max(
@@ -123,16 +115,8 @@ export class TextChunker {
             }
         }
 
-        let separatorEnd = splitIndex;
-        while (
-            separatorEnd < combined.length &&
-            /\s/.test(combined[separatorEnd])
-        ) {
-            separatorEnd++;
-        }
-        const separator = combined.slice(splitIndex, separatorEnd);
         const rebalancedPrevious = combined.slice(0, splitIndex);
-        const rebalancedTail = combined.slice(separatorEnd);
+        const rebalancedTail = combined.slice(splitIndex);
         if (
             !rebalancedPrevious ||
             !rebalancedTail ||
@@ -142,40 +126,16 @@ export class TextChunker {
             return nonEmpty;
         }
 
-        return [
-            ...nonEmpty.slice(0, -2),
-            {
-                text: rebalancedPrevious,
-                separatorBefore: previous.separatorBefore,
-            },
-            { text: rebalancedTail, separatorBefore: separator },
-        ];
+        return [...nonEmpty.slice(0, -2), rebalancedPrevious, rebalancedTail];
     }
 
-    private splitOversized(
-        text: string,
-        separatorBefore: string
-    ): PendingChunk[] {
-        if (text.length <= this.maxChunkSize) {
-            return [{ text, separatorBefore }];
-        }
+    private splitOversized(text: string, separatorBefore: string): string[] {
+        const source = `${separatorBefore}${text}`;
+        if (source.length <= this.maxChunkSize) return [source];
 
-        const chunks: PendingChunk[] = [];
-        let nextSeparator = separatorBefore;
-        for (let i = 0; i < text.length; i += this.maxChunkSize) {
-            const rawChunk = text.slice(i, i + this.maxChunkSize);
-            const chunkText = rawChunk.trim();
-            if (!chunkText) {
-                nextSeparator += rawChunk;
-                continue;
-            }
-            const leadingWhitespace = rawChunk.match(/^\s+/)?.[0] ?? "";
-            const trailingWhitespace = rawChunk.match(/\s+$/)?.[0] ?? "";
-            chunks.push({
-                text: chunkText,
-                separatorBefore: nextSeparator + leadingWhitespace,
-            });
-            nextSeparator = trailingWhitespace;
+        const chunks: string[] = [];
+        for (let i = 0; i < source.length; i += this.maxChunkSize) {
+            chunks.push(source.slice(i, i + this.maxChunkSize));
         }
         return chunks;
     }
