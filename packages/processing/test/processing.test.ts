@@ -222,7 +222,7 @@ test("text chunker preserves exact maximum and minimum boundaries", () => {
     assert.deepEqual(chunker.chunkText(exactMaximum), [exactMaximum]);
     assert.deepEqual(
         chunker.chunkText(`${leadingSentence} ${exactMinimumTail}`),
-        [leadingSentence, exactMinimumTail]
+        [leadingSentence, ` ${exactMinimumTail}`]
     );
 });
 
@@ -238,7 +238,7 @@ test("text chunker merges a short tail when the result remains bounded", () => {
 
     assert.deepEqual(chunker.chunkText(`${first} ${previous} ${tail}`), [
         first,
-        `${previous} ${tail}`,
+        ` ${previous} ${tail}`,
     ]);
 });
 
@@ -249,12 +249,12 @@ test("text chunker allows a short-tail merge exactly at the maximum", () => {
         maxChunkSize: 40,
     });
     const first = `${"A".repeat(24)}.`;
-    const previous = `${"B".repeat(31)}.`;
+    const previous = `${"B".repeat(30)}.`;
     const tail = "Little.";
 
     const chunks = chunker.chunkText(`${first} ${previous} ${tail}`);
 
-    assert.deepEqual(chunks, [first, `${previous} ${tail}`]);
+    assert.deepEqual(chunks, [first, ` ${previous} ${tail}`]);
     assert.equal(chunks[1].length, 40);
 });
 
@@ -274,7 +274,7 @@ test("text chunker rebalances a short tail without exceeding the maximum", () =>
         true
     );
     assert.equal(chunks.every(Boolean), true);
-    assert.equal(chunks.join(" "), input);
+    assert.equal(chunks.join(""), input);
     assert.deepEqual(chunks, chunker.chunkText(input));
 });
 
@@ -288,7 +288,7 @@ test("text chunker preserves an unterminated trailing fragment", () => {
 
     const chunks = chunker.chunkText(input);
 
-    assert.equal(chunks.join(" "), input);
+    assert.equal(chunks.join(""), input);
     assert.equal(chunks.at(-1)?.includes("final fragment"), true);
     assert.equal(
         chunks.every((chunk) => chunk.length <= 40),
@@ -328,6 +328,47 @@ test("text chunker never invents whitespace between contiguous oversized slices"
     );
     assert.equal(
         chunks.every((chunk) => chunk.length <= 3800),
+        true
+    );
+});
+
+test("text chunker reconstructs mixed semantic and hard-split boundaries", () => {
+    const chunker = new TextChunker({
+        minChunkSize: 1,
+        targetChunkSize: 10,
+        maxChunkSize: 10,
+    });
+    const input = `123456789 ${"A".repeat(12)}`;
+    const chunks = chunker.chunkText(input);
+
+    assert.equal(chunks.join(""), input);
+    assert.equal(
+        chunks.every((chunk) => chunk.length > 0),
+        true
+    );
+    assert.equal(
+        chunks.every((chunk) => chunk.length <= 10),
+        true
+    );
+});
+
+test("text chunker reconstructs normalized whitespace across boundaries", () => {
+    const chunker = new TextChunker({
+        minChunkSize: 2,
+        targetChunkSize: 8,
+        maxChunkSize: 10,
+    });
+    const input = "First\t\n  sentence.   Second\nline without punctuation";
+    const normalized = input.replace(/\s+/g, " ").trim();
+    const chunks = chunker.chunkText(input);
+
+    assert.equal(chunks.join(""), normalized);
+    assert.equal(
+        chunks.every((chunk) => chunk.length > 0),
+        true
+    );
+    assert.equal(
+        chunks.every((chunk) => chunk.length <= 10),
         true
     );
 });
