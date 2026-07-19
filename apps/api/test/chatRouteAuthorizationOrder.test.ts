@@ -3,7 +3,12 @@ import test from "node:test";
 import type { NextFunction, Request, RequestHandler, Response } from "express";
 import { chatRateLimit } from "../src/middleware/rateLimit";
 import { db } from "../src/db";
-import { Books, Conversations, Messages } from "../src/db/schema";
+import {
+    Books,
+    Conversations,
+    Messages,
+    type MessageExecutionMetadata,
+} from "../src/db/schema";
 import { hybridBookSearchService } from "../src/services/HybridBookSearchService";
 import {
     OpenAIService,
@@ -143,6 +148,36 @@ const invoke = async (
     }
 
     return { body, headers, nextError, response, statusCode, writes };
+};
+
+const assertCompactExecutionMetadata = (
+    message: unknown,
+    expected: {
+        modelId?: string | null;
+        usage?: MessageExecutionMetadata["usage"];
+    } = {}
+) => {
+    const metadata = (message as { executionMetadata?: unknown })
+        .executionMetadata as MessageExecutionMetadata | undefined;
+    assert.ok(metadata);
+    assert.deepEqual(Object.keys(metadata), [
+        "modelId",
+        "generationDurationMs",
+        "totalLatencyMs",
+        "usage",
+        "langfuseTraceId",
+    ]);
+    assert.equal(
+        metadata.modelId,
+        expected.modelId === undefined ? "gpt-4o-mini" : expected.modelId
+    );
+    assert.ok(Number.isInteger(metadata.generationDurationMs));
+    assert.ok(metadata.generationDurationMs >= 0);
+    assert.ok(Number.isInteger(metadata.totalLatencyMs));
+    assert.ok(metadata.totalLatencyMs >= metadata.generationDurationMs);
+    assert.deepEqual(metadata.usage, expected.usage ?? null);
+    assert.equal(metadata.langfuseTraceId, null);
+    return metadata;
 };
 
 test("mounted create route authorizes before every downstream side effect", async () => {
@@ -556,6 +591,9 @@ test("mounted append route persists and terminates a failed partial stream", asy
         ]);
         assert.equal(result.response.headersSent, true);
         assert.equal(result.response.writableEnded, true);
+        const failedMetadata = assertCompactExecutionMetadata(
+            insertedMessages[1]
+        );
         assert.deepEqual(insertedMessages, [
             {
                 conversationId: "conversation-1",
@@ -577,6 +615,7 @@ test("mounted append route persists and terminates a failed partial stream", asy
                 ],
                 completionStatus: "failed",
                 finishReason: null,
+                executionMetadata: failedMetadata,
             },
         ]);
 
@@ -627,6 +666,9 @@ test("mounted append route persists and terminates a failed partial stream", asy
             })}\n\n`,
             "data: [DONE]\n\n",
         ]);
+        const cancelledMetadata = assertCompactExecutionMetadata(
+            insertedMessages[1]
+        );
         assert.deepEqual(insertedMessages, [
             {
                 conversationId: "conversation-1",
@@ -648,6 +690,83 @@ test("mounted append route persists and terminates a failed partial stream", asy
                 ],
                 completionStatus: "cancelled",
                 finishReason: null,
+                executionMetadata: cancelledMetadata,
+            },
+        ]);
+
+        selects = 0;
+        insertedMessages.length = 0;
+        OpenAIService.prototype.generateStreamResponse = async () => {
+            return (async function* () {
+                yield {
+                    choices: [
+                        {
+                            delta: { content: "limited" },
+                            finish_reason: "length",
+                        },
+                    ],
+                    usage: {
+                        prompt_tokens: 9,
+                        completion_tokens: 3,
+                        total_tokens: 12,
+                    },
+                } as never;
+            })();
+        };
+
+        const truncatedResult = await invoke(handler, {
+            params: {
+                resourceType: "book",
+                rid: "book-1",
+                cid: "conversation-1",
+            },
+            body: { message: "Limit this" },
+            user: {
+                id: "user-1",
+                email: "owner@example.com",
+                name: "Owner",
+                googleId: null,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            },
+        });
+
+        assert.equal(truncatedResult.nextError, undefined);
+        assert.equal(selects, 4);
+        assert.match(truncatedResult.writes.join(""), /"status":"truncated"/);
+        const truncatedMetadata = assertCompactExecutionMetadata(
+            insertedMessages[1],
+            {
+                usage: {
+                    inputTokens: 9,
+                    cachedInputTokens: 0,
+                    outputTokens: 3,
+                    totalTokens: 12,
+                },
+            }
+        );
+        assert.deepEqual(insertedMessages, [
+            {
+                conversationId: "conversation-1",
+                role: "user",
+                content: "Limit this",
+            },
+            {
+                conversationId: "conversation-1",
+                role: "assistant",
+                content: "limited",
+                contextSources: [
+                    {
+                        id: "chunk-1",
+                        chunkIndex: 0,
+                        score: 1,
+                        bestRank: 1,
+                        excerpt: "context",
+                    },
+                ],
+                completionStatus: "truncated",
+                finishReason: "length",
+                executionMetadata: truncatedMetadata,
             },
         ]);
     } finally {
@@ -868,6 +987,9 @@ test("mounted append route aborts on close and never writes after destruction", 
         assert.deepEqual(closedDuringGeneration.writes, [
             `data: ${JSON.stringify({ content: "partial" })}\n\n`,
         ]);
+        const disconnectedMetadata = assertCompactExecutionMetadata(
+            insertedMessages[1]
+        );
         assert.deepEqual(insertedMessages, [
             {
                 conversationId: "conversation-1",
@@ -889,6 +1011,7 @@ test("mounted append route aborts on close and never writes after destruction", 
                 ],
                 completionStatus: "cancelled",
                 finishReason: null,
+                executionMetadata: disconnectedMetadata,
             },
         ]);
     } finally {

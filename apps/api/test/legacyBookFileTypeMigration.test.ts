@@ -27,11 +27,11 @@ test("0013 follows the manual 0012 schema without losing its objects", () => {
     const journal = JSON.parse(
         readFileSync(`${migrationRoot}/meta/_journal.json`, "utf8")
     ) as { entries: Array<{ idx: number; tag: string }> };
-    const lastEntries = journal.entries
-        .slice(-4)
+    const migrationSequence = journal.entries
+        .filter(({ idx }) => idx >= 12 && idx <= 15)
         .map(({ idx, tag }) => ({ idx, tag }));
 
-    assert.deepEqual(lastEntries, [
+    assert.deepEqual(migrationSequence, [
         { idx: 12, tag: "0012_lightsail_pgvector_jobs" },
         { idx: 13, tag: "0013_backfill_legacy_book_file_types" },
         { idx: 14, tag: "0014_mighty_rattler" },
