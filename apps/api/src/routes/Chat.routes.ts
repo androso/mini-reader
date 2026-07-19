@@ -19,7 +19,6 @@ import {
     isOpenAIChatModel,
 } from "../services/OpenAIServices";
 import {
-    addHighlightContextMessage,
     buildBookContextSystemPrompt,
     buildRetrievalQuery,
     normalizeHighlightContext,
@@ -52,6 +51,12 @@ import {
     type ChatCompletionOutcome,
     type MessageCompletionStatus,
 } from "../services/ChatCompletionOutcome";
+import {
+    BOOK_CONTEXT_FAILURE_MESSAGES,
+    NO_RELEVANT_BOOK_CONTEXT_RESPONSE,
+    classifyStoredBookContext,
+    type BookContextStatus,
+} from "../services/BookContextState";
 
 const router = Router();
 const oaiService = new OpenAIService();
@@ -248,9 +253,8 @@ const buildRagMessages = async (
     trace: TraceObservation = getNoopTraceObservation()
 ): Promise<{
     messages: ChatMessage[];
-    status: "ready" | "processing" | "failed";
+    status: BookContextStatus;
     sources: MessageContextSource[] | null;
-    error?: string | null;
 }> => {
     log.debug("Building RAG messages", {
         resourceType,
@@ -264,8 +268,8 @@ const buildRagMessages = async (
             resourceId,
         });
         return {
-            messages: addHighlightContextMessage(messages, highlightContext),
-            status: "ready",
+            messages,
+            status: "retrieval_unavailable",
             sources: null,
         };
     }
@@ -288,54 +292,47 @@ const buildRagMessages = async (
                 processingStatus: book?.processingStatus,
                 hasCollection: Boolean(book?.collectionName),
                 collectionName: book?.collectionName,
-                processingError: book?.processingError,
             },
         });
     } catch (error) {
         recordObservationError(loadBookSpan, error, "Book lookup failed");
-        throw error;
+        log.error("Book lookup failed while retrieving context", {
+            resourceId,
+            userId,
+        });
+        return {
+            messages,
+            status: "retrieval_unavailable",
+            sources: null,
+        };
     } finally {
         loadBookSpan.end();
     }
 
-    if (!book) {
-        log.warn("Book not found for RAG", { resourceId, userId });
-        return { messages, status: "ready", sources: null };
-    }
-
-    if (book.processingStatus === "failed") {
-        log.warn("Book processing failed, cannot retrieve context", {
+    const contextState = classifyStoredBookContext(book);
+    if (contextState !== "ready") {
+        log.info("Book context is not ready for retrieval", {
             resourceId,
             userId,
-            error: book.processingError,
+            contextState,
         });
-        return {
-            messages,
-            status: "failed",
-            sources: null,
-            error: book.processingError,
-        };
+        return { messages, status: contextState, sources: null };
     }
-
-    if (!book.collectionName) {
-        log.info("Book has no Chroma collection yet", {
-            resourceId,
-            userId,
-            processingStatus: book.processingStatus,
-        });
-        return { messages, status: "processing", sources: null };
+    if (!book?.collectionName) {
+        return { messages, status: "retrieval_unavailable", sources: null };
     }
+    const collectionName = book.collectionName;
 
     try {
         log.info("Retrieving book context", {
             resourceId,
             userId,
-            collectionName: book.collectionName,
+            collectionName,
         });
         const start = Date.now();
         const retrievalSpan = trace.startObservation("hybrid_retrieval", {
             input: {
-                collectionName: book.collectionName,
+                collectionName,
                 queryLength: query.length,
                 lexicalLimit: 20,
                 vectorLimit: 20,
@@ -347,7 +344,7 @@ const buildRagMessages = async (
         >;
         try {
             searchResults = await hybridBookSearchService.search(
-                book.collectionName,
+                collectionName,
                 query,
                 {},
                 {
@@ -365,11 +362,14 @@ const buildRagMessages = async (
         } finally {
             retrievalSpan.end();
         }
-        const documents = searchResults.map((result) => result.content);
+        const relevantResults = searchResults.filter(
+            (result) => result.content.trim().length > 0
+        );
+        const documents = relevantResults.map((result) => result.content);
         const duration = Date.now() - start;
         log.info("Book context retrieved", {
             resourceId,
-            collectionName: book.collectionName,
+            collectionName,
             retrievedChunkCount: documents.length,
             durationMs: duration,
         });
@@ -377,12 +377,12 @@ const buildRagMessages = async (
         if (!documents.length) {
             log.warn("No relevant chunks retrieved", {
                 resourceId,
-                collectionName: book.collectionName,
+                collectionName,
             });
-            return { messages, status: "ready", sources: null };
+            return { messages, status: "no_relevant_context", sources: null };
         }
 
-        const sources = buildContextSources(searchResults);
+        const sources = buildContextSources(relevantResults);
         const promptSpan = trace.startObservation("build_rag_prompt", {
             input: {
                 retrievedChunkCount: documents.length,
@@ -398,7 +398,7 @@ const buildRagMessages = async (
             output: {
                 contextLength: context.length,
                 messageCount: messages.length + 1,
-                selectedChunks: summarizeRetrievedChunks(searchResults),
+                selectedChunks: summarizeRetrievedChunks(relevantResults),
             },
         });
         promptSpan.end();
@@ -419,18 +419,33 @@ const buildRagMessages = async (
     } catch (error) {
         log.error("Error retrieving book context", {
             resourceId,
-            collectionName: book.collectionName,
-            error: error instanceof Error ? error.message : String(error),
+            collectionName,
         });
-        return { messages, status: "ready", sources: null };
+        return {
+            messages,
+            status: "retrieval_unavailable",
+            sources: null,
+        };
     }
 };
 
-const writeChatStatusAndEnd = (
+const writeContextFailureAndEnd = (
     res: Response,
-    payload: Record<string, unknown>
+    status: Exclude<BookContextStatus, "ready" | "no_relevant_context">
 ) => {
-    res.write(`data: ${JSON.stringify(payload)}\n\n`);
+    res.write(
+        `data: ${JSON.stringify({
+            error: BOOK_CONTEXT_FAILURE_MESSAGES[status],
+            status,
+        })}\n\n`
+    );
+    res.write(
+        `data: ${JSON.stringify({
+            type: "terminal",
+            status: "failed",
+            finishReason: status,
+        })}\n\n`
+    );
     res.write("data: [DONE]\n\n");
     res.end();
 };
@@ -666,22 +681,65 @@ const runChatCompletion = async ({
         );
         if (responseClosed()) return;
 
-        if (ragResult.status === "processing") {
-            trace.setTraceIO({ output: { status: "processing" } });
-            writeChatStatusAndEnd(res, {
-                error: "Document context is still processing. Please try again shortly.",
-                status: "processing",
+        if (
+            ragResult.status !== "ready" &&
+            ragResult.status !== "no_relevant_context"
+        ) {
+            trace.setTraceIO({
+                output: {
+                    status: "failed",
+                    finishReason: ragResult.status,
+                },
             });
+            writeContextFailureAndEnd(res, ragResult.status);
             return;
         }
-        if (ragResult.status === "failed") {
+
+        if (ragResult.status === "no_relevant_context") {
+            await saveAssistantMessage(
+                conversationId,
+                NO_RELEVANT_BOOK_CONTEXT_RESPONSE,
+                null,
+                "complete",
+                "no_relevant_context",
+                trace
+            );
             trace.setTraceIO({
-                output: { status: "failed", error: ragResult.error },
+                output: {
+                    status: "complete",
+                    finishReason: "no_relevant_context",
+                    assistantResponseLength:
+                        NO_RELEVANT_BOOK_CONTEXT_RESPONSE.length,
+                    sourceCount: 0,
+                },
             });
-            writeChatStatusAndEnd(res, {
-                error: ragResult.error || "Document text processing failed.",
-                status: "failed",
+            if (!responseClosed()) {
+                res.write(
+                    `data: ${JSON.stringify({
+                        content: NO_RELEVANT_BOOK_CONTEXT_RESPONSE,
+                    })}\n\n`
+                );
+                res.write(
+                    `data: ${JSON.stringify({
+                        type: "terminal",
+                        status: "complete",
+                        finishReason: "no_relevant_context",
+                    })}\n\n`
+                );
+                res.write("data: [DONE]\n\n");
+                res.end();
+            }
+            return;
+        }
+
+        if (!ragResult.sources?.length) {
+            trace.setTraceIO({
+                output: {
+                    status: "failed",
+                    finishReason: "retrieval_unavailable",
+                },
             });
+            writeContextFailureAndEnd(res, "retrieval_unavailable");
             return;
         }
 
