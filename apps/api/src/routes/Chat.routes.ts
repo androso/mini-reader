@@ -779,6 +779,9 @@ router.post(
             });
         } catch (e) {
             console.error("Error in chat stream", e);
+            if (!res.headersSent) {
+                throw e;
+            }
             if (!res.writableEnded) {
                 res.write(
                     `data: ${JSON.stringify({ error: "An error occurred" })}\n\n`
@@ -909,6 +912,9 @@ router.post(
             });
         } catch (error) {
             console.error("Error in chat messages", error);
+            if (!res.headersSent) {
+                throw error;
+            }
             if (!res.writableEnded) {
                 res.write(
                     `data: ${JSON.stringify({ error: "An error occurred" })}\n\n`
