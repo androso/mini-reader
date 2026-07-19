@@ -19,6 +19,7 @@ import { handleBookProcessingEnqueue } from "../services/BookProcessingEnqueueSe
 import { handleBookFileDelivery } from "../services/BookFileDelivery";
 import { publicBookSelection, toPublicBook } from "../services/PublicBook";
 import { createBookUploadPlan } from "../utils/bookUpload";
+import { persistUploadedBook } from "../services/BookUploadService";
 
 const log = createLogger("books");
 
@@ -198,10 +199,34 @@ router.post(
                 fileKey: uploadPlan.book.fileKey,
             });
 
-            const [book] = await db
-                .insert(Books)
-                .values(uploadPlan.book)
-                .returning();
+            const book = await persistUploadedBook(uploadPlan.book.fileKey, {
+                insertBook: async () => {
+                    const [insertedBook] = await db
+                        .insert(Books)
+                        .values(uploadPlan.book)
+                        .returning();
+                    if (!insertedBook) {
+                        throw new Error("Book insert returned no row");
+                    }
+                    return insertedBook;
+                },
+                deleteFile: async (fileKey) => {
+                    await deleteFile(fileKey);
+                },
+                onCleanupError: (cleanupError) => {
+                    log.error(
+                        "Failed to clean up upload after insert failure",
+                        {
+                            bookId: uploadPlan.book.id,
+                            fileKey: uploadPlan.book.fileKey,
+                            error:
+                                cleanupError instanceof Error
+                                    ? cleanupError.message
+                                    : String(cleanupError),
+                        }
+                    );
+                },
+            });
             log.info("Book record created", {
                 bookId: book.id,
                 userId: req.user.id,
