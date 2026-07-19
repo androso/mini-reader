@@ -60,7 +60,7 @@ const selection = {
     processingStatus: Books.processingStatus,
 };
 
-const bookDeletionRepository: BookDeletionRepository = {
+export const bookDeletionRepository: BookDeletionRepository = {
     async findBook(bookId) {
         const [book] = await db
             .select(selection)

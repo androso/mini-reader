@@ -49,7 +49,7 @@ export interface ProcessUploadedBookOptions {
 const getErrorMessage = (error: unknown) =>
     error instanceof Error ? error.message : "Book processing failed";
 
-const bookProcessingRepository: BookProcessingRepository = {
+export const bookProcessingRepository: BookProcessingRepository = {
     async findBookForProcessing(bookId, userId) {
         log.debug("Finding book for processing", { bookId, userId });
         const [book] = await db
