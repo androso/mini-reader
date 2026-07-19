@@ -45,6 +45,13 @@ import {
     projectChatRequest,
     type ChatServerHistoryRepository,
 } from "../services/ChatServerHistory";
+import {
+    classifyChatCompletionStatus,
+    createResponseAbortController,
+    isAbortError,
+    type ChatCompletionOutcome,
+    type MessageCompletionStatus,
+} from "../services/ChatCompletionOutcome";
 
 const router = Router();
 const oaiService = new OpenAIService();
@@ -460,10 +467,13 @@ const streamAssistantResponse = async ({
         },
     });
 
+    const responseAbort = createResponseAbortController(res);
+
     let accumulatedResponse = "";
-    let streamCompleted = false;
     let finishReason: string | null = null;
     let usage: unknown;
+    let streamFailed = false;
+    let caughtAbortError = false;
 
     try {
         const textStream = await oaiService.generateStreamResponse(
@@ -471,6 +481,7 @@ const streamAssistantResponse = async ({
             undefined,
             {
                 model,
+                signal: responseAbort.controller.signal,
                 ...(traceOpenAI
                     ? {
                           langfuse: {
@@ -493,13 +504,10 @@ const streamAssistantResponse = async ({
         );
 
         for await (const chunk of textStream) {
-            if (res.writableEnded) break;
+            if (responseAbort.wasClosed() || res.writableEnded) break;
             const choice = chunk.choices[0];
             if (choice?.finish_reason) {
                 finishReason = choice.finish_reason;
-            }
-            if (choice?.finish_reason === "stop") {
-                streamCompleted = true;
             }
             if ("usage" in chunk && chunk.usage) {
                 usage = chunk.usage;
@@ -513,46 +521,67 @@ const streamAssistantResponse = async ({
             output: {
                 outputLength: accumulatedResponse.length,
                 finishReason,
-                streamCompleted,
                 usage,
             },
         });
     } catch (streamError) {
-        if (!streamCompleted || !isPrematureCloseError(streamError)) {
+        caughtAbortError = isAbortError(streamError);
+        const completedBeforeTransportWarning =
+            (finishReason === "stop" || finishReason === "length") &&
+            isPrematureCloseError(streamError);
+
+        if (
+            !responseAbort.wasClosed() &&
+            !caughtAbortError &&
+            !completedBeforeTransportWarning
+        ) {
+            streamFailed = true;
             recordObservationError(
                 openAiSpan,
                 streamError,
                 "OpenAI chat stream failed"
             );
-            throw streamError;
+        } else if (completedBeforeTransportWarning) {
+            openAiSpan.update({
+                level: "WARNING",
+                statusMessage: "Premature close after completed chat stream",
+                output: {
+                    outputLength: accumulatedResponse.length,
+                    finishReason,
+                    transportWarning: getErrorDetail(streamError),
+                    usage,
+                },
+            });
+            log.warn("Ignoring premature close after completed chat stream", {
+                conversationId,
+                error: getErrorDetail(streamError),
+            });
         }
-
-        openAiSpan.update({
-            level: "WARNING",
-            statusMessage: "Premature close after completed chat stream",
-            output: {
-                outputLength: accumulatedResponse.length,
-                finishReason,
-                streamCompleted,
-                transportWarning: getErrorDetail(streamError),
-                usage,
-            },
-        });
-        log.warn("Ignoring premature close after completed chat stream", {
-            conversationId,
-            error: getErrorDetail(streamError),
-        });
     } finally {
+        responseAbort.cleanup();
         openAiSpan.end();
     }
 
-    return accumulatedResponse;
+    return {
+        content: accumulatedResponse,
+        status: classifyChatCompletionStatus({
+            finishReason,
+            aborted:
+                responseAbort.wasClosed() ||
+                responseAbort.controller.signal.aborted ||
+                caughtAbortError,
+            failed: streamFailed,
+        }),
+        finishReason,
+    } satisfies ChatCompletionOutcome;
 };
 
 const saveAssistantMessage = async (
     conversationId: string,
     content: string,
     contextSources: MessageContextSource[] | null,
+    completionStatus: MessageCompletionStatus,
+    finishReason: string | null,
     trace: TraceObservation
 ) => {
     const saveSpan = trace.startObservation("save_assistant_message", {
@@ -569,6 +598,8 @@ const saveAssistantMessage = async (
             role: "assistant",
             content,
             contextSources,
+            completionStatus,
+            finishReason,
         });
         await touchConversation(conversationId);
         saveSpan.update({
@@ -644,7 +675,7 @@ const runChatCompletion = async ({
         return;
     }
 
-    const accumulatedResponse = await streamAssistantResponse({
+    const outcome = await streamAssistantResponse({
         messages: ragResult.messages,
         res,
         trace,
@@ -657,25 +688,36 @@ const runChatCompletion = async ({
         traceOpenAI: resourceType === "book",
     });
 
+    await saveAssistantMessage(
+        conversationId,
+        outcome.content,
+        ragResult.sources,
+        outcome.status,
+        outcome.finishReason,
+        trace
+    );
+    trace.setTraceIO({
+        output: {
+            status: outcome.status,
+            finishReason: outcome.finishReason,
+            assistantResponseLength: outcome.content.length,
+            sourceCount: ragResult.sources?.length ?? 0,
+        },
+    });
+
     if (!res.writableEnded) {
-        await saveAssistantMessage(
-            conversationId,
-            accumulatedResponse,
-            ragResult.sources,
-            trace
-        );
-        trace.setTraceIO({
-            output: {
-                status: "complete",
-                assistantResponseLength: accumulatedResponse.length,
-                sourceCount: ragResult.sources?.length ?? 0,
-            },
-        });
         if (ragResult.sources?.length) {
             res.write(
                 `data: ${JSON.stringify({ type: "sources", sources: ragResult.sources })}\n\n`
             );
         }
+        res.write(
+            `data: ${JSON.stringify({
+                type: "terminal",
+                status: outcome.status,
+                finishReason: outcome.finishReason,
+            })}\n\n`
+        );
         res.write("data: [DONE]\n\n");
         res.end();
     }

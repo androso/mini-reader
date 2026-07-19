@@ -407,7 +407,7 @@ test("mounted append route rejects unauthorized and mismatched scopes before sid
     }
 });
 
-test("mounted append route emits an SSE error after streaming begins", async () => {
+test("mounted append route persists and terminates a failed partial stream", async () => {
     const handler = routeHandler(
         "/:resourceType/:rid/conversations/:cid/messages",
         "post"
@@ -506,7 +506,24 @@ test("mounted append route emits an SSE error after streaming begins", async () 
         ]);
         assert.deepEqual(result.writes, [
             `data: ${JSON.stringify({ content: "partial" })}\n\n`,
-            `data: ${JSON.stringify({ error: "An error occurred" })}\n\n`,
+            `data: ${JSON.stringify({
+                type: "sources",
+                sources: [
+                    {
+                        id: "chunk-1",
+                        chunkIndex: 0,
+                        score: 1,
+                        bestRank: 1,
+                        excerpt: "context",
+                    },
+                ],
+            })}\n\n`,
+            `data: ${JSON.stringify({
+                type: "terminal",
+                status: "failed",
+                finishReason: null,
+            })}\n\n`,
+            "data: [DONE]\n\n",
         ]);
         assert.equal(result.response.headersSent, true);
         assert.equal(result.response.writableEnded, true);
@@ -515,6 +532,93 @@ test("mounted append route emits an SSE error after streaming begins", async () 
                 conversationId: "conversation-1",
                 role: "user",
                 content: "Question",
+            },
+            {
+                conversationId: "conversation-1",
+                role: "assistant",
+                content: "partial",
+                contextSources: [
+                    {
+                        id: "chunk-1",
+                        chunkIndex: 0,
+                        score: 1,
+                        bestRank: 1,
+                        excerpt: "context",
+                    },
+                ],
+                completionStatus: "failed",
+                finishReason: null,
+            },
+        ]);
+
+        selects = 0;
+        insertedMessages.length = 0;
+        OpenAIService.prototype.generateStreamResponse = async () => {
+            const abortError = new Error("request cancelled");
+            abortError.name = "AbortError";
+            throw abortError;
+        };
+
+        const cancelledResult = await invoke(handler, {
+            params: {
+                resourceType: "book",
+                rid: "book-1",
+                cid: "conversation-1",
+            },
+            body: { message: "Cancel this" },
+            user: {
+                id: "user-1",
+                email: "owner@example.com",
+                name: "Owner",
+                googleId: null,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            },
+        });
+
+        assert.equal(cancelledResult.nextError, undefined);
+        assert.equal(selects, 4);
+        assert.deepEqual(cancelledResult.writes, [
+            `data: ${JSON.stringify({
+                type: "sources",
+                sources: [
+                    {
+                        id: "chunk-1",
+                        chunkIndex: 0,
+                        score: 1,
+                        bestRank: 1,
+                        excerpt: "context",
+                    },
+                ],
+            })}\n\n`,
+            `data: ${JSON.stringify({
+                type: "terminal",
+                status: "cancelled",
+                finishReason: null,
+            })}\n\n`,
+            "data: [DONE]\n\n",
+        ]);
+        assert.deepEqual(insertedMessages, [
+            {
+                conversationId: "conversation-1",
+                role: "user",
+                content: "Cancel this",
+            },
+            {
+                conversationId: "conversation-1",
+                role: "assistant",
+                content: "",
+                contextSources: [
+                    {
+                        id: "chunk-1",
+                        chunkIndex: 0,
+                        score: 1,
+                        bestRank: 1,
+                        excerpt: "context",
+                    },
+                ],
+                completionStatus: "cancelled",
+                finishReason: null,
             },
         ]);
     } finally {

@@ -64,6 +64,7 @@ export interface LangfuseOpenAITraceOptions {
 export interface GenerateStreamResponseOptions {
     model?: OpenAIChatModel;
     langfuse?: LangfuseOpenAITraceOptions;
+    signal?: AbortSignal;
 }
 
 export const createOpenAIClientOptions = (): NonNullable<
@@ -141,7 +142,8 @@ export class OpenAIService {
                 userMessages,
                 systemPrompt,
                 options?.model
-            )
+            ),
+            options?.signal ? { signal: options.signal } : undefined
         );
         return response;
     }
