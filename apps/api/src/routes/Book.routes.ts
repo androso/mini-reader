@@ -15,7 +15,10 @@ import { Books } from "../db/schema";
 import { eq, sql } from "drizzle-orm";
 import { bookSearchChunkStore } from "../services/BookSearchChunkStore";
 import { hybridBookSearchService } from "../services/HybridBookSearchService";
-import { handleBookProcessingEnqueue } from "../services/BookProcessingEnqueueService";
+import {
+    BookProcessingQueueUnavailableError,
+    handleBookProcessingEnqueue,
+} from "../services/BookProcessingEnqueueService";
 import { handleBookFileDelivery } from "../services/BookFileDelivery";
 import { publicBookSelection, toPublicBook } from "../services/PublicBook";
 import { persistUploadedBook } from "../services/BookUploadService";
@@ -24,6 +27,11 @@ import {
     BookUploadEnqueueError,
     BookUploadValidationError,
 } from "../services/BookUploadAcceptanceService";
+import {
+    BookProcessingRetryConflictError,
+    BookProcessingRetryNotFoundError,
+    retryBookProcessing,
+} from "../services/BookProcessingRetryService";
 
 const log = createLogger("books");
 
@@ -323,6 +331,36 @@ router.get(
         res.json({
             books: booksList,
         });
+    })
+);
+
+router.post(
+    "/:bookId/retry",
+    authenticate,
+    asyncHandler(async (req, res) => {
+        try {
+            const result = await retryBookProcessing(
+                req.params.bookId,
+                req.user.id
+            );
+            res.status(202).json(result);
+        } catch (error) {
+            if (error instanceof BookProcessingRetryNotFoundError) {
+                res.status(404).json({ error: error.message });
+                return;
+            }
+            if (error instanceof BookProcessingRetryConflictError) {
+                res.status(409).json({ error: error.message });
+                return;
+            }
+            if (error instanceof BookProcessingQueueUnavailableError) {
+                res.status(503).json({
+                    error: "Book processing queue is unavailable",
+                });
+                return;
+            }
+            throw error;
+        }
     })
 );
 
