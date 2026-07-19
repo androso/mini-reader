@@ -313,6 +313,55 @@ test("pathological minimum above maximum keeps existing bounded chunks", () => {
     assert.equal(chunks.join(""), input);
 });
 
+test("text chunker never invents whitespace between contiguous oversized slices", () => {
+    const input = "A".repeat(3850);
+    const chunks = new TextChunker().chunkText(input);
+
+    assert.equal(chunks.join(""), input);
+    assert.equal(
+        chunks.reduce((length, chunk) => length + chunk.length, 0),
+        input.length
+    );
+    assert.equal(
+        chunks.some((chunk) => /\s/.test(chunk)),
+        false
+    );
+    assert.equal(
+        chunks.every((chunk) => chunk.length <= 3800),
+        true
+    );
+});
+
+test("text chunker rejects unsafe size options but permits minimum above maximum", () => {
+    for (const option of [
+        "minChunkSize",
+        "targetChunkSize",
+        "maxChunkSize",
+    ] as const) {
+        for (const value of [
+            0,
+            -1,
+            Number.NaN,
+            Number.POSITIVE_INFINITY,
+            1.5,
+        ]) {
+            assert.throws(
+                () => new TextChunker({ [option]: value }),
+                new RegExp(`${option} must be a positive safe integer`)
+            );
+        }
+    }
+
+    assert.doesNotThrow(
+        () =>
+            new TextChunker({
+                minChunkSize: 30,
+                targetChunkSize: 10,
+                maxChunkSize: 20,
+            })
+    );
+});
+
 test("PDF text extraction decodes every run in source order", () => {
     assert.equal(
         decodePdfTextRuns([
