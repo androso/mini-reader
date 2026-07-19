@@ -116,7 +116,7 @@ export default function BookCover({
         const loadCover = async () => {
             try {
                 const response = await fetch(
-                    apiUrl(`/api/books/${book.fileKey}`),
+                    apiUrl(`/api/books/${book.id}`),
                     {
                         credentials: "include",
                     }
@@ -145,7 +145,7 @@ export default function BookCover({
                 URL.revokeObjectURL(objectUrl);
             }
         };
-    }, [book.fileKey, book.fileType, book.id]);
+    }, [book.fileType, book.id]);
 
     return (
         <div
