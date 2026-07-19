@@ -18,6 +18,11 @@ import { PDFUtils } from "../utils/pdfUtils";
 import { bookSearchChunkStore } from "../services/BookSearchChunkStore";
 import { hybridBookSearchService } from "../services/HybridBookSearchService";
 import { handleBookProcessingEnqueue } from "../services/BookProcessingEnqueueService";
+import { handleBookFileDelivery } from "../services/BookFileDelivery";
+import {
+    publicBookSelection,
+    toPublicBook,
+} from "../services/PublicBook";
 
 const log = createLogger("books");
 
@@ -53,8 +58,9 @@ const upload = multer({
  *         updatedAt:
  *           type: string
  *           format: date-time
- *     Book:
+ *     PublicBook:
  *       type: object
+ *       required: [id, title, fileType, processingStatus, createdAt]
  *       properties:
  *         id:
  *           type: string
@@ -62,12 +68,15 @@ const upload = multer({
  *         title:
  *           type: string
  *           description: Book title
- *         userId:
+ *         fileType:
  *           type: string
- *           description: ID of the user who uploaded the book
- *         fileKey:
+ *           nullable: true
+ *           enum: [epub, pdf]
+ *         processingStatus:
  *           type: string
- *           description: Storage key for the book file
+ *         processingError:
+ *           type: string
+ *           nullable: true
  *         createdAt:
  *           type: string
  *           format: date-time
@@ -103,7 +112,7 @@ const upload = multer({
  *                   type: string
  *                   example: "File upload successful"
  *                 book:
- *                   $ref: '#/components/schemas/Book'
+ *                   $ref: '#/components/schemas/PublicBook'
  *                 processStatus:
  *                   type: string
  *                   example: "processing"
@@ -244,7 +253,7 @@ router.post(
             }
 
             const [queuedBook] = await db
-                .select()
+                .select(publicBookSelection)
                 .from(Books)
                 .where(eq(Books.id, book.id));
 
@@ -256,7 +265,7 @@ router.post(
             });
             res.status(202).json({
                 message: "File upload accepted for processing",
-                book: queuedBook ?? book,
+                book: queuedBook ?? toPublicBook(book),
                 processStatus: "processing",
                 fileType: mimeType,
             });
@@ -294,20 +303,7 @@ router.post(
  *                 books:
  *                   type: array
  *                   items:
- *                     type: object
- *                     properties:
- *                       id:
- *                         type: string
- *                         example: "1ba8cd628f61"
- *                       title:
- *                         type: string
- *                         example: "cordwainer-smith_short-fiction.epub"
- *                       userId:
- *                         type: string
- *                         example: "1ba8cd628f61"
- *                       fileKey:
- *                         type: string
- *                         example: "fdd2a6cd-f354-4428-9084-a893a9132318-1736868043356-cordwainer-smith_short-fiction.epub"
+ *                     $ref: '#/components/schemas/PublicBook'
  *       401:
  *         description: Authentication failed
  *         content:
@@ -324,7 +320,7 @@ router.get(
     authenticate,
     asyncHandler(async (req, res) => {
         const booksList = await db
-            .select()
+            .select(publicBookSelection)
             .from(Books)
             .where(eq(Books.userId, req.user.id));
 
@@ -422,22 +418,16 @@ router.get(
     "/:id",
     authenticate,
     asyncHandler(async (req, res) => {
-        const id = req.params.id;
-
-        try {
-            const fileBuffer = await getFile(id);
-            if (id.startsWith("pdf-")) {
-                res.type("application/pdf");
-            } else if (id.startsWith("epub-")) {
-                res.type("application/epub+zip");
-            } else {
-                res.type("application/octet-stream");
-            }
-            res.send(fileBuffer);
-        } catch (er) {
-            console.error("Error fetching file", er);
-            res.status(500).json({ error: "Internal server error" });
-        }
+        await handleBookFileDelivery(req.params.id, req.user.id, res, {
+            async findBookById(bookId) {
+                const [book] = await db
+                    .select()
+                    .from(Books)
+                    .where(eq(Books.id, bookId));
+                return book;
+            },
+            getFile,
+        });
     })
 );
 // working
