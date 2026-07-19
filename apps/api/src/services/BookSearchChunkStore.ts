@@ -16,16 +16,13 @@ export interface BookSearchChunk {
 export const createChunkId = (collectionName: string, chunkIndex: number) =>
     `${collectionName}_${chunkIndex}`;
 
-export const bookSearchChunkStore: SearchIndexStore & {
-    getCollectionChunks(collectionName: string): Promise<BookSearchChunk[]>;
-    deleteCollectionChunks(collectionName: string): Promise<void>;
-} = {
-    async replaceCollectionChunks(collectionName, chunks) {
-        log.info("Replacing collection chunks in DB", {
-            collectionName,
-            chunkCount: chunks.length,
-        });
-        await db
+export const replaceCollectionChunksWithDatabase = async (
+    database: typeof db,
+    collectionName: string,
+    chunks: string[]
+) => {
+    await database.transaction(async (tx) => {
+        await tx
             .delete(BookSearchChunks)
             .where(eq(BookSearchChunks.collectionName, collectionName));
         log.debug("Deleted existing collection chunks", { collectionName });
@@ -35,7 +32,7 @@ export const bookSearchChunkStore: SearchIndexStore & {
             return;
         }
 
-        await db.insert(BookSearchChunks).values(
+        await tx.insert(BookSearchChunks).values(
             chunks.map((content, chunkIndex) => ({
                 id: createChunkId(collectionName, chunkIndex),
                 collectionName,
@@ -43,7 +40,20 @@ export const bookSearchChunkStore: SearchIndexStore & {
                 content,
             }))
         );
-        log.info("Inserted collection chunks", {
+    });
+};
+
+export const bookSearchChunkStore: SearchIndexStore & {
+    getCollectionChunks(collectionName: string): Promise<BookSearchChunk[]>;
+    deleteCollectionChunks(collectionName: string): Promise<void>;
+} = {
+    async replaceCollectionChunks(collectionName, chunks) {
+        log.info("Replacing collection chunks in DB", {
+            collectionName,
+            chunkCount: chunks.length,
+        });
+        await replaceCollectionChunksWithDatabase(db, collectionName, chunks);
+        log.info("Replaced collection chunks", {
             collectionName,
             chunkCount: chunks.length,
         });
