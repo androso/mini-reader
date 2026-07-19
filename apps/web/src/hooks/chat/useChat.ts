@@ -137,6 +137,37 @@ export const useChat = (bookId: string) => {
                             continue;
                         }
 
+                        if (jsonData.type === "terminal") {
+                            setChatState((prev) => {
+                                const messages = [...prev.messages];
+                                const lastMessage =
+                                    messages[messages.length - 1];
+
+                                if (lastMessage?.role === "assistant") {
+                                    messages[messages.length - 1] = {
+                                        ...lastMessage,
+                                        completionStatus:
+                                            jsonData.status ?? null,
+                                        finishReason:
+                                            jsonData.finishReason ?? null,
+                                    };
+                                }
+
+                                return {
+                                    ...prev,
+                                    messages,
+                                    currentConversation:
+                                        prev.currentConversation
+                                            ? {
+                                                  ...prev.currentConversation,
+                                                  messages,
+                                              }
+                                            : null,
+                                };
+                            });
+                            continue;
+                        }
+
                         if (jsonData.error !== undefined) {
                             setChatState((prev) => {
                                 const messages = [...prev.messages];

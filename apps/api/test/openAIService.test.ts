@@ -73,13 +73,13 @@ test("stream generation sends the usage-enabled request to the configured client
     delete process.env.LANGFUSE_PUBLIC_KEY;
     delete process.env.LANGFUSE_SECRET_KEY;
 
-    const calls: unknown[] = [];
+    const calls: Array<{ request: unknown; options: unknown }> = [];
     const fakeStream = {} as AsyncIterable<unknown>;
     const fakeClient = {
         chat: {
             completions: {
-                create: async (request: unknown) => {
-                    calls.push(request);
+                create: async (request: unknown, options: unknown) => {
+                    calls.push({ request, options });
                     return fakeStream;
                 },
             },
@@ -88,13 +88,22 @@ test("stream generation sends the usage-enabled request to the configured client
 
     try {
         const service = new OpenAIService(fakeClient);
-        const result = await service.generateStreamResponse(messages);
+        const abortController = new AbortController();
+        const result = await service.generateStreamResponse(
+            messages,
+            undefined,
+            { signal: abortController.signal }
+        );
 
         assert.equal(result, fakeStream);
         assert.equal(calls.length, 1);
         assert.deepEqual(
-            (calls[0] as { stream_options?: unknown }).stream_options,
+            (calls[0].request as { stream_options?: unknown }).stream_options,
             { include_usage: true }
+        );
+        assert.equal(
+            (calls[0].options as { signal?: AbortSignal }).signal,
+            abortController.signal
         );
     } finally {
         restoreEnv("LANGFUSE_PUBLIC_KEY", previousPublicKey);
