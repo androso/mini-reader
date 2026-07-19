@@ -1,5 +1,9 @@
 import { TextBlock } from "@/types/EpubReader";
 import { apiUrl } from "@/lib/api";
+import {
+    getTextBlockNavigationTarget,
+    shouldPersistVisibleTextBlock,
+} from "@/lib/readerNavigationBounds";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 
 export const useTextBlockNavigation = (
@@ -74,7 +78,13 @@ export const useTextBlockNavigation = (
     );
 
     useEffect(() => {
-        if (!activeTextBlockId && flatTextBlocks.length > 0) {
+        if (flatTextBlocks.length === 0) {
+            setActiveTextBlockId(null);
+            setIsLoading(false);
+            return;
+        }
+
+        if (!activeTextBlockId) {
             const initializeProgress = async () => {
                 try {
                     const storedId = await fetchProgress();
@@ -156,11 +166,14 @@ export const useTextBlockNavigation = (
 
             scrollTimeout.current = setTimeout(() => {
                 const mostVisibleId = findMostVisibleBlock();
-                if (mostVisibleId) {
+                if (
+                    shouldPersistVisibleTextBlock(
+                        mostVisibleId,
+                        activeTextBlockId
+                    )
+                ) {
+                    setActiveTextBlockId(mostVisibleId);
                     saveProgress(mostVisibleId);
-                    if (mostVisibleId !== activeTextBlockId) {
-                        setActiveTextBlockId(mostVisibleId);
-                    }
                 }
             }, 300);
         }
@@ -184,33 +197,25 @@ export const useTextBlockNavigation = (
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key == "ArrowDown" || e.key == "ArrowUp") {
                 e.preventDefault();
-                setIsManualScroll(true);
-
-                const currTextBlockIndex = flatTextBlocks.findIndex(
-                    (block) => block.id === activeTextBlockId
+                const targetBlock = getTextBlockNavigationTarget(
+                    flatTextBlocks,
+                    activeTextBlockId,
+                    e.key
                 );
 
-                const newIndex =
-                    e.key === "ArrowDown"
-                        ? Math.min(
-                              currTextBlockIndex + 1,
-                              flatTextBlocks.length
-                          )
-                        : Math.max(currTextBlockIndex - 1, 0);
-
-                if (newIndex !== currTextBlockIndex) {
-                    const targetBlock = flatTextBlocks[newIndex];
+                if (targetBlock) {
+                    setIsManualScroll(true);
                     setActiveTextBlockId(targetBlock.id);
                     saveProgress(targetBlock.id);
                     document.getElementById(targetBlock.id)?.scrollIntoView({
                         behavior: "smooth",
                         block: "center",
                     });
-                }
 
-                setTimeout(() => {
-                    setIsManualScroll(false);
-                }, 300);
+                    setTimeout(() => {
+                        setIsManualScroll(false);
+                    }, 300);
+                }
             }
         };
 
