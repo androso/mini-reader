@@ -867,6 +867,38 @@ const runBookChatTraceIfNeeded = <T>(
     );
 };
 
+/**
+ * @swagger
+ * /api/{resourceType}/{bookId}/conversations:
+ *   post:
+ *     tags: [Chat]
+ *     summary: Create an authorized book conversation and stream its answer
+ *     description: The API persists the new user message, loads bounded PostgreSQL history, and fails closed when book context is unavailable. SSE ends with a terminal event described by ChatTerminalEvent.
+ *     parameters:
+ *       - in: path
+ *         name: resourceType
+ *         required: true
+ *         schema: { type: string, enum: [book] }
+ *       - in: path
+ *         name: bookId
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema: { $ref: '#/components/schemas/ChatRequest' }
+ *     responses:
+ *       200:
+ *         description: SSE conversation id, content/source events, and terminal outcome
+ *         content:
+ *           text/event-stream:
+ *             schema: { type: string }
+ *       400: { description: Invalid message/model or unsupported resource type }
+ *       403: { description: Untrusted Origin or book belongs to another user }
+ *       404: { description: Book not found }
+ *       429: { description: Chat limit exceeded; Retry-After is returned }
+ */
 router.post(
     "/:resourceType/:id/conversations",
     authenticate,
@@ -965,6 +997,35 @@ router.post(
     })
 );
 
+/**
+ * @swagger
+ * /api/{resourceType}/{bookId}/conversations:
+ *   get:
+ *     tags: [Chat]
+ *     summary: List conversations for an authorized book
+ *     parameters:
+ *       - in: path
+ *         name: resourceType
+ *         required: true
+ *         schema: { type: string, enum: [book] }
+ *       - in: path
+ *         name: bookId
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       200:
+ *         description: Conversations ordered by latest activity
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               required: [conversations]
+ *               properties:
+ *                 conversations: { type: array, items: { type: object } }
+ *       400: { description: Unsupported resource type }
+ *       403: { description: Book belongs to another user }
+ *       404: { description: Book not found }
+ */
 router.get(
     "/:resourceType/:id/conversations",
     authenticate,
@@ -1001,6 +1062,42 @@ router.get(
     })
 );
 
+/**
+ * @swagger
+ * /api/{resourceType}/{bookId}/conversations/{conversationId}/messages:
+ *   post:
+ *     tags: [Chat]
+ *     summary: Persist a user message and stream an authorized answer
+ *     description: Client roles and transcripts are ignored. The server uses the newest PostgreSQL history fitting 30 messages and 60,000 characters.
+ *     parameters:
+ *       - in: path
+ *         name: resourceType
+ *         required: true
+ *         schema: { type: string, enum: [book] }
+ *       - in: path
+ *         name: bookId
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *       - in: path
+ *         name: conversationId
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema: { $ref: '#/components/schemas/ChatRequest' }
+ *     responses:
+ *       200:
+ *         description: SSE content/source events and terminal outcome
+ *         content:
+ *           text/event-stream:
+ *             schema: { type: string }
+ *       400: { description: Invalid message/model or unsupported resource type }
+ *       403: { description: Untrusted Origin or book belongs to another user }
+ *       404: { description: Book or scoped conversation not found }
+ *       429: { description: Chat limit exceeded; Retry-After is returned }
+ */
 router.post(
     "/:resourceType/:rid/conversations/:cid/messages",
     authenticate,
@@ -1099,6 +1196,41 @@ router.post(
     })
 );
 
+/**
+ * @swagger
+ * /api/{resourceType}/{bookId}/conversations/{conversationId}:
+ *   get:
+ *     tags: [Chat]
+ *     summary: Get public messages for an authorized conversation
+ *     parameters:
+ *       - in: path
+ *         name: resourceType
+ *         required: true
+ *         schema: { type: string, enum: [book] }
+ *       - in: path
+ *         name: bookId
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *       - in: path
+ *         name: conversationId
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       200:
+ *         description: Chronological messages without private execution metadata
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               required: [messages]
+ *               properties:
+ *                 messages:
+ *                   type: array
+ *                   items: { $ref: '#/components/schemas/PublicMessage' }
+ *       400: { description: Unsupported resource type }
+ *       403: { description: Book belongs to another user }
+ *       404: { description: Book or scoped conversation not found }
+ */
 router.get(
     "/:resourceType/:id/conversations/:conversationId",
     authenticate,

@@ -13,7 +13,7 @@ const SHUTDOWN_TIMEOUT_MS = 10000;
 
 const server = app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
-    swaggerdocs(app, PORT);
+    swaggerdocs(app);
     startBookProcessingRunner();
 });
 
