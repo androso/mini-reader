@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import { createLogger } from "@reader/providers";
 import { db } from "../db";
 import {
@@ -40,6 +40,11 @@ import {
     runAuthorizedScopedChatConversationOperation,
     type SupportedChatResourceType,
 } from "../services/ChatResourceAuthorization";
+import {
+    persistUserMessageAndBuildHistory,
+    projectChatRequest,
+    type ChatServerHistoryRepository,
+} from "../services/ChatServerHistory";
 
 const router = Router();
 const oaiService = new OpenAIService();
@@ -116,6 +121,25 @@ const touchConversation = async (conversationId: string) => {
         .update(Conversations)
         .set({ lastMessageAt: new Date() })
         .where(eq(Conversations.id, conversationId));
+};
+
+const chatServerHistoryRepository: ChatServerHistoryRepository = {
+    loadMessages: async (conversationId) =>
+        db
+            .select({
+                id: Messages.id,
+                role: Messages.role,
+                content: Messages.content,
+                createdAt: Messages.createdAt,
+            })
+            .from(Messages)
+            .where(eq(Messages.conversationId, conversationId))
+            .orderBy(asc(Messages.createdAt), asc(Messages.id)),
+    insertUserMessage: async (conversationId, content) => {
+        await db
+            .insert(Messages)
+            .values({ conversationId, role: "user", content });
+    },
 };
 
 const runAuthorizedScopedRequestOperation = async <T>({
@@ -701,15 +725,16 @@ router.post(
     authenticate,
     asyncHandler(async (req: Request, res) => {
         try {
-            const { message, messages, model } = req.body;
-            if (!message || !Array.isArray(messages)) {
+            const request = projectChatRequest(req.body);
+            if (!request) {
                 res.status(400).send({
-                    error: "Message and messages array are required",
+                    error: "Message must be a non-empty string of at most 8000 characters",
                 });
                 return;
             }
+            const { message, model } = request;
             const highlightContext = normalizeHighlightContext(
-                req.body.highlightContext
+                request.highlightContext
             );
             const chatModel = resolveChatModel(model);
             if (!chatModel) {
@@ -735,19 +760,19 @@ router.post(
                         })
                         .returning();
 
+                    const messages = await persistUserMessageAndBuildHistory({
+                        conversationId: conversation.id,
+                        message,
+                        repository: chatServerHistoryRepository,
+                    });
+                    await touchConversation(conversation.id);
+
                     res.setHeader("Content-Type", "text/event-stream");
                     res.setHeader("Cache-Control", "no-cache");
                     res.setHeader("Connection", "keep-alive");
                     res.write(
                         `data: ${JSON.stringify({ type: "conversation_id", conversationId: conversation.id })}\n\n`
                     );
-
-                    await db.insert(Messages).values({
-                        conversationId: conversation.id,
-                        role: "user",
-                        content: message,
-                    });
-                    await touchConversation(conversation.id);
 
                     await runBookChatTraceIfNeeded(
                         {
@@ -845,15 +870,16 @@ router.post(
                 return;
             }
 
-            const { messages, model } = req.body;
-            if (!Array.isArray(messages) || messages.length === 0) {
+            const request = projectChatRequest(req.body);
+            if (!request) {
                 res.status(400).send({
-                    error: "Messages array is required",
+                    error: "Message must be a non-empty string of at most 8000 characters",
                 });
                 return;
             }
+            const { message, model } = request;
             const highlightContext = normalizeHighlightContext(
-                req.body.highlightContext
+                request.highlightContext
             );
             const chatModel = resolveChatModel(model);
             if (!chatModel) {
@@ -870,17 +896,16 @@ router.post(
                 userId: req.user.id,
                 res,
                 operation: async (_conversation, authorizedResourceType) => {
+                    const messages = await persistUserMessageAndBuildHistory({
+                        conversationId,
+                        message,
+                        repository: chatServerHistoryRepository,
+                    });
+                    await touchConversation(conversationId);
+
                     res.setHeader("Content-Type", "text/event-stream");
                     res.setHeader("Cache-Control", "no-cache");
                     res.setHeader("Connection", "keep-alive");
-
-                    const lastMessage = messages[messages.length - 1];
-                    await db.insert(Messages).values({
-                        conversationId,
-                        role: lastMessage.role,
-                        content: lastMessage.content,
-                    });
-                    await touchConversation(conversationId);
 
                     await runBookChatTraceIfNeeded(
                         {
@@ -890,7 +915,7 @@ router.post(
                             userId: req.user.id,
                             routeName: "append_message",
                             messageCount: messages.length,
-                            queryLength: lastMessage.content.length,
+                            queryLength: message.length,
                             hasHighlightContext: Boolean(highlightContext),
                         },
                         (trace) =>
@@ -900,7 +925,7 @@ router.post(
                                 conversationId,
                                 userId: req.user.id,
                                 messages,
-                                query: lastMessage.content,
+                                query: message,
                                 res,
                                 routeName: "append_message",
                                 model: chatModel,

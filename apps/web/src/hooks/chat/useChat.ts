@@ -229,8 +229,6 @@ export const useChat = (bookId: string) => {
                     credentials: "include",
                     body: JSON.stringify({
                         message: userMessage.content,
-                        role: "user",
-                        messages: [...chatState.messages, userMessage],
                         model,
                         ...(highlightContext ? { highlightContext } : {}),
                     }),
