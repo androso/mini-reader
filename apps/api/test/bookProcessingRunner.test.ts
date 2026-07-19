@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
     getStaleLockSeconds,
@@ -23,4 +24,29 @@ test("runner stale lock delay rounds up to seconds", () => {
     assert.equal(getStaleLockSeconds(1), 1);
     assert.equal(getStaleLockSeconds(1000), 1);
     assert.equal(getStaleLockSeconds(1001), 2);
+});
+
+test("stale-lock and processing failure updates cannot overwrite deleting", () => {
+    const runnerSource = readFileSync(
+        "src/services/BookProcessingRunner.ts",
+        "utf8"
+    );
+    const processingSource = readFileSync(
+        "src/services/BookProcessingService.ts",
+        "utf8"
+    );
+    const enqueueSource = readFileSync(
+        "src/services/BookProcessingEnqueueService.ts",
+        "utf8"
+    );
+
+    assert.match(
+        runnerSource,
+        /UPDATE books[\s\S]*?WHERE id IN \(SELECT book_id FROM stale_jobs\)[\s\S]*?AND processing_status = 'processing'/
+    );
+    assert.match(
+        processingSource,
+        /processingStatus, "processing"\)[\s\S]*?\.returning\(\{ id: Books\.id \}\)/
+    );
+    assert.match(enqueueSource, /eq\(Books\.processingStatus, "processing"\)/);
 });
