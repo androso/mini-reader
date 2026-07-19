@@ -992,7 +992,15 @@ test("mounted create and append routes send only bounded persisted history to th
             db.update = (() => ({
                 set: () => ({ where: async () => undefined }),
             })) as unknown as typeof db.update;
-            hybridBookSearchService.search = async () => [];
+            hybridBookSearchService.search = async () => [
+                {
+                    id: "chunk-1",
+                    chunkIndex: 0,
+                    content: "authoritative book context",
+                    score: 1,
+                    bestRank: 1,
+                },
+            ];
             OpenAIService.prototype.generateStreamResponse = async (
                 messages
             ) => {
@@ -1038,7 +1046,14 @@ test("mounted create and append routes send only bounded persisted history to th
             );
 
             assert.equal(result.nextError, undefined, route);
-            assert.deepEqual(modelInputs, [expectedHistory], route);
+            assert.equal(modelInputs.length, 1, route);
+            assert.equal(modelInputs[0][0].role, "system", route);
+            assert.match(
+                modelInputs[0][0].content,
+                /authoritative book context/,
+                route
+            );
+            assert.deepEqual(modelInputs[0].slice(1), expectedHistory, route);
             assert.equal(
                 modelInputs[0].filter(
                     ({ role, content }) =>
