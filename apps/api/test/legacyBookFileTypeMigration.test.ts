@@ -20,23 +20,21 @@ test("0013 backfills only known null legacy book key formats", () => {
     assert.match(migration, /"file_key" LIKE 'epub-%'/);
     assert.match(migration, /THEN 'epub'::"file_type"/);
     assert.doesNotMatch(migration, /ELSE/);
-    assert.doesNotMatch(
-        migration,
-        /CREATE (?:TABLE|TYPE|INDEX)|ALTER TABLE/i
-    );
+    assert.doesNotMatch(migration, /CREATE (?:TABLE|TYPE|INDEX)|ALTER TABLE/i);
 });
 
-test("0013 is the latest snapshot and includes the manual 0012 schema", () => {
+test("0013 follows the manual 0012 schema without losing its objects", () => {
     const journal = JSON.parse(
         readFileSync(`${migrationRoot}/meta/_journal.json`, "utf8")
     ) as { entries: Array<{ idx: number; tag: string }> };
     const lastEntries = journal.entries
-        .slice(-2)
+        .slice(-3)
         .map(({ idx, tag }) => ({ idx, tag }));
 
     assert.deepEqual(lastEntries, [
         { idx: 12, tag: "0012_lightsail_pgvector_jobs" },
         { idx: 13, tag: "0013_backfill_legacy_book_file_types" },
+        { idx: 14, tag: "0014_mighty_rattler" },
     ]);
 
     const snapshot0011 = JSON.parse(
