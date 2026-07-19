@@ -18,6 +18,17 @@ export type Message = {
     role: string;
     content: string;
     contextSources?: ContextSource[] | null;
+    completionStatus?: "complete" | "truncated" | "cancelled" | "failed" | null;
+    finishReason?: string | null;
+};
+
+const completionNotices: Partial<
+    Record<NonNullable<Message["completionStatus"]>, string>
+> = {
+    truncated:
+        "This response reached the model output limit and may be incomplete.",
+    cancelled: "This response was cancelled before completion.",
+    failed: "This response failed before completion.",
 };
 
 const formatScore = (score: number) =>
@@ -88,6 +99,9 @@ const MessageList = memo(
                     .map((message: Message, index: number) => {
                         const isAssistant = message.role === "assistant";
                         const sources = message.contextSources ?? [];
+                        const completionNotice = message.completionStatus
+                            ? completionNotices[message.completionStatus]
+                            : undefined;
 
                         return (
                             <div
@@ -132,6 +146,14 @@ const MessageList = memo(
                                 </div>
                                 {isAssistant && sources.length > 0 && (
                                     <MessageSources sources={sources} />
+                                )}
+                                {isAssistant && completionNotice && (
+                                    <p
+                                        className="max-w-[85%] text-xs leading-relaxed text-amber-200/80"
+                                        role="status"
+                                    >
+                                        {completionNotice}
+                                    </p>
                                 )}
                             </div>
                         );
