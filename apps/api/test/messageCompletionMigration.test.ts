@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
+import { Client } from "pg";
 
 const migrationRoot = existsSync("migrations/0015_daffy_runaways.sql")
     ? "migrations"
@@ -15,6 +17,12 @@ const snapshot = JSON.parse(
     enums: Record<string, { values: string[] }>;
     tables: Record<string, { columns: Record<string, { notNull: boolean }> }>;
 };
+const migrationTestDatabaseUrl =
+    process.env.MESSAGE_COMPLETION_MIGRATION_TEST_DATABASE_URL ??
+    process.env.PROGRESS_MIGRATION_TEST_DATABASE_URL;
+
+const quoteIdentifier = (identifier: string) =>
+    `"${identifier.replace(/"/g, '""')}"`;
 
 test("0015 adds nullable completion fields and backfills assistants only", () => {
     assert.match(
@@ -42,3 +50,108 @@ test("0015 adds nullable completion fields and backfills assistants only", () =>
         false
     );
 });
+
+test(
+    "0015 backfills completion outcomes in a disposable PostgreSQL database",
+    {
+        skip: migrationTestDatabaseUrl
+            ? false
+            : "requires MESSAGE_COMPLETION_MIGRATION_TEST_DATABASE_URL or PROGRESS_MIGRATION_TEST_DATABASE_URL",
+    },
+    async () => {
+        assert.ok(migrationTestDatabaseUrl);
+        const adminUrl = new URL(migrationTestDatabaseUrl);
+        const databaseName = `reader_message_completion_${randomUUID().replace(/-/g, "")}`;
+        const testUrl = new URL(adminUrl);
+        testUrl.pathname = `/${databaseName}`;
+        const admin = new Client({ connectionString: adminUrl.toString() });
+        let databaseCreated = false;
+
+        await admin.connect();
+        try {
+            await admin.query(
+                `CREATE DATABASE ${quoteIdentifier(databaseName)}`
+            );
+            databaseCreated = true;
+            const database = new Client({
+                connectionString: testUrl.toString(),
+            });
+            await database.connect();
+
+            try {
+                await database.query(`
+                    CREATE TYPE "message_role" AS ENUM ('user', 'assistant');
+                    CREATE TABLE "messages" (
+                        "id" uuid PRIMARY KEY,
+                        "conversation_id" uuid NOT NULL,
+                        "role" "message_role" NOT NULL,
+                        "content" text NOT NULL,
+                        "context_sources" jsonb,
+                        "created_at" timestamp NOT NULL DEFAULT now()
+                    );
+                    INSERT INTO "messages" (
+                        "id", "conversation_id", "role", "content"
+                    ) VALUES
+                        ('10000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000001', 'user', 'question'),
+                        ('10000000-0000-4000-8000-000000000002', '20000000-0000-4000-8000-000000000001', 'assistant', 'answer');
+                `);
+
+                await database.query(migration);
+
+                const messages = await database.query<{
+                    role: "user" | "assistant";
+                    completion_status: string | null;
+                    finish_reason: string | null;
+                }>(`
+                    SELECT "role", "completion_status", "finish_reason"
+                    FROM "messages"
+                    ORDER BY "id"
+                `);
+                assert.deepEqual(messages.rows, [
+                    {
+                        role: "user",
+                        completion_status: null,
+                        finish_reason: null,
+                    },
+                    {
+                        role: "assistant",
+                        completion_status: "complete",
+                        finish_reason: null,
+                    },
+                ]);
+
+                const columns = await database.query<{
+                    column_name: string;
+                    is_nullable: string;
+                }>(`
+                    SELECT "column_name", "is_nullable"
+                    FROM "information_schema"."columns"
+                    WHERE "table_schema" = 'public'
+                      AND "table_name" = 'messages'
+                      AND "column_name" IN ('completion_status', 'finish_reason')
+                    ORDER BY "column_name"
+                `);
+                assert.deepEqual(columns.rows, [
+                    {
+                        column_name: "completion_status",
+                        is_nullable: "YES",
+                    },
+                    { column_name: "finish_reason", is_nullable: "YES" },
+                ]);
+            } finally {
+                await database.end();
+            }
+        } finally {
+            if (databaseCreated) {
+                await admin.query(
+                    `SELECT pg_terminate_backend("pid") FROM "pg_stat_activity" WHERE "datname" = $1`,
+                    [databaseName]
+                );
+                await admin.query(
+                    `DROP DATABASE ${quoteIdentifier(databaseName)}`
+                );
+            }
+            await admin.end();
+        }
+    }
+);
