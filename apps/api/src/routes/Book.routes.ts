@@ -18,8 +18,12 @@ import { hybridBookSearchService } from "../services/HybridBookSearchService";
 import { handleBookProcessingEnqueue } from "../services/BookProcessingEnqueueService";
 import { handleBookFileDelivery } from "../services/BookFileDelivery";
 import { publicBookSelection, toPublicBook } from "../services/PublicBook";
-import { createBookUploadPlan } from "../utils/bookUpload";
 import { persistUploadedBook } from "../services/BookUploadService";
+import {
+    acceptBookUpload,
+    BookUploadEnqueueError,
+    BookUploadValidationError,
+} from "../services/BookUploadAcceptanceService";
 
 const log = createLogger("books");
 
@@ -164,89 +168,85 @@ router.post(
                 res.status(400).json({ error: "No file uploaded" });
                 return;
             }
-            const mimeType = req.file.mimetype;
             const fileBuffer = req.file.buffer;
-            // Validate file type
-            if (
-                !["application/pdf", "application/epub+zip"].includes(mimeType)
-            ) {
-                log.warn("Book upload rejected: unsupported file type", {
-                    mimeType,
-                    userId: req.user.id,
-                });
-                res.status(400).json({
-                    error: "Unsupported file type. Only PDF and EPUB are supported.",
-                });
-                return;
-            }
-            const fileType = mimeType === "application/pdf" ? "pdf" : "epub";
-            const uploadPlan = createBookUploadPlan(
-                req.user.id,
-                req.file.originalname,
-                fileType
-            );
-
-            log.info("Uploading file to storage", {
-                userId: req.user.id,
-                bookId: uploadPlan.book.id,
-                fileKey: uploadPlan.book.fileKey,
-                mimeType,
-            });
-            await uploadFile(uploadPlan.book.fileKey, fileBuffer);
-            log.info("File uploaded to storage", {
-                userId: req.user.id,
-                bookId: uploadPlan.book.id,
-                fileKey: uploadPlan.book.fileKey,
-            });
-
-            const book = await persistUploadedBook(uploadPlan.book.fileKey, {
-                insertBook: async () => {
-                    const [insertedBook] = await db
-                        .insert(Books)
-                        .values(uploadPlan.book)
-                        .returning();
-                    if (!insertedBook) {
-                        throw new Error("Book insert returned no row");
+            let acceptedUpload;
+            try {
+                acceptedUpload = await acceptBookUpload(
+                    {
+                        userId: req.user.id,
+                        title: req.file.originalname,
+                        buffer: fileBuffer,
+                    },
+                    {
+                        uploadFile: async (fileKey, buffer) => {
+                            await uploadFile(fileKey, buffer);
+                        },
+                        insertBook: async (bookValues) =>
+                            persistUploadedBook(bookValues.fileKey, {
+                                insertBook: async () => {
+                                    const [insertedBook] = await db
+                                        .insert(Books)
+                                        .values(bookValues)
+                                        .returning();
+                                    if (!insertedBook) {
+                                        throw new Error(
+                                            "Book insert returned no row"
+                                        );
+                                    }
+                                    return insertedBook;
+                                },
+                                deleteFile: async (fileKey) => {
+                                    await deleteFile(fileKey);
+                                },
+                                onCleanupError: (cleanupError) => {
+                                    log.error(
+                                        "Failed to clean up upload after insert failure",
+                                        {
+                                            bookId: bookValues.id,
+                                            fileKey: bookValues.fileKey,
+                                            error:
+                                                cleanupError instanceof Error
+                                                    ? cleanupError.message
+                                                    : String(cleanupError),
+                                        }
+                                    );
+                                },
+                            }),
+                        enqueue: handleBookProcessingEnqueue,
                     }
-                    return insertedBook;
-                },
-                deleteFile: async (fileKey) => {
-                    await deleteFile(fileKey);
-                },
-                onCleanupError: (cleanupError) => {
-                    log.error(
-                        "Failed to clean up upload after insert failure",
-                        {
-                            bookId: uploadPlan.book.id,
-                            fileKey: uploadPlan.book.fileKey,
-                            error:
-                                cleanupError instanceof Error
-                                    ? cleanupError.message
-                                    : String(cleanupError),
-                        }
-                    );
-                },
-            });
+                );
+            } catch (error) {
+                if (error instanceof BookUploadValidationError) {
+                    log.warn("Book upload rejected: invalid content", {
+                        mimeType: req.file.mimetype,
+                        userId: req.user.id,
+                    });
+                    res.status(400).json({ error: "Invalid PDF or EPUB file" });
+                    return;
+                }
+                if (error instanceof BookUploadEnqueueError) {
+                    log.error("Book processing enqueue failed", {
+                        error:
+                            error.cause instanceof Error
+                                ? error.cause.message
+                                : String(error.cause),
+                    });
+                    res.status(503).json({
+                        error: "Book processing queue is unavailable",
+                    });
+                    return;
+                }
+                throw error;
+            }
+            const { book, fileType, uploadPlan } = acceptedUpload;
+            const mimeType =
+                fileType === "pdf" ? "application/pdf" : "application/epub+zip";
             log.info("Book record created", {
                 bookId: book.id,
                 userId: req.user.id,
                 fileKey: book.fileKey,
                 fileType,
             });
-
-            try {
-                await handleBookProcessingEnqueue(uploadPlan.job);
-            } catch (error) {
-                log.error("Book processing enqueue failed", {
-                    bookId: book.id,
-                    error:
-                        error instanceof Error ? error.message : String(error),
-                });
-                res.status(503).json({
-                    error: "Book processing queue is unavailable",
-                });
-                return;
-            }
 
             const [queuedBook] = await db
                 .select(publicBookSelection)
