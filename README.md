@@ -92,6 +92,12 @@ Book uploads are processed asynchronously. The API stores the uploaded file,
 inserts a `processing` book row, enqueues a Postgres-backed job, and returns
 immediately while the API's in-process runner finishes PDF/EPUB ingestion.
 
+The API applies process-local request limits: 20 authentication requests per
+15 minutes per client IP, 10 uploads per hour per user, and 30 chat mutations
+per minute per user. These bounded counters assume one API replica and reset
+when the process restarts; a horizontally scaled deployment would need a shared
+rate-limit store.
+
 ## AWS infrastructure
 
 For the low-cost AWS deployment, use Lightsail with one app container, local

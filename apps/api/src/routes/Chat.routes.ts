@@ -8,6 +8,7 @@ import {
     type MessageContextSource,
 } from "../db/schema";
 import { authenticate } from "../middleware/auth";
+import { chatRateLimit } from "../middleware/rateLimit";
 import { asyncHandler } from "../middleware/asyncHandler";
 import {
     OPENAI_CHAT_MAX_TOKENS,
@@ -837,6 +838,7 @@ const runBookChatTraceIfNeeded = <T>(
 router.post(
     "/:resourceType/:id/conversations",
     authenticate,
+    chatRateLimit,
     asyncHandler(async (req: Request, res) => {
         try {
             const request = projectChatRequest(req.body);
@@ -970,6 +972,7 @@ router.get(
 router.post(
     "/:resourceType/:rid/conversations/:cid/messages",
     authenticate,
+    chatRateLimit,
     asyncHandler(async (req, res) => {
         try {
             const {
