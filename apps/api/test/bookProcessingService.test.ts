@@ -30,6 +30,7 @@ const createRepository = (
         }),
         markReady: async (_, collectionName) => {
             calls.ready.push(collectionName);
+            return true;
         },
         markFailed: async (_, error) => {
             calls.failed.push(error);
@@ -169,5 +170,68 @@ test("file type mismatch fails safely", async () => {
     );
 
     assert.deepEqual(calls.ready, []);
+    assert.equal(calls.failed.length, 1);
+});
+
+test("books outside processing state never start artifact generation", async () => {
+    const { repository, calls } = createRepository({
+        findBookForProcessing: async () => ({
+            id: "book-1",
+            userId: "user-1",
+            fileKey: "epub-key",
+            fileType: "epub",
+            collectionName: null,
+            processingStatus: "deleting",
+            processingError: null,
+        }),
+    });
+    let processCalls = 0;
+
+    await assert.rejects(
+        handleProcessUploadedBook(payload, repository, async () => {
+            processCalls++;
+            return {
+                collectionName: "unexpected",
+                chunks: 1,
+                reusedCollection: false,
+            };
+        }),
+        /not processing/
+    );
+
+    assert.equal(processCalls, 0);
+    assert.deepEqual(calls.ready, []);
+    assert.equal(calls.failed.length, 1);
+});
+
+test("late publication loss removes newly generated artifacts", async () => {
+    const cleaned: string[] = [];
+    const { repository, calls } = createRepository({
+        markReady: async (_, collectionName) => {
+            calls.ready.push(collectionName);
+            return false;
+        },
+    });
+
+    await assert.rejects(
+        handleProcessUploadedBook(
+            payload,
+            repository,
+            async () => ({
+                collectionName: "book_book_1",
+                chunks: 2,
+                reusedCollection: false,
+            }),
+            {
+                cleanupCollectionArtifacts: async (collectionName) => {
+                    cleaned.push(collectionName);
+                },
+            }
+        ),
+        /left processing before publication/
+    );
+
+    assert.deepEqual(calls.ready, ["book_book_1"]);
+    assert.deepEqual(cleaned, ["book_book_1"]);
     assert.equal(calls.failed.length, 1);
 });

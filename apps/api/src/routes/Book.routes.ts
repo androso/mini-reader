@@ -6,15 +6,12 @@ import {
     deleteFile,
     getFile,
     uploadFile,
-    vectorStore,
 } from "@reader/providers";
 import { authenticate } from "../middleware/auth";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { db } from "../db";
 import { Books } from "../db/schema";
-import { eq, sql } from "drizzle-orm";
-import { bookSearchChunkStore } from "../services/BookSearchChunkStore";
-import { hybridBookSearchService } from "../services/HybridBookSearchService";
+import { eq } from "drizzle-orm";
 import {
     BookProcessingQueueUnavailableError,
     handleBookProcessingEnqueue,
@@ -32,6 +29,11 @@ import {
     BookProcessingRetryNotFoundError,
     retryBookProcessing,
 } from "../services/BookProcessingRetryService";
+import {
+    BookDeletionForbiddenError,
+    BookDeletionNotFoundError,
+    deleteOwnedBook,
+} from "../services/BookDeletionService";
 
 const log = createLogger("books");
 
@@ -476,61 +478,19 @@ router.delete(
         });
 
         try {
-            const [book] = await db
-                .select()
-                .from(Books)
-                .where(eq(Books.id, bookId));
-            if (!book) {
-                log.warn("Book delete failed: not found", { bookId });
-                res.status(404).json({
-                    error: "Book was not found",
-                });
-                return;
-            }
-            if (book.userId !== req.user.id) {
-                log.warn("Book delete failed: unauthorized", {
-                    bookId,
-                    userId: req.user.id,
-                    ownerId: book.userId,
-                });
-                res.status(403).json({
-                    error: "Not authorized",
-                });
-                return;
-            }
-            await db.delete(Books).where(eq(Books.id, bookId));
-            log.info("Book record deleted", { bookId });
-
-            const [remaining] = await db
-                .select({ count: sql`count(*)`.mapWith(Number) })
-                .from(Books)
-                .where(eq(Books.fileKey, book.fileKey));
-            if (remaining.count === 0) {
-                log.info("Deleting orphaned file and collection", {
-                    fileKey: book.fileKey,
-                    collectionName: book.collectionName,
-                });
-                await deleteFile(book.fileKey);
-
-                if (book.collectionName) {
-                    await vectorStore.deleteCollection(book.collectionName);
-                    await bookSearchChunkStore.deleteCollectionChunks(
-                        book.collectionName
-                    );
-                    hybridBookSearchService.clearCollectionCache(
-                        book.collectionName
-                    );
-                }
-            } else {
-                log.debug("Skipping cleanup, file still referenced", {
-                    fileKey: book.fileKey,
-                    remainingCount: remaining.count,
-                });
-            }
+            await deleteOwnedBook(bookId, req.user.id);
 
             log.info("Book delete successful", { bookId });
             res.status(204).send();
         } catch (e) {
+            if (e instanceof BookDeletionNotFoundError) {
+                res.status(404).json({ error: e.message });
+                return;
+            }
+            if (e instanceof BookDeletionForbiddenError) {
+                res.status(403).json({ error: e.message });
+                return;
+            }
             log.error("Book delete failed", {
                 bookId,
                 error: e instanceof Error ? e.message : String(e),
