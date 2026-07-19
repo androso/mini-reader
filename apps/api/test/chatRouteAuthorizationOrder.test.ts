@@ -276,6 +276,234 @@ test("mounted create route authorizes before every downstream side effect", asyn
     }
 });
 
+test("mounted append route rejects unauthorized and mismatched scopes before side effects", async () => {
+    const handler = routeHandler(
+        "/:resourceType/:rid/conversations/:cid/messages",
+        "post"
+    );
+    const originalSelect = db.select;
+    const originalInsert = db.insert;
+    const originalSearch = hybridBookSearchService.search;
+    const originalGenerate = OpenAIService.prototype.generateStreamResponse;
+
+    try {
+        for (const scenario of [
+            {
+                name: "unsupported",
+                resourceType: "article",
+                book: null,
+                conversation: null,
+                expectedStatus: 400,
+            },
+            {
+                name: "missing",
+                resourceType: "book",
+                book: null,
+                conversation: null,
+                expectedStatus: 404,
+            },
+            {
+                name: "non-owner",
+                resourceType: "book",
+                book: { id: "book-1", userId: "user-2" },
+                conversation: null,
+                expectedStatus: 403,
+            },
+            {
+                name: "scope mismatch",
+                resourceType: "book",
+                book: { id: "book-1", userId: "user-1" },
+                conversation: null,
+                expectedStatus: 404,
+            },
+        ] as const) {
+            let selects = 0;
+            let messageInserts = 0;
+            let retrievals = 0;
+            let modelCalls = 0;
+            db.select = (() => ({
+                from: (table: unknown) => ({
+                    where: async () => {
+                        selects++;
+                        if (table === Books) {
+                            return scenario.book ? [scenario.book] : [];
+                        }
+                        assert.equal(table, Conversations);
+                        return scenario.conversation
+                            ? [scenario.conversation]
+                            : [];
+                    },
+                }),
+            })) as unknown as typeof db.select;
+            db.insert = ((table: unknown) => ({
+                values: async () => {
+                    assert.equal(table, Messages);
+                    messageInserts++;
+                },
+            })) as unknown as typeof db.insert;
+            hybridBookSearchService.search = async () => {
+                retrievals++;
+                return [];
+            };
+            OpenAIService.prototype.generateStreamResponse = async () => {
+                modelCalls++;
+                return (async function* () {})();
+            };
+
+            const result = await invoke(handler, {
+                params: {
+                    resourceType: scenario.resourceType,
+                    rid: "book-1",
+                    cid: "conversation-1",
+                },
+                body: {
+                    messages: [{ role: "user", content: "Question" }],
+                },
+                user: {
+                    id: "user-1",
+                    email: "owner@example.com",
+                    name: "Owner",
+                    googleId: null,
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                },
+            });
+
+            assert.equal(result.nextError, undefined, scenario.name);
+            assert.equal(
+                result.statusCode,
+                scenario.expectedStatus,
+                scenario.name
+            );
+            assert.equal(messageInserts, 0, scenario.name);
+            assert.equal(result.headers.length, 0, scenario.name);
+            assert.equal(result.writes.length, 0, scenario.name);
+            assert.equal(retrievals, 0, scenario.name);
+            assert.equal(modelCalls, 0, scenario.name);
+            assert.equal(
+                selects,
+                scenario.name === "scope mismatch"
+                    ? 2
+                    : scenario.name === "unsupported"
+                      ? 0
+                      : 1,
+                scenario.name
+            );
+        }
+    } finally {
+        db.select = originalSelect;
+        db.insert = originalInsert;
+        hybridBookSearchService.search = originalSearch;
+        OpenAIService.prototype.generateStreamResponse = originalGenerate;
+    }
+});
+
+test("mounted append route emits an SSE error after streaming begins", async () => {
+    const handler = routeHandler(
+        "/:resourceType/:rid/conversations/:cid/messages",
+        "post"
+    );
+    const originalSelect = db.select;
+    const originalInsert = db.insert;
+    const originalUpdate = db.update;
+    const originalSearch = hybridBookSearchService.search;
+    const originalGenerate = OpenAIService.prototype.generateStreamResponse;
+    const originalConsoleError = console.error;
+    let selects = 0;
+
+    try {
+        console.error = () => undefined;
+        db.select = (() => ({
+            from: (table: unknown) => ({
+                where: async () => {
+                    selects++;
+                    if (table === Conversations) {
+                        return [{ id: "conversation-1" }];
+                    }
+                    assert.equal(table, Books);
+                    return [
+                        {
+                            id: "book-1",
+                            userId: "user-1",
+                            processingStatus: "ready",
+                            processingError: null,
+                            collectionName: "book_collection",
+                        },
+                    ];
+                },
+            }),
+        })) as unknown as typeof db.select;
+        db.insert = (() => ({
+            values: async () => undefined,
+        })) as unknown as typeof db.insert;
+        db.update = (() => ({
+            set: () => ({ where: async () => undefined }),
+        })) as unknown as typeof db.update;
+        hybridBookSearchService.search = async () => [
+            {
+                id: "chunk-1",
+                chunkIndex: 0,
+                content: "context",
+                score: 1,
+                bestRank: 1,
+            },
+        ];
+        OpenAIService.prototype.generateStreamResponse = async () => {
+            return (async function* () {
+                yield {
+                    choices: [
+                        {
+                            delta: { content: "partial" },
+                            finish_reason: null,
+                        },
+                    ],
+                } as never;
+                throw new Error("model unavailable");
+            })();
+        };
+
+        const result = await invoke(handler, {
+            params: {
+                resourceType: "book",
+                rid: "book-1",
+                cid: "conversation-1",
+            },
+            body: {
+                messages: [{ role: "user", content: "Question" }],
+            },
+            user: {
+                id: "user-1",
+                email: "owner@example.com",
+                name: "Owner",
+                googleId: null,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            },
+        });
+
+        assert.equal(result.nextError, undefined);
+        assert.equal(selects, 3);
+        assert.deepEqual(result.headers, [
+            ["Content-Type", "text/event-stream"],
+            ["Cache-Control", "no-cache"],
+            ["Connection", "keep-alive"],
+        ]);
+        assert.deepEqual(result.writes, [
+            `data: ${JSON.stringify({ content: "partial" })}\n\n`,
+            `data: ${JSON.stringify({ error: "An error occurred" })}\n\n`,
+        ]);
+        assert.equal(result.response.headersSent, true);
+        assert.equal(result.response.writableEnded, true);
+    } finally {
+        db.select = originalSelect;
+        db.insert = originalInsert;
+        db.update = originalUpdate;
+        hybridBookSearchService.search = originalSearch;
+        OpenAIService.prototype.generateStreamResponse = originalGenerate;
+        console.error = originalConsoleError;
+    }
+});
+
 test("pre-stream create and append failures reach terminal middleware", async () => {
     const createHandler = routeHandler(
         "/:resourceType/:id/conversations",
