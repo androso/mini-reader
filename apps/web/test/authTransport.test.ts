@@ -7,6 +7,7 @@ const sourceFiles = [
     "src/lib/queryClient.ts",
     "src/app/page.tsx",
     "src/components/BookCover.tsx",
+    "src/components/bookCoverLoading.ts",
     "src/components/reader/PdfReader.tsx",
     "src/hooks/chat/useChat.ts",
     "src/hooks/chat/useConversations.ts",
