@@ -4,6 +4,7 @@ import { Progress } from "../db/schema";
 import { Books } from "../db/schema";
 import { db } from "../db";
 import { and, eq } from "drizzle-orm";
+import { asyncHandler } from "../middleware/asyncHandler";
 
 interface TrackerObjetc {
     user_id: string;
@@ -12,15 +13,18 @@ interface TrackerObjetc {
 }
 const router = Router();
 
-router.get("/progress", async (req: Request, res: Response) => {
-    const [progress] = await db.select().from(Progress);
-    res.status(200).json({ data: progress });
-});
+router.get(
+    "/progress",
+    asyncHandler(async (req: Request, res: Response) => {
+        const [progress] = await db.select().from(Progress);
+        res.status(200).json({ data: progress });
+    })
+);
 
 router.get(
     "/:rid/progress",
     authenticate,
-    async (req: Request, res: Response) => {
+    asyncHandler(async (req: Request, res: Response) => {
         try {
             const user_id = req.user.id;
             const book_id = req.params.rid;
@@ -62,13 +66,13 @@ router.get(
             console.error("Error fetching progress:", error);
             res.status(500).json({ message: "Internal server error" });
         }
-    }
+    })
 );
 
 router.post(
     "/:rid/progress",
     authenticate,
-    async (req: Request, res: Response) => {
+    asyncHandler(async (req: Request, res: Response) => {
         try {
             const user_id = req.user.id;
             const file_key = req.params.rid;
@@ -135,7 +139,7 @@ router.post(
             console.error("Progress can't be tracked", error);
             res.status(500).json({ message: "Progress wasn't saved" });
         }
-    }
+    })
 );
 
 export default router;
