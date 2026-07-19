@@ -667,6 +667,7 @@ test("mounted append route aborts on close and never writes after destruction", 
     const insertedMessages: unknown[] = [];
     let response: Response | undefined;
     let modelCalls = 0;
+    let retrievalCalls = 0;
     let generationSignal: AbortSignal | undefined;
 
     const request = {
@@ -720,6 +721,61 @@ test("mounted append route aborts on close and never writes after destruction", 
         })) as unknown as typeof db.update;
 
         hybridBookSearchService.search = async () => {
+            retrievalCalls++;
+            return [];
+        };
+        OpenAIService.prototype.generateStreamResponse = async () => {
+            modelCalls++;
+            return (async function* () {})();
+        };
+        const destroyedWrites: string[] = [];
+        let destroyedNextError: unknown;
+        const destroyedResponse = {
+            destroyed: true,
+            writableEnded: false,
+            headersSent: true,
+            setHeader() {
+                return this;
+            },
+            write(chunk: string) {
+                destroyedWrites.push(chunk);
+                return true;
+            },
+            end() {
+                return this;
+            },
+            once() {
+                return this;
+            },
+            off() {
+                return this;
+            },
+            status() {
+                return this;
+            },
+            send() {
+                return this;
+            },
+        } as unknown as Response;
+
+        handler(
+            request as unknown as Request,
+            destroyedResponse,
+            (error?: unknown) => {
+                destroyedNextError = error;
+            }
+        );
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        await new Promise<void>((resolve) => setImmediate(resolve));
+
+        assert.equal(destroyedNextError, undefined);
+        assert.equal(retrievalCalls, 0);
+        assert.equal(modelCalls, 0);
+        assert.deepEqual(destroyedWrites, []);
+        insertedMessages.length = 0;
+
+        hybridBookSearchService.search = async () => {
+            retrievalCalls++;
             response?.emit("close");
             return [];
         };
@@ -739,6 +795,7 @@ test("mounted append route aborts on close and never writes after destruction", 
         await new Promise<void>((resolve) => setImmediate(resolve));
 
         assert.equal(modelCalls, 0);
+        assert.equal(retrievalCalls, 1);
         assert.deepEqual(closedDuringRetrieval.writes, []);
         assert.deepEqual(insertedMessages, [
             {
