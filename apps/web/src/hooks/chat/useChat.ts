@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import useSelectedConversation from "./useSelectedConversation";
 import { Message } from "@/components/reader/MessageList";
 import type { HighlightContext } from "@/types/highlightContext";
+import { normalizeChatInput } from "./chatInput";
 import { useQueryClient } from "@tanstack/react-query";
 import { conversationsQueryKey } from "./useConversations";
 import { apiUrl } from "@/lib/api";
@@ -203,9 +204,10 @@ export const useChat = (bookId: string) => {
             onHighlightContextSent?: () => void
         ) => {
             e.preventDefault();
-            if (!input.trim()) return;
+            const message = normalizeChatInput(input);
+            if (!message) return;
 
-            const userMessage = { id: null, role: "user", content: input };
+            const userMessage = { id: null, role: "user", content: message };
             setInput("");
 
             try {
@@ -229,8 +231,6 @@ export const useChat = (bookId: string) => {
                     credentials: "include",
                     body: JSON.stringify({
                         message: userMessage.content,
-                        role: "user",
-                        messages: [...chatState.messages, userMessage],
                         model,
                         ...(highlightContext ? { highlightContext } : {}),
                     }),
