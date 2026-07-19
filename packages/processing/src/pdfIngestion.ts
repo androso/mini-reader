@@ -2,6 +2,9 @@ import crypto from "crypto";
 import PDFParser from "pdf2json";
 import { TextChunker } from "./chunkText";
 
+export const decodePdfTextRuns = (runs: ReadonlyArray<{ T: string }>) =>
+    runs.map((run) => decodeURIComponent(run.T)).join("");
+
 export const extractPdfChunks = async (
     fileBuffer: Buffer,
     chunker = new TextChunker()
@@ -15,7 +18,7 @@ export const extractPdfChunks = async (
             try {
                 for (const page of pdfData.Pages) {
                     const textPage = page.Texts.map((text) =>
-                        decodeURIComponent(text.R[0].T)
+                        decodePdfTextRuns(text.R)
                     ).join(" ");
                     allChunks.push(...chunker.chunkText(textPage));
                 }

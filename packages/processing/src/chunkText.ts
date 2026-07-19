@@ -20,7 +20,7 @@ export class TextChunker {
         if (!normalized) return [];
         if (normalized.length <= this.maxChunkSize) return [normalized];
 
-        const sentences = normalized.match(/[^.!?]+[.!?]+(?:\s+|$)/g) || [
+        const sentences = normalized.match(/.*?[.!?]+(?:\s+|$)|.+$/g) || [
             normalized,
         ];
         const chunks: string[] = [];
@@ -41,7 +41,70 @@ export class TextChunker {
             chunks.push(...this.splitOversized(current));
         }
 
-        return chunks.filter((chunk) => chunk.length >= this.minChunkSize);
+        return this.finalizeChunks(chunks);
+    }
+
+    private finalizeChunks(chunks: string[]): string[] {
+        const nonEmpty = chunks.map((chunk) => chunk.trim()).filter(Boolean);
+        if (nonEmpty.length <= 1) return nonEmpty;
+
+        const tailIndex = nonEmpty.length - 1;
+        const tail = nonEmpty[tailIndex];
+        if (
+            tail.length >= this.minChunkSize ||
+            this.minChunkSize > this.maxChunkSize
+        ) {
+            return nonEmpty;
+        }
+
+        const previous = nonEmpty[tailIndex - 1];
+        const combined = `${previous} ${tail}`.trim();
+        if (combined.length <= this.maxChunkSize) {
+            return [...nonEmpty.slice(0, -2), combined];
+        }
+
+        const minimumSuffixLength = Math.max(
+            1,
+            Math.min(this.minChunkSize, this.maxChunkSize)
+        );
+        const minimumSplitIndex = Math.max(
+            1,
+            combined.length - this.maxChunkSize
+        );
+        const maximumSplitIndex = Math.min(
+            this.maxChunkSize,
+            combined.length - 1
+        );
+        if (minimumSplitIndex > maximumSplitIndex) return nonEmpty;
+
+        const idealSplitIndex = Math.min(
+            Math.max(combined.length - minimumSuffixLength, minimumSplitIndex),
+            maximumSplitIndex
+        );
+        let splitIndex = idealSplitIndex;
+        for (
+            let candidate = idealSplitIndex;
+            candidate >= minimumSplitIndex;
+            candidate--
+        ) {
+            if (/\s/.test(combined[candidate])) {
+                splitIndex = candidate;
+                break;
+            }
+        }
+
+        const rebalancedPrevious = combined.slice(0, splitIndex).trimEnd();
+        const rebalancedTail = combined.slice(splitIndex).trimStart();
+        if (
+            !rebalancedPrevious ||
+            !rebalancedTail ||
+            rebalancedPrevious.length > this.maxChunkSize ||
+            rebalancedTail.length > this.maxChunkSize
+        ) {
+            return nonEmpty;
+        }
+
+        return [...nonEmpty.slice(0, -2), rebalancedPrevious, rebalancedTail];
     }
 
     private splitOversized(text: string): string[] {
