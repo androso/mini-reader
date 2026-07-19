@@ -53,6 +53,123 @@ const patchCentralSizes = (
     return patched;
 };
 
+const findCentralEntry = (buffer: Buffer, name: string) => {
+    const offset = centralEntryOffsets(buffer).find((entryOffset) =>
+        buffer
+            .subarray(
+                entryOffset + 46,
+                entryOffset + 46 + buffer.readUInt16LE(entryOffset + 28)
+            )
+            .equals(Buffer.from(name))
+    );
+    assert.notEqual(offset, undefined);
+    return offset!;
+};
+
+const crc32 = (bytes: Buffer) => {
+    let crc = 0xffffffff;
+    for (const byte of bytes) {
+        crc ^= byte;
+        for (let bit = 0; bit < 8; bit += 1) {
+            crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
+        }
+    }
+    return (crc ^ 0xffffffff) >>> 0;
+};
+
+const withLocalName = (
+    buffer: Buffer,
+    centralName: string,
+    localName: string
+) => {
+    const patched = Buffer.from(buffer);
+    const centralOffset = findCentralEntry(patched, centralName);
+    const localOffset = patched.readUInt32LE(centralOffset + 42);
+    const localNameLength = patched.readUInt16LE(localOffset + 26);
+    assert.equal(Buffer.byteLength(localName), localNameLength);
+    patched.write(localName, localOffset + 30, localNameLength, "utf8");
+    return patched;
+};
+
+const unicodePathField = (originalName: string, unicodeName: string) => {
+    const encodedName = Buffer.from(unicodeName);
+    const field = Buffer.alloc(9 + encodedName.length);
+    field.writeUInt16LE(0x7075, 0);
+    field.writeUInt16LE(5 + encodedName.length, 2);
+    field[4] = 1;
+    field.writeUInt32LE(crc32(Buffer.from(originalName)), 5);
+    encodedName.copy(field, 9);
+    return field;
+};
+
+const withUnicodePathOverride = (
+    buffer: Buffer,
+    entryName: string,
+    unicodeName: string
+) => {
+    const extra = unicodePathField(entryName, unicodeName);
+    const originalEndOffset = buffer.lastIndexOf(
+        Buffer.from([0x50, 0x4b, 0x05, 0x06])
+    );
+    const originalCentralOffset = buffer.readUInt32LE(originalEndOffset + 16);
+    const originalCentralSize = buffer.readUInt32LE(originalEndOffset + 12);
+    const originalEntryOffset = findCentralEntry(buffer, entryName);
+    const localOffset = buffer.readUInt32LE(originalEntryOffset + 42);
+    const localNameLength = buffer.readUInt16LE(localOffset + 26);
+    const localExtraLength = buffer.readUInt16LE(localOffset + 28);
+    const localInsertOffset =
+        localOffset + 30 + localNameLength + localExtraLength;
+    let patched = Buffer.concat([
+        buffer.subarray(0, localInsertOffset),
+        extra,
+        buffer.subarray(localInsertOffset),
+    ]);
+    patched.writeUInt16LE(localExtraLength + extra.length, localOffset + 28);
+
+    const shiftedEntryOffset = originalEntryOffset + extra.length;
+    const centralNameLength = patched.readUInt16LE(shiftedEntryOffset + 28);
+    const centralExtraLength = patched.readUInt16LE(shiftedEntryOffset + 30);
+    const centralInsertOffset =
+        shiftedEntryOffset + 46 + centralNameLength + centralExtraLength;
+    patched = Buffer.concat([
+        patched.subarray(0, centralInsertOffset),
+        extra,
+        patched.subarray(centralInsertOffset),
+    ]);
+    patched.writeUInt16LE(
+        centralExtraLength + extra.length,
+        shiftedEntryOffset + 30
+    );
+    const endOffset = originalEndOffset + extra.length * 2;
+    patched.writeUInt32LE(originalCentralSize + extra.length, endOffset + 12);
+    patched.writeUInt32LE(originalCentralOffset + extra.length, endOffset + 16);
+    return patched;
+};
+
+const expectGenericRejectionWithoutSideEffects = async (buffer: Buffer) => {
+    const calls: string[] = [];
+    await assert.rejects(
+        acceptBookUpload(
+            { userId: "user-a", title: "spoofed.epub", buffer },
+            {
+                uploadFile: async () => void calls.push("storage"),
+                insertBook: async () => {
+                    calls.push("database");
+                    return {};
+                },
+                enqueue: async () => void calls.push("queue"),
+            }
+        ),
+        (error) => {
+            assert.ok(error instanceof BookUploadValidationError);
+            assert.equal(error.message, "Invalid PDF or EPUB file");
+            assert.doesNotMatch(error.message, /ZIP|archive|CRC|path|header/i);
+            return true;
+        }
+    );
+    assert.deepEqual(calls, []);
+};
+
 test("detects PDF content despite a misleading submitted name and MIME", async () => {
     const calls: string[] = [];
     const result = await acceptBookUpload(
@@ -184,30 +301,20 @@ test("rejects CRC failures", async () => {
     await assert.rejects(validateBookUpload(corrupted), /CRC32 mismatch/);
 });
 
-test("invalid content causes no storage, database, or queue side effects", async () => {
-    const calls: string[] = [];
-    await assert.rejects(
-        acceptBookUpload(
-            {
-                userId: "user-a",
-                title: "spoofed.pdf",
-                buffer: Buffer.from("not a book"),
-            },
-            {
-                uploadFile: async () => void calls.push("storage"),
-                insertBook: async () => {
-                    calls.push("database");
-                    return {};
-                },
-                enqueue: async () => void calls.push("queue"),
-            }
-        ),
-        (error) => {
-            assert.ok(error instanceof BookUploadValidationError);
-            assert.equal(error.message, "Invalid PDF or EPUB file");
-            assert.doesNotMatch(error.message, /ZIP|archive|CRC|signature/i);
-            return true;
-        }
+test("rejects a traversal name hidden in the local file header", async () => {
+    const epub = await makeEpub(["aa/book.xhtml", "content"]);
+    await expectGenericRejectionWithoutSideEffects(
+        withLocalName(epub, "aa/book.xhtml", "../book.xhtml")
     );
-    assert.deepEqual(calls, []);
+});
+
+test("rejects a traversal name in an Info-ZIP Unicode path override", async () => {
+    const epub = await makeEpub(["aa/book.xhtml", "content"]);
+    await expectGenericRejectionWithoutSideEffects(
+        withUnicodePathOverride(epub, "aa/book.xhtml", "../book.xhtml")
+    );
+});
+
+test("invalid content causes no storage, database, or queue side effects", async () => {
+    await expectGenericRejectionWithoutSideEffects(Buffer.from("not a book"));
 });
