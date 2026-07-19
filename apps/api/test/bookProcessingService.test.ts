@@ -28,7 +28,6 @@ const createRepository = (
             processingStatus: "processing",
             processingError: null,
         }),
-        findReadyDuplicate: async () => null,
         markReady: async (_, collectionName) => {
             calls.ready.push(collectionName);
         },
@@ -111,29 +110,40 @@ test("failed processing marks failed on final attempt option", async () => {
     assert.deepEqual(calls.failed, ["final embedding failure"]);
 });
 
-test("duplicate upload reuses ready collection", async () => {
+test("processing ignores a stale queued file key and never looks up duplicates", async () => {
+    const authoritativeFileKey = "users/user-1/books/book-1/original";
     const { repository, calls } = createRepository({
-        findReadyDuplicate: async () => ({ collectionName: "book_existing" }),
+        findBookForProcessing: async () => ({
+            id: "book-1",
+            userId: "user-1",
+            fileKey: authoritativeFileKey,
+            fileType: "epub",
+            collectionName: null,
+            processingStatus: "processing",
+            processingError: null,
+        }),
     });
-    let seenExistingCollection: string | null | undefined;
+    let seenInput: { bookId: string; fileKey: string } | undefined;
 
     const result = await handleProcessUploadedBook(
-        payload,
+        { ...payload, fileKey: "stale-queue-key" },
         repository,
         async (input) => {
-            seenExistingCollection = input.existingReadyCollectionName;
+            seenInput = { bookId: input.bookId, fileKey: input.fileKey };
             return {
-                collectionName:
-                    input.existingReadyCollectionName || "unexpected",
-                chunks: 0,
-                reusedCollection: true,
+                collectionName: "book_book_1",
+                chunks: 2,
+                reusedCollection: false,
             };
         }
     );
 
-    assert.equal(seenExistingCollection, "book_existing");
-    assert.equal(result.reusedCollection, true);
-    assert.deepEqual(calls.ready, ["book_existing"]);
+    assert.deepEqual(seenInput, {
+        bookId: "book-1",
+        fileKey: authoritativeFileKey,
+    });
+    assert.equal(result.reusedCollection, false);
+    assert.deepEqual(calls.ready, ["book_book_1"]);
 });
 
 test("file type mismatch fails safely", async () => {
