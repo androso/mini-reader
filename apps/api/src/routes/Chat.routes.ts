@@ -6,6 +6,7 @@ import {
     Conversations,
     Messages,
     type MessageContextSource,
+    type MessageExecutionMetadata,
 } from "../db/schema";
 import { authenticate } from "../middleware/auth";
 import { chatRateLimit } from "../middleware/rateLimit";
@@ -58,10 +59,19 @@ import {
     classifyStoredBookContext,
     type BookContextStatus,
 } from "../services/BookContextState";
+import {
+    buildMessageExecutionMetadata,
+    PUBLIC_MESSAGE_SELECTION,
+} from "../services/ChatExecutionMetadata";
 
 const router = Router();
 const oaiService = new OpenAIService();
 const log = createLogger("chat");
+
+type StreamAssistantOutcome = ChatCompletionOutcome & {
+    usage: unknown;
+    generationDurationMs: number;
+};
 
 const chatResourceRepository = {
     findBookById: async (resourceId: string) => {
@@ -476,6 +486,7 @@ const streamAssistantResponse = async ({
     traceOpenAI: boolean;
     responseAbort: ReturnType<typeof createResponseAbortController>;
 }) => {
+    const generationStartedAt = Date.now();
     const openAiSpan = trace.startObservation("openai_chat_stream", {
         input: {
             model,
@@ -487,7 +498,7 @@ const streamAssistantResponse = async ({
 
     let accumulatedResponse = "";
     let finishReason: string | null = null;
-    let usage: unknown;
+    let usage: unknown = null;
     let streamFailed = false;
     let caughtAbortError = false;
 
@@ -590,7 +601,9 @@ const streamAssistantResponse = async ({
             failed: streamFailed,
         }),
         finishReason,
-    } satisfies ChatCompletionOutcome;
+        usage,
+        generationDurationMs: Date.now() - generationStartedAt,
+    } satisfies StreamAssistantOutcome;
 };
 
 const saveAssistantMessage = async (
@@ -599,6 +612,7 @@ const saveAssistantMessage = async (
     contextSources: MessageContextSource[] | null,
     completionStatus: MessageCompletionStatus,
     finishReason: string | null,
+    executionMetadata: MessageExecutionMetadata,
     trace: TraceObservation
 ) => {
     const saveSpan = trace.startObservation("save_assistant_message", {
@@ -617,6 +631,7 @@ const saveAssistantMessage = async (
             contextSources,
             completionStatus,
             finishReason,
+            executionMetadata,
         });
         await touchConversation(conversationId);
         saveSpan.update({
@@ -663,6 +678,7 @@ const runChatCompletion = async ({
     highlightContext: HighlightContext | null;
     trace: TraceObservation;
 }) => {
+    const startedAt = Date.now();
     const responseAbort = createResponseAbortController(res);
     const responseClosed = () =>
         responseAbort.wasClosed() || res.destroyed || res.writableEnded;
@@ -697,12 +713,20 @@ const runChatCompletion = async ({
         }
 
         if (ragResult.status === "no_relevant_context") {
+            const executionMetadata = buildMessageExecutionMetadata({
+                modelId: null,
+                generationDurationMs: 0,
+                totalLatencyMs: Date.now() - startedAt,
+                usage: null,
+                langfuseTraceId: trace.traceId,
+            });
             await saveAssistantMessage(
                 conversationId,
                 NO_RELEVANT_BOOK_CONTEXT_RESPONSE,
                 null,
                 "complete",
                 "no_relevant_context",
+                executionMetadata,
                 trace
             );
             trace.setTraceIO({
@@ -757,6 +781,13 @@ const runChatCompletion = async ({
             traceOpenAI: resourceType === "book",
             responseAbort,
         });
+        const executionMetadata = buildMessageExecutionMetadata({
+            modelId: model,
+            generationDurationMs: outcome.generationDurationMs,
+            totalLatencyMs: Date.now() - startedAt,
+            usage: outcome.usage,
+            langfuseTraceId: trace.traceId,
+        });
 
         await saveAssistantMessage(
             conversationId,
@@ -764,6 +795,7 @@ const runChatCompletion = async ({
             ragResult.sources,
             outcome.status,
             outcome.finishReason,
+            executionMetadata,
             trace
         );
         trace.setTraceIO({
@@ -1081,7 +1113,7 @@ router.get(
                 operation: async () => {
                     const conversationId = req.params.conversationId;
                     const messages = await db
-                        .select()
+                        .select(PUBLIC_MESSAGE_SELECTION)
                         .from(Messages)
                         .where(eq(Messages.conversationId, conversationId))
                         .orderBy(Messages.createdAt);

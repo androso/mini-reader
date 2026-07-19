@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { NextFunction, Request, RequestHandler, Response } from "express";
 import { db } from "../src/db";
-import { Books, Conversations, Messages } from "../src/db/schema";
+import {
+    Books,
+    Conversations,
+    Messages,
+    type MessageExecutionMetadata,
+} from "../src/db/schema";
 import {
     BOOK_CONTEXT_FAILURE_MESSAGES,
     NO_RELEVANT_BOOK_CONTEXT_RESPONSE,
@@ -385,6 +390,11 @@ test("no-match is persisted refusal while ready passages alone reach OpenAI", as
                                 finish_reason: "stop",
                             },
                         ],
+                        usage: {
+                            prompt_tokens: 8,
+                            completion_tokens: 2,
+                            total_tokens: 10,
+                        },
                     } as never;
                 })();
             };
@@ -405,6 +415,20 @@ test("no-match is persisted refusal while ready passages alone reach OpenAI", as
                     })}\n\n`,
                     "data: [DONE]\n\n",
                 ]);
+                const executionMetadata = (
+                    insertedMessages[1] as {
+                        executionMetadata: MessageExecutionMetadata;
+                    }
+                ).executionMetadata;
+                assert.deepEqual(executionMetadata, {
+                    modelId: null,
+                    generationDurationMs: 0,
+                    totalLatencyMs: executionMetadata.totalLatencyMs,
+                    usage: null,
+                    langfuseTraceId: null,
+                });
+                assert.ok(Number.isInteger(executionMetadata.totalLatencyMs));
+                assert.ok(executionMetadata.totalLatencyMs >= 0);
                 assert.deepEqual(insertedMessages[1], {
                     conversationId: "conversation-1",
                     role: "assistant",
@@ -412,6 +436,7 @@ test("no-match is persisted refusal while ready passages alone reach OpenAI", as
                     contextSources: null,
                     completionStatus: "complete",
                     finishReason: "no_relevant_context",
+                    executionMetadata,
                 });
                 continue;
             }
@@ -437,6 +462,25 @@ test("no-match is persisted refusal while ready passages alone reach OpenAI", as
                 })}\n\n`,
                 "data: [DONE]\n\n",
             ]);
+            const readyMetadata = (
+                insertedMessages[1] as {
+                    executionMetadata: MessageExecutionMetadata;
+                }
+            ).executionMetadata;
+            assert.equal(readyMetadata.modelId, "gpt-4o-mini");
+            assert.ok(Number.isInteger(readyMetadata.generationDurationMs));
+            assert.ok(readyMetadata.generationDurationMs >= 0);
+            assert.ok(
+                readyMetadata.totalLatencyMs >=
+                    readyMetadata.generationDurationMs
+            );
+            assert.deepEqual(readyMetadata.usage, {
+                inputTokens: 8,
+                cachedInputTokens: 0,
+                outputTokens: 2,
+                totalTokens: 10,
+            });
+            assert.equal(readyMetadata.langfuseTraceId, null);
         }
     } finally {
         db.select = originalSelect;

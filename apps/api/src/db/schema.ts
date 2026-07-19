@@ -136,6 +136,21 @@ export type MessageContextSource = {
     excerpt: string;
 };
 
+export type MessageTokenUsage = {
+    inputTokens: number;
+    cachedInputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+};
+
+export type MessageExecutionMetadata = {
+    modelId: string | null;
+    generationDurationMs: number;
+    totalLatencyMs: number;
+    usage: MessageTokenUsage | null;
+    langfuseTraceId: string | null;
+};
+
 export const Messages = pgTable("messages", {
     id: uuid("id").defaultRandom().primaryKey(),
     conversationId: uuid("conversation_id")
@@ -148,6 +163,9 @@ export const Messages = pgTable("messages", {
     >(),
     completionStatus: messageCompletionStatusEnum("completion_status"),
     finishReason: text("finish_reason"),
+    executionMetadata: jsonb(
+        "execution_metadata"
+    ).$type<MessageExecutionMetadata | null>(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
