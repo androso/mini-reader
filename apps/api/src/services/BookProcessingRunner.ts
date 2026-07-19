@@ -64,6 +64,7 @@ const reclaimStaleProcessingJobs = async () => {
                 processing_status = 'failed',
                 processing_error = $2
             WHERE id IN (SELECT book_id FROM stale_jobs)
+              AND processing_status = 'processing'
             RETURNING id
         `,
         [staleLockSeconds, STALE_LOCK_ERROR]

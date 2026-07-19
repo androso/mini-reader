@@ -1,5 +1,5 @@
 import type { BookProcessingJobData } from "@reader/jobs";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { createLogger } from "@reader/providers";
 import { db } from "../db";
 import { Books } from "../db/schema";
@@ -35,7 +35,12 @@ const bookProcessingEnqueueRepository: BookProcessingEnqueueRepository = {
                 processingStatus: "queue_failed",
                 processingError: `Book processing queue unavailable: ${error}`,
             })
-            .where(eq(Books.id, bookId));
+            .where(
+                and(
+                    eq(Books.id, bookId),
+                    eq(Books.processingStatus, "processing")
+                )
+            );
         log.error("Book queue marked failed", { bookId, error });
     },
 };
