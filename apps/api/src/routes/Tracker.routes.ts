@@ -22,6 +22,25 @@ const sendBookNotFound = (res: Response): void => {
 export const createTrackerRouter = (database: TrackerDatabase = db) => {
     const router = Router();
 
+    /**
+     * @swagger
+     * /api/{bookId}/progress:
+     *   get:
+     *     tags: [Progress]
+     *     summary: Get progress for an owned book
+     *     parameters:
+     *       - in: path
+     *         name: bookId
+     *         required: true
+     *         schema: { type: string, format: uuid }
+     *     responses:
+     *       200:
+     *         description: Saved progress or an empty owned-book state
+     *         content:
+     *           application/json:
+     *             schema: { $ref: '#/components/schemas/Progress' }
+     *       404: { description: Book is missing or not owned by this user }
+     */
     router.get(
         "/:rid/progress",
         authenticate,
@@ -76,6 +95,33 @@ export const createTrackerRouter = (database: TrackerDatabase = db) => {
         })
     );
 
+    /**
+     * @swagger
+     * /api/{bookId}/progress:
+     *   post:
+     *     tags: [Progress]
+     *     summary: Atomically save progress for an owned book
+     *     parameters:
+     *       - in: path
+     *         name: bookId
+     *         required: true
+     *         schema: { type: string, format: uuid }
+     *     requestBody:
+     *       required: true
+     *       content:
+     *         application/json:
+     *           schema:
+     *             type: object
+     *             required: [progress_block, progress_chapter]
+     *             properties:
+     *               progress_block: { type: string }
+     *               progress_chapter: { type: string }
+     *     responses:
+     *       201: { description: Progress inserted or updated on userId and bookId }
+     *       400: { description: Progress fields are missing }
+     *       403: { description: Origin does not match FRONTEND_URL }
+     *       404: { description: Book is missing or not owned by this user }
+     */
     router.post(
         "/:rid/progress",
         authenticate,

@@ -121,6 +121,12 @@ curl http://127.0.0.1:3000/health
 After DNS is pointed at the static IP, visit `https://reader.example.com`.
 Caddy will request and renew the TLS certificate automatically.
 
+The bootstrap sets `FRONTEND_URL` to that exact HTTPS origin and leaves
+`NEXT_PUBLIC_API_URL` empty. Browser mutations therefore satisfy the API Origin
+check and use the Secure, HttpOnly `__Host-reader_session` cookie through one
+same-origin Caddy entrypoint. Compose binds the API and web ports to loopback;
+Caddy is the only public ingress and trusted proxy hop.
+
 ## 4. Updates
 
 Deployments after the first boot are manual:
@@ -175,17 +181,32 @@ curl http://127.0.0.1:3000/health
 
 Run a product smoke test:
 
-1. sign in;
-2. upload one small EPUB or PDF;
-3. confirm `/api/books/:id/status` moves from `processing` to `ready`;
-4. open the book;
-5. ask one chat question and confirm source-backed context appears.
+1. sign in and verify the production session cookie, then log out and verify the
+   `204` response clears both supported cookie names;
+2. reject a malformed upload with a generic `400`, then upload a small valid
+   EPUB or PDF;
+3. use its UUID to confirm `/api/books/{bookId}/status` moves from `processing`
+   to `ready`, open the protected file, and save/restore owner-scoped progress;
+4. exercise `POST /api/books/{bookId}/retry` for a `queue_failed` book and delete
+   a test book without a late processing publication;
+5. ask one chat question and confirm a terminal completion outcome. A no-match
+   may return the fixed refusal; unavailable context must fail closed;
+6. confirm executable EPUB markup is sanitized and EPUB covers load only near
+   the viewport without stale blob URLs.
 
 ## Notes
 
 - This stack intentionally does not create ECS, RDS, Redis, ElastiCache, EFS,
   Chroma, ALBs, or GitHub Actions deployment roles.
 - The vector store is pgvector via `VECTOR_STORE_DRIVER=pg`.
-- Book processing runs in the app container with concurrency `1`.
+- Book processing is single-flight in the app process through the Postgres-backed
+  runner; `BOOK_PROCESSING_CONCURRENCY` is not a runtime tuning knob.
+- Migrations `0012` through `0016` add the Postgres queue/pgvector path, legacy
+  file-type compatibility, UUID progress constraints, completion outcomes, and
+  private execution metadata. Existing object keys and collection names remain
+  compatible; all public calls use book UUIDs.
+- Queue failures preserve the S3 original for the retry endpoint. Deletion uses
+  the retryable `deleting` state and removes queued work before artifact cleanup,
+  so recovery requires both the database backup and S3 originals.
 - First boot writes secrets into `/opt/reader/.env.prod` and cloud-init logs may
   include bootstrap context. Treat the instance and stack events as sensitive.
