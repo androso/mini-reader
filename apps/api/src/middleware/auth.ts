@@ -1,19 +1,22 @@
 import { Request, Response, NextFunction } from "express";
 import { verifyToken } from "../services/AuthService";
+import { getAuthToken } from "../utils/authCookie";
+
+export const readSessionToken = getAuthToken;
 
 export async function authenticate(
     req: Request,
     res: Response,
     next: NextFunction
 ) {
-    const token = req.headers.authorization?.split(" ")[1];
+    const token = readSessionToken(req);
     if (!token) {
-        res.status(401).json({ message: "No token provided" });
+        res.status(401).json({ message: "No session provided" });
         return;
     }
     const user = await verifyToken(token);
     if (!user) {
-        res.status(401).json({ message: "Invalid token" });
+        res.status(401).json({ message: "Invalid session" });
         return;
     }
 
