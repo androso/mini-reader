@@ -100,6 +100,37 @@ test("untrusted, missing, and malformed mutation origins are rejected", async ()
     );
 });
 
+test("CSRF rejection runs before malformed mutation body parsing", async () => {
+    process.env.FRONTEND_URL = trustedOrigin;
+    await withServer(
+        (app) => {
+            app.use(cors(frontendCorsOptions()));
+            app.use(enforceTrustedOrigin);
+            app.use(express.json());
+            app.post("/mutation", (_req, res) => res.status(204).end());
+            app.use(terminalErrorHandler);
+        },
+        async (baseUrl) => {
+            for (const origin of [undefined, "https://attacker.example"]) {
+                const headers: Record<string, string> = {
+                    "Content-Type": "application/json",
+                };
+                if (origin) headers.Origin = origin;
+
+                const response = await fetch(`${baseUrl}/mutation`, {
+                    method: "POST",
+                    headers,
+                    body: "{",
+                });
+                assert.equal(response.status, 403, String(origin));
+                assert.deepEqual(await response.json(), {
+                    message: "Untrusted request origin",
+                });
+            }
+        }
+    );
+});
+
 test("safe methods bypass CSRF and trusted preflight supports credentials", async () => {
     process.env.FRONTEND_URL = trustedOrigin;
     await withServer(
@@ -162,6 +193,58 @@ test("ordinary async rejections reach the generic terminal 500", async () => {
             } finally {
                 console.error = originalError;
             }
+        }
+    );
+});
+
+test("trusted malformed JSON preserves parser 400 with a generic body", async () => {
+    process.env.FRONTEND_URL = trustedOrigin;
+    await withServer(
+        (app) => {
+            app.use(enforceTrustedOrigin);
+            app.use(express.json());
+            app.post("/mutation", (_req, res) => res.status(204).end());
+            app.use(terminalErrorHandler);
+        },
+        async (baseUrl) => {
+            const response = await fetch(`${baseUrl}/mutation`, {
+                method: "POST",
+                headers: {
+                    Origin: trustedOrigin,
+                    "Content-Type": "application/json",
+                },
+                body: "{",
+            });
+            assert.equal(response.status, 400);
+            assert.deepEqual(await response.json(), {
+                error: "Invalid request",
+            });
+        }
+    );
+});
+
+test("trusted oversized JSON preserves parser 413 with a generic body", async () => {
+    process.env.FRONTEND_URL = trustedOrigin;
+    await withServer(
+        (app) => {
+            app.use(enforceTrustedOrigin);
+            app.use(express.json({ limit: "4b" }));
+            app.post("/mutation", (_req, res) => res.status(204).end());
+            app.use(terminalErrorHandler);
+        },
+        async (baseUrl) => {
+            const response = await fetch(`${baseUrl}/mutation`, {
+                method: "POST",
+                headers: {
+                    Origin: trustedOrigin,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ value: "too large" }),
+            });
+            assert.equal(response.status, 413);
+            assert.deepEqual(await response.json(), {
+                error: "Invalid request",
+            });
         }
     );
 });
