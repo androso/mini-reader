@@ -1,10 +1,11 @@
 import { Request, Response, NextFunction } from "express";
 import { verifyToken } from "../services/AuthService";
 import { getAuthToken } from "../utils/authCookie";
+import { asyncHandler } from "./asyncHandler";
 
 export const readSessionToken = getAuthToken;
 
-export async function authenticate(
+export const authenticate = asyncHandler(async function authenticate(
     req: Request,
     res: Response,
     next: NextFunction
@@ -22,4 +23,4 @@ export async function authenticate(
 
     req.user = user;
     next();
-}
+});

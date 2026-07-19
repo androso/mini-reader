@@ -8,6 +8,7 @@ import {
     type MessageContextSource,
 } from "../db/schema";
 import { authenticate } from "../middleware/auth";
+import { asyncHandler } from "../middleware/asyncHandler";
 import {
     OPENAI_CHAT_MAX_TOKENS,
     OPENAI_CHAT_MODEL,
@@ -618,7 +619,7 @@ const runBookChatTraceIfNeeded = <T>(
 router.post(
     "/:resourceType/:id/conversations",
     authenticate,
-    async (req: Request, res) => {
+    asyncHandler(async (req: Request, res) => {
         if (!isValidResourceType(req.params.resourceType)) {
             res.status(400).send({
                 error: "Invalid resource type",
@@ -705,13 +706,13 @@ router.post(
                 res.end();
             }
         }
-    }
+    })
 );
 
 router.get(
     "/:resourceType/:id/conversations",
     authenticate,
-    async (req: Request, res) => {
+    asyncHandler(async (req: Request, res) => {
         if (!isValidResourceType(req.params.resourceType)) {
             res.status(400).send({
                 error: "Invalid resource type",
@@ -742,13 +743,13 @@ router.get(
                 });
             }
         }
-    }
+    })
 );
 
 router.post(
     "/:resourceType/:rid/conversations/:cid/messages",
     authenticate,
-    async (req, res) => {
+    asyncHandler(async (req, res) => {
         try {
             const {
                 resourceType,
@@ -846,13 +847,13 @@ router.post(
                 res.end();
             }
         }
-    }
+    })
 );
 
 router.get(
     "/:resourceType/:id/conversations/:conversationId",
     authenticate,
-    async (req: Request, res) => {
+    asyncHandler(async (req: Request, res) => {
         if (!isValidResourceType(req.params.resourceType)) {
             res.status(400).send({
                 error: "Invalid resource type",
@@ -893,7 +894,7 @@ router.get(
                 });
             }
         }
-    }
+    })
 );
 
 export default router;
