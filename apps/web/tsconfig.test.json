@@ -12,6 +12,7 @@
   "include": [
     "src/hooks/chat/chatInput.ts",
     "src/hooks/imageObjectUrlRegistry.ts",
+    "src/lib/readerNavigationBounds.ts",
     "test/**/*.ts"
   ]
 }
