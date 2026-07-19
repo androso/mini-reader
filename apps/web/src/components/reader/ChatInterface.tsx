@@ -16,6 +16,7 @@ import ChatHistory from "./ChatHistory";
 import useConversations from "@/hooks/chat/useConversations";
 import { useChat } from "@/hooks/chat/useChat";
 import { useBookProcessingStatus } from "@/hooks/useBookProcessingStatus";
+import { canRetryBookProcessing } from "@/lib/bookProcessingRetry";
 import type { HighlightContext } from "@/types/highlightContext";
 
 const CHAT_MODELS = [
@@ -82,9 +83,7 @@ export function ChatInterface({
               ? processingStatus.error ||
                 "Document text processing failed. This PDF may be scanned or image-only, and OCR is not enabled yet."
               : null;
-    const canRetryProcessing =
-        processingStatus?.status === "failed" ||
-        processingStatus?.status === "queue_failed";
+    const canRetryProcessing = canRetryBookProcessing(processingStatus);
     const {
         chatState,
         handleSelectConversation,
