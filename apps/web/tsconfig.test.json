@@ -9,5 +9,9 @@
     "rootDir": ".",
     "types": ["node"]
   },
-  "include": ["src/hooks/imageObjectUrlRegistry.ts", "test/**/*.ts"]
+  "include": [
+    "src/hooks/chat/chatInput.ts",
+    "src/hooks/imageObjectUrlRegistry.ts",
+    "test/**/*.ts"
+  ]
 }
