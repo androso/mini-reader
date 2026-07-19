@@ -1,10 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import {
-    createReaderPath,
-    isPdfFileType,
-} from "../src/lib/bookReaderRouting";
+import { createReaderPath, isPdfFileType } from "../src/lib/bookReaderRouting";
 
 const readSource = (path: string) => readFileSync(path, "utf8");
 
@@ -48,11 +45,27 @@ test("a projected legacy PDF navigates by book ID and selects PdfReader", () => 
 test("progress, status, chat, and deletion callers retain book IDs and cookies", () => {
     const library = readSource("src/app/page.tsx");
     const progress = readSource("src/hooks/useTextBlockNavigation.ts");
+    const epubReader = readSource("src/components/reader/EpubReader.tsx");
+    const reader = readSource("src/app/read/[id]/page.tsx");
     const status = readSource("src/hooks/useBookProcessingStatus.ts");
     const chat = readSource("src/hooks/chat/useChat.ts");
 
     assert.match(library, /`\/api\/books\/\$\{itemId\}`/);
     assert.match(progress, /`\/api\/\$\{bookId\}\/progress`/);
+    assert.match(progress, /contentRef[^,]*,[\s\S]*?bookId: string/);
+    assert.doesNotMatch(
+        progress,
+        /window\.location|URLSearchParams|localStorage/
+    );
+    assert.match(
+        epubReader,
+        /useTextBlockNavigation\(flatTextBlocks, contentRef, bookId\)/
+    );
+    assert.equal(
+        (reader.match(/<EpubReader[\s\S]*?bookId=\{bookId \?\? ""\}/g) ?? [])
+            .length,
+        2
+    );
     assert.match(status, /`\/api\/books\/\$\{bookId\}\/status`/);
     assert.match(chat, /`\/api\/book\/\$\{bookId\}\/conversations/);
     for (const source of [library, progress, status, chat]) {
