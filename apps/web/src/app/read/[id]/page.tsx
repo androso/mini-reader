@@ -16,6 +16,7 @@ import {
 } from "react";
 import type { HighlightContext } from "@/types/highlightContext";
 import { apiUrl } from "@/lib/api";
+import { isPdfFileType } from "@/lib/bookReaderRouting";
 
 type ChatSidebarSide = "left" | "right";
 
@@ -48,7 +49,7 @@ export default function Reader() {
     const [isResizingChatPane, setIsResizingChatPane] = useState(false);
     const readerShellRef = useRef<HTMLDivElement>(null);
     const isResizingChatPaneRef = useRef(false);
-    const isPdf = fileType === "pdf";
+    const isPdf = isPdfFileType(fileType);
     const bookUrl = apiUrl(`/api/books/${bookId ?? ""}`);
 
     const getShellSizing = useCallback(() => {
