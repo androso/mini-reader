@@ -141,7 +141,7 @@ from publishing the book again, and leaves failed cleanup retryable by sending
 the same `DELETE /api/books/{bookId}` request again.
 
 Progress is owner-scoped by `(userId, bookId)` and saved with an atomic upsert.
-The reader restores a clamped percentage once its layout stabilizes, and its
+The reader restores the owner's saved block and chapter, and its bounded
 navigation helpers do not write invalid or unchanged positions. EPUB markup is
 sanitized in `@reader/epub`; object URLs are revoked when books change or the
 reader unmounts. Library EPUB covers load once they approach within 200px of

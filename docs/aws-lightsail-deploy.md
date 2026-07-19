@@ -99,6 +99,10 @@ Edit `.env.prod` and set:
 - `OPENAI_API_KEY`
 - S3 bucket and access key values
 
+`POSTGRES_PASSWORD` is interpolated directly into Compose's `DATABASE_URL`.
+Use only URI-unreserved characters (`A-Z`, `a-z`, `0-9`, `.`, `_`, `~`, and
+`-`); do not use reserved characters such as `/`, `?`, `#`, `@`, or `:`.
+
 For this deployment, keep:
 
 ```bash
