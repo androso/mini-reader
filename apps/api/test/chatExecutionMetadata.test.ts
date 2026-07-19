@@ -34,8 +34,8 @@ test("normalizes OpenAI chat usage without retaining provider payload fields", (
 test("normalizes alternate token names and derives a missing total", () => {
     assert.deepEqual(
         normalizeMessageTokenUsage({
-            input_tokens: 12.8,
-            output_tokens: 3.9,
+            input_tokens: 12,
+            output_tokens: 3,
             input_tokens_details: { cached_tokens: 4 },
         }),
         {
@@ -54,9 +54,59 @@ test("missing or invalid usage remains nullable", () => {
         "invalid",
         {},
         { prompt_tokens: -1, completion_tokens: Number.NaN },
+        { prompt_tokens: 12 },
+        { completion_tokens: 3 },
+        { input_tokens: 12 },
+        { total_tokens: 15 },
     ]) {
         assert.equal(normalizeMessageTokenUsage(usage), null);
     }
+});
+
+test("mixed malformed counters never create false usage diagnostics", () => {
+    for (const usage of [
+        { prompt_tokens: "12", completion_tokens: 3 },
+        { prompt_tokens: 12, completion_tokens: null },
+        { prompt_tokens: 12.5, completion_tokens: 3 },
+        {
+            prompt_tokens: 12,
+            completion_tokens: 3,
+            total_tokens: Number.POSITIVE_INFINITY,
+        },
+        {
+            prompt_tokens: 12,
+            completion_tokens: 3,
+            prompt_tokens_details: { cached_tokens: "4" },
+        },
+        {
+            input_tokens: 12,
+            output_tokens: 3,
+            input_tokens_details: { cached_tokens: -1 },
+        },
+        {
+            prompt_tokens: 12,
+            completion_tokens: 3,
+            input_tokens: 12,
+            output_tokens: 3,
+        },
+    ]) {
+        assert.equal(normalizeMessageTokenUsage(usage), null);
+    }
+});
+
+test("valid zero counters and missing cached details remain explicit", () => {
+    assert.deepEqual(
+        normalizeMessageTokenUsage({
+            prompt_tokens: 0,
+            completion_tokens: 0,
+        }),
+        {
+            inputTokens: 0,
+            cachedInputTokens: 0,
+            outputTokens: 0,
+            totalTokens: 0,
+        }
+    );
 });
 
 test("builds only compact allow-listed execution metadata", () => {
