@@ -16,6 +16,7 @@ import ChatHistory from "./ChatHistory";
 import useConversations from "@/hooks/chat/useConversations";
 import { useChat } from "@/hooks/chat/useChat";
 import { useBookProcessingStatus } from "@/hooks/useBookProcessingStatus";
+import { canRetryBookProcessing } from "@/lib/bookProcessingRetry";
 import type { HighlightContext } from "@/types/highlightContext";
 
 const CHAT_MODELS = [
@@ -64,17 +65,25 @@ export function ChatInterface({
     const conversationsQuery = useConversations(bookId);
     const { data: conversationsData, refetch: refetchConversations } =
         conversationsQuery;
-    const { data: processingStatus } = useBookProcessingStatus(bookId);
+    const {
+        data: processingStatus,
+        retry: retryProcessing,
+        isRetrying,
+        retryError,
+    } = useBookProcessingStatus(bookId);
     const [selectedModel, setSelectedModel] = useState(CHAT_MODELS[0].value);
     const [isDesktopHistoryVisible, setIsDesktopHistoryVisible] =
         useState(true);
     const inputRef = useRef<HTMLInputElement>(null);
     const isDocumentReady = processingStatus?.ready ?? false;
     const processingError =
-        processingStatus?.status === "failed"
-            ? processingStatus.error ||
-              "Document text processing failed. This PDF may be scanned or image-only, and OCR is not enabled yet."
-            : null;
+        processingStatus?.status === "queue_failed"
+            ? "Document processing could not be queued. The original file was preserved and can be retried."
+            : processingStatus?.status === "failed"
+              ? processingStatus.error ||
+                "Document text processing failed. This PDF may be scanned or image-only, and OCR is not enabled yet."
+              : null;
+    const canRetryProcessing = canRetryBookProcessing(processingStatus);
     const {
         chatState,
         handleSelectConversation,
@@ -98,7 +107,9 @@ export function ChatInterface({
                 <div className="w-64 shrink-0 overflow-x-hidden">
                     <ChatHistory
                         conversations={conversations}
-                        currentConversationId={chatState.currentConversation?.id}
+                        currentConversationId={
+                            chatState.currentConversation?.id
+                        }
                         isLoading={conversationsQuery.isLoading}
                         isError={conversationsQuery.isError}
                         onNewConversation={startNewConversation}
@@ -172,6 +183,10 @@ export function ChatInterface({
                     isDocumentReady={isDocumentReady}
                     isCheckingStatus={!processingStatus}
                     processingError={processingError}
+                    canRetryProcessing={canRetryProcessing}
+                    isRetrying={isRetrying}
+                    retryError={retryError ? retryError.message : null}
+                    onRetryProcessing={() => void retryProcessing()}
                     highlightContext={highlightContext}
                     onClearHighlightContext={onClearHighlightContext}
                     selectedModel={selectedModel}
@@ -241,6 +256,10 @@ const ChatInput = ({
     isDocumentReady,
     isCheckingStatus,
     processingError,
+    canRetryProcessing,
+    isRetrying,
+    retryError,
+    onRetryProcessing,
     highlightContext,
     onClearHighlightContext,
     selectedModel,
@@ -257,6 +276,10 @@ const ChatInput = ({
     isDocumentReady: boolean;
     isCheckingStatus: boolean;
     processingError: string | null;
+    canRetryProcessing: boolean;
+    isRetrying: boolean;
+    retryError: string | null;
+    onRetryProcessing: () => void;
     highlightContext: HighlightContext | null;
     onClearHighlightContext?: () => void;
     selectedModel: string;
@@ -280,6 +303,19 @@ const ChatInput = ({
                     (isCheckingStatus
                         ? "Checking document processing status..."
                         : "Document context is still processing. You can ask questions once it is ready.")}
+                {canRetryProcessing && (
+                    <div className="mt-2 flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={onRetryProcessing}
+                            disabled={isRetrying}
+                            className="rounded border border-current px-2 py-1 text-xs font-semibold disabled:opacity-60"
+                        >
+                            {isRetrying ? "Retrying..." : "Retry processing"}
+                        </button>
+                        {retryError && <span>{retryError}</span>}
+                    </div>
+                )}
             </div>
         )}
         <div className="mb-2 flex justify-end">
