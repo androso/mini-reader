@@ -9,6 +9,7 @@ import { db } from "../db";
 import { Books } from "../db/schema";
 import { bookSearchChunkStore } from "./BookSearchChunkStore";
 import { hybridBookSearchService } from "./HybridBookSearchService";
+import { deleteBookCollectionArtifacts } from "./BookDeletionService";
 
 const log = createLogger("BookProcessingService");
 
@@ -34,7 +35,7 @@ export interface BookProcessingRepository {
         bookId: string,
         userId: string
     ): Promise<BookProcessingRecord | null>;
-    markReady(bookId: string, collectionName: string): Promise<void>;
+    markReady(bookId: string, collectionName: string): Promise<boolean>;
     markFailed(bookId: string, error: string): Promise<void>;
 }
 
@@ -42,18 +43,25 @@ export type ProcessBookForSearch = typeof processBookForSearch;
 
 export interface ProcessUploadedBookOptions {
     markFailedOnError?: boolean;
+    cleanupCollectionArtifacts?: (collectionName: string) => Promise<void>;
 }
 
 const getErrorMessage = (error: unknown) =>
     error instanceof Error ? error.message : "Book processing failed";
 
-const bookProcessingRepository: BookProcessingRepository = {
+export const bookProcessingRepository: BookProcessingRepository = {
     async findBookForProcessing(bookId, userId) {
         log.debug("Finding book for processing", { bookId, userId });
         const [book] = await db
             .select()
             .from(Books)
-            .where(and(eq(Books.id, bookId), eq(Books.userId, userId)));
+            .where(
+                and(
+                    eq(Books.id, bookId),
+                    eq(Books.userId, userId),
+                    eq(Books.processingStatus, "processing")
+                )
+            );
         if (!book) {
             log.warn("Book not found for processing", { bookId, userId });
         } else {
@@ -70,15 +78,27 @@ const bookProcessingRepository: BookProcessingRepository = {
 
     async markReady(bookId, collectionName) {
         log.info("Marking book as ready", { bookId, collectionName });
-        await db
+        const updated = await db
             .update(Books)
             .set({
                 collectionName,
                 processingStatus: "ready",
                 processingError: null,
             })
-            .where(eq(Books.id, bookId));
-        log.info("Book marked as ready", { bookId, collectionName });
+            .where(
+                and(
+                    eq(Books.id, bookId),
+                    eq(Books.processingStatus, "processing")
+                )
+            )
+            .returning({ id: Books.id });
+        const published = updated.length === 1;
+        log.info("Book ready publication completed", {
+            bookId,
+            collectionName,
+            published,
+        });
+        return published;
     },
 
     async markFailed(bookId, error) {
@@ -89,7 +109,12 @@ const bookProcessingRepository: BookProcessingRepository = {
                 processingStatus: "failed",
                 processingError: error,
             })
-            .where(eq(Books.id, bookId));
+            .where(
+                and(
+                    eq(Books.id, bookId),
+                    eq(Books.processingStatus, "processing")
+                )
+            );
         log.error("Book marked as failed", { bookId, error });
     },
 };
@@ -115,7 +140,12 @@ export const handleProcessUploadedBook = async (
             payload.userId
         );
         if (!book) {
-            throw new Error(`Book ${payload.bookId} was not found`);
+            throw new Error(
+                `Book ${payload.bookId} was not found in processing state`
+            );
+        }
+        if (book.processingStatus !== "processing") {
+            throw new Error(`Book ${payload.bookId} is not processing`);
         }
         if (book.fileType !== payload.fileType) {
             throw new Error(
@@ -135,7 +165,19 @@ export const handleProcessUploadedBook = async (
             fileType: payload.fileType,
         });
 
-        await repository.markReady(payload.bookId, result.collectionName);
+        const published = await repository.markReady(
+            payload.bookId,
+            result.collectionName
+        );
+        if (!published) {
+            await (
+                options.cleanupCollectionArtifacts ??
+                deleteBookCollectionArtifacts
+            )(result.collectionName);
+            throw new Error(
+                `Book ${payload.bookId} left processing before publication`
+            );
+        }
         const duration = Date.now() - start;
         log.info("Uploaded book processing succeeded", {
             bookId: payload.bookId,
