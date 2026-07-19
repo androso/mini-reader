@@ -9,14 +9,15 @@ test("library, reader, cover, and public book types use book IDs only", () => {
     const library = readSource("src/app/page.tsx");
     const reader = readSource("src/app/read/[id]/page.tsx");
     const cover = readSource("src/components/BookCover.tsx");
+    const coverLoading = readSource("src/components/bookCoverLoading.ts");
     const bookTypes = readSource("src/types/bookTypes.ts");
 
     assert.match(library, /router\.push\(createReaderPath\(book\)\)/);
     assert.match(reader, /const bookId = params\.id/);
     assert.match(reader, /`\/api\/books\/\$\{bookId \?\? ""\}`/);
-    assert.match(cover, /`\/api\/books\/\$\{book\.id\}`/);
+    assert.match(coverLoading, /`\/api\/books\/\$\{bookId\}`/);
 
-    for (const source of [library, reader, cover, bookTypes]) {
+    for (const source of [library, reader, cover, coverLoading, bookTypes]) {
         assert.doesNotMatch(source, /fileKey/);
     }
     assert.doesNotMatch(reader, /searchParams\.get\(["']bookId["']\)/);
