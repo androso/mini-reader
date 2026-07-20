@@ -15,10 +15,11 @@ export const authResponse = <T>(user: T) => ({ user });
 
 /**
  * @swagger
- * /auth/google:
+ * /api/auth/google:
  *   post:
  *     tags:
  *       - Auth
+ *     security: []
  *     summary: Authenticate user with a Google ID token
  *     description: Verifies a Google ID token, creates or updates the user, and sets an HttpOnly session cookie
  *     requestBody:
@@ -54,6 +55,10 @@ export const authResponse = <T>(user: T) => ({ user });
  *                 message:
  *                   type: string
  *                   example: "Invalid Google OAuth token"
+ *       403:
+ *         description: Origin does not match FRONTEND_URL
+ *       429:
+ *         description: Authentication limit exceeded; Retry-After is returned
  */
 
 router.post(
@@ -96,6 +101,28 @@ router.post(
     })
 );
 
+/**
+ * @swagger
+ * /api/auth/dev:
+ *   post:
+ *     tags: [Auth]
+ *     security: []
+ *     summary: Create a local development session
+ *     description: Available outside production only; sets reader_session.
+ *     responses:
+ *       200:
+ *         description: Development session created
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 user: { $ref: '#/components/schemas/User' }
+ *       403: { description: Origin does not match FRONTEND_URL }
+ *       404: { description: Disabled in production }
+ *       429: { description: Authentication limit exceeded; Retry-After is returned }
+ *       500: { $ref: '#/components/responses/InternalError' }
+ */
 router.post(
     "/dev",
     asyncHandler(async (_req, res) => {
@@ -118,14 +145,19 @@ router.post(
 
 /**
  * @swagger
- * /auth/logout:
+ * /api/auth/logout:
  *   post:
  *     tags:
  *       - Auth
+ *     security: []
  *     summary: End the current Reader session
  *     responses:
  *       204:
  *         description: Session cookies cleared
+ *       403:
+ *         description: Origin does not match FRONTEND_URL
+ *       429:
+ *         description: Authentication limit exceeded; Retry-After is returned
  */
 export const logout = (_req: express.Request, res: express.Response) => {
     clearAuthCookies(res);

@@ -47,60 +47,11 @@ const upload = multer({
 
 /**
  * @swagger
- * components:
- *   schemas:
- *     User:
- *       type: object
- *       properties:
- *         id:
- *           type: string
- *           description: Unique identifier for the user
- *         name:
- *           type: string
- *           description: User's full name
- *         email:
- *           type: string
- *           description: User's email address
- *         googleId:
- *           type: string
- *           description: User's Google ID
- *         createdAt:
- *           type: string
- *           format: date-time
- *         updatedAt:
- *           type: string
- *           format: date-time
- *     PublicBook:
- *       type: object
- *       required: [id, title, fileType, processingStatus, createdAt]
- *       properties:
- *         id:
- *           type: string
- *           description: Unique identifier for the book
- *         title:
- *           type: string
- *           description: Book title
- *         fileType:
- *           type: string
- *           nullable: true
- *           enum: [epub, pdf]
- *         processingStatus:
- *           type: string
- *         processingError:
- *           type: string
- *           nullable: true
- *         createdAt:
- *           type: string
- *           format: date-time
- */
-
-/**
- * @swagger
  * /api/books:
  *   post:
  *     tags: [Books]
- *     summary: Upload EPUB or PDF file
- *     description: Uploads an EPUB or PDF file and queues asynchronous embedding generation.
+ *     summary: Validate and queue a book upload
+ *     description: Validates PDF or EPUB contents before storage. The compressed request limit is 80 MiB; EPUBs also enforce CRC, safe paths, 5,000 entries, 500 MiB expanded total, 50 MiB per entry, and a 100:1 expansion ratio.
  *     requestBody:
  *       required: true
  *       content:
@@ -111,10 +62,11 @@ const upload = multer({
  *               file:
  *                 type: string
  *                 format: binary
- *                 description: EPUB or PDF file to upload (max 80MB)
+ *                 description: PDF or EPUB content (maximum 80 MiB compressed)
+ *             required: [file]
  *     responses:
  *       202:
- *         description: File successfully uploaded and accepted for processing
+ *         description: Original stored and accepted for Postgres-backed processing
  *         content:
  *           application/json:
  *             schema:
@@ -122,7 +74,7 @@ const upload = multer({
  *               properties:
  *                 message:
  *                   type: string
- *                   example: "File upload successful"
+ *                   example: "File upload accepted for processing"
  *                 book:
  *                   $ref: '#/components/schemas/PublicBook'
  *                 processStatus:
@@ -142,25 +94,16 @@ const upload = multer({
  *                   type: string
  *                   example: "No session provided or invalid session"
  *       400:
- *         description: Bad request
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 error:
- *                   type: string
- *                   example: "No file uploaded or invalid file format"
+ *         description: Missing file or invalid PDF/EPUB content
+ *       403:
+ *         description: Origin does not match FRONTEND_URL
  *       413:
- *         description: Payload too large
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 error:
- *                   type: string
- *                   example: "File size exceeds 80MB limit"
+ *         description: Compressed upload exceeds 80 MiB
+ *       429:
+ *         description: Upload limit exceeded; Retry-After is returned
+ *       503:
+ *         description: Queue unavailable; the original is preserved as queue_failed
+ *       500: { $ref: '#/components/responses/InternalError' }
  */
 router.post(
     "/",
@@ -291,15 +234,10 @@ router.post(
 
 /**
  * @swagger
- * tags:
- *   - name: Books
- *     description: Book management endpoints
- *
  * /api/books:
  *   get:
  *     tags: [Books]
- *     summary: Get all books uploaded by user
- *     description: Get all books uploaded by the user
+ *     summary: List the current user's public book records
  *     responses:
  *       200:
  *         description: Books successfully fetched
@@ -313,15 +251,8 @@ router.post(
  *                   items:
  *                     $ref: '#/components/schemas/PublicBook'
  *       401:
- *         description: Authentication failed
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: "No session provided"
+ *         description: Missing or invalid session cookie
+ *       500: { $ref: '#/components/responses/InternalError' }
  */
 router.get(
     "/",
@@ -338,6 +269,34 @@ router.get(
     })
 );
 
+/**
+ * @swagger
+ * /api/books/{bookId}/retry:
+ *   post:
+ *     tags: [Books]
+ *     summary: Retry processing for an owned failed book
+ *     parameters:
+ *       - in: path
+ *         name: bookId
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       202:
+ *         description: Retry queued
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               required: [bookId, status]
+ *               properties:
+ *                 bookId: { type: string, format: uuid }
+ *                 status: { type: string, enum: [processing] }
+ *       404: { description: Owned book not found }
+ *       403: { description: Origin does not match FRONTEND_URL }
+ *       409: { description: Book is not queue_failed or failed }
+ *       503: { description: Queue unavailable; book returns to queue_failed }
+ *       500: { $ref: '#/components/responses/InternalError' }
+ */
 router.post(
     "/:bookId/retry",
     authenticate,
@@ -368,6 +327,27 @@ router.post(
     })
 );
 
+/**
+ * @swagger
+ * /api/books/{bookId}/status:
+ *   get:
+ *     tags: [Books]
+ *     summary: Get an owned book's processing status
+ *     parameters:
+ *       - in: path
+ *         name: bookId
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       200:
+ *         description: Current processing state
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/BookStatus' }
+ *       403: { description: Book belongs to another user }
+ *       404: { description: Book not found }
+ *       500: { $ref: '#/components/responses/InternalError' }
+ */
 router.get(
     "/:id/status",
     authenticate,
@@ -406,50 +386,31 @@ router.get(
 
 /**
  * @swagger
- * tags:
- *   - name: Books
- *     description: Book management endpoints
- *
- * /api/books/{id}:
+ * /api/books/{bookId}:
  *   get:
  *     tags: [Books]
- *     summary: Get book by id
- *     description: Get book by id
+ *     summary: Download an owned book by public UUID
+ *     description: Resolves the private storage key only after ownership succeeds. Responses are private and use nosniff.
  *     parameters:
  *       - in: path
- *         name: id
+ *         name: bookId
  *         required: true
- *         schema:
- *           type: string
- *         description: Book ID
+ *         schema: { type: string, format: uuid }
  *     responses:
  *       200:
  *         description: Book successfully fetched
  *         content:
- *           application/octet-stream:
+ *           application/pdf:
+ *             schema: { type: string, format: binary }
+ *           application/epub+zip:
  *             schema:
  *               type: string
  *               format: binary
- *       401:
- *         description: Authentication failed
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: "No session provided"
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 error:
- *                   type: string
- *                   example: "Internal server error"
+ *           application/octet-stream:
+ *             schema: { type: string, format: binary }
+ *       403: { description: Book belongs to another user }
+ *       404: { description: Book not found }
+ *       500: { $ref: '#/components/responses/InternalError' }
  */
 
 router.get(
@@ -468,7 +429,26 @@ router.get(
         });
     })
 );
-// working
+
+/**
+ * @swagger
+ * /api/books/{bookId}:
+ *   delete:
+ *     tags: [Books]
+ *     summary: Delete an owned book and its artifacts
+ *     description: Marks the book deleting, removes queued work, and cleans private artifacts. Repeat the request if cleanup fails while the row remains deleting.
+ *     parameters:
+ *       - in: path
+ *         name: bookId
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       204: { description: Book and artifacts deleted }
+ *       403: { description: Book belongs to another user }
+ *       404: { description: Book not found }
+ *       500:
+ *         $ref: '#/components/responses/InternalError'
+ */
 router.delete(
     "/:id",
     authenticate,

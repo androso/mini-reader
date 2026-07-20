@@ -39,6 +39,26 @@ migrations and compatibility handling, keep `bookId` as the public identity and
 when their contract changes. Do not replace the Postgres-backed runner in
 `apps/api/src/services/BookProcessingRunner.ts` with Redis or BullMQ.
 
+Preserve the security and data boundaries already established here. Browser
+authentication uses the HttpOnly session cookie, unsafe requests require the
+configured trusted origin, and resource ownership must be checked before
+storage access, database writes, SSE headers, retrieval, or model calls. Public
+book and message projections must not expose storage keys, collection names, or
+private execution metadata.
+
+Validate uploaded contents before any persistent write. Keep failed queue work
+and deletion cleanup retryable, retain compatibility for legacy file keys and
+collection names, and keep progress writes owner-scoped and atomic. Chat history
+comes from PostgreSQL rather than client transcripts, completion outcomes are
+persisted, and missing or unavailable book context fails closed. EPUB HTML is
+sanitized centrally in `@reader/epub`; reader navigation, object URLs, and lazy
+cover requests must retain their existing bounds and cleanup guarantees.
+
+When a public contract or runtime variable changes, update Swagger/OpenAPI,
+environment templates, README setup, and both Lightsail guides in the same
+issue. Keep optional Langfuse metadata tracing distinct from the excluded RAG
+evaluation, reranking, and shadow systems.
+
 Add focused regression tests around the boundary being changed, especially
 owner/non-owner behavior, migration of legacy rows, queue and deletion races,
 and malformed EPUB or upload inputs. Run the affected package tests first,
