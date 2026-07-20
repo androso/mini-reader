@@ -6,10 +6,8 @@ upstream repository as the fuller product reference, while keeping this fork
 deployable in a simple, low-service environment.
 
 The intended default runtime is the API and web app, with Postgres-backed book
-processing running in the API process. The Redis/BullMQ worker is legacy and
-optional. Prefer local Postgres with pgvector and the existing compact
-Lightsail/container path over introducing mandatory Redis, a separate worker,
-Chroma, ECS, or other multi-service infrastructure.
+processing running in the API process. The Redis/BullMQ worker and Chroma have been completely removed.
+Prefer local Postgres with pgvector and the existing compact Lightsail/container path over introducing mandatory Redis, a separate worker, Chroma, ECS, or other multi-service infrastructure.
 
 Keep upstream RAG evaluation, reranking, and shadow tooling out of this compact
 fork, along with ECS and other multi-service deployment complexity.

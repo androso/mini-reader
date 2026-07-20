@@ -7,17 +7,14 @@ declare global {
             S3_BUCKET_NAME: string;
             S3_REGION?: string;
             OPENAI_API_KEY: string;
-            CHROMA_URL?: string;
-            CHROMA_CLIENT_AUTH_CREDENTIALS?: string;
             DATABASE_URL: string;
-            REDIS_URL?: string;
             DEV_USER_EMAIL?: string;
             DEV_USER_NAME?: string;
             JWT_SECRET: string;
             LOCAL_STORAGE_DIR?: string;
             NODE_ENV?: string;
             STORAGE_DRIVER?: "s3" | "local";
-            VECTOR_STORE_DRIVER?: "pg" | "chroma";
+            VECTOR_STORE_DRIVER?: "pg";
             BOOK_PROCESSING_RUNNER_ENABLED?: string;
             BOOK_PROCESSING_MAX_ATTEMPTS?: string;
             BOOK_PROCESSING_POLL_INTERVAL_MS?: string;

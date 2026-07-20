@@ -11,15 +11,13 @@ and less deployment machinery than the upstream repository.
 This fork favors one small deployment over upstream's production-oriented
 service split. The normal runtime starts the API and web app, runs book
 processing inside the API through a Postgres-backed queue, and can use local
-Postgres with pgvector. The Redis/BullMQ worker remains available only for
-explicit legacy worker runs.
+Postgres with pgvector.
 
 This fork does not track every upstream feature. It includes the upstream
 authentication, authorization, storage, validation, data-integrity, and reader
 safety work selected for the compact parity milestone, while leaving out RAG
 evaluation, reranking and shadow tooling, ECS-oriented automation, and new
-CI/CD machinery. Redis, BullMQ, and Chroma remain optional compatibility paths,
-not requirements for the normal deployment.
+CI/CD machinery. The vector store is exclusively pgvector.
 
 Selected upstream product, security, storage, and data-integrity improvements
 are tracked in the
@@ -32,7 +30,6 @@ deployment stack.
 
 - `apps/api`: Express API for auth, books, chat, progress, storage, and current ingestion flow.
 - `apps/web`: Next.js frontend for the library, reader, auth, and chat UI.
-- `apps/worker`: legacy BullMQ worker, kept for explicit Redis-backed worker runs only.
 - `packages/epub`: shared EPUB parsing utilities.
 - `packages/jobs`: shared book-processing job helpers.
 - `packages/processing`: shared PDF/EPUB ingestion pipeline.
@@ -65,10 +62,9 @@ For local auth, the API supports `/api/auth/dev` through `DEV_USER_EMAIL` and
 ## Commands
 
 - `pnpm dev`: run the API and web app in development mode. The API runs the Postgres-backed book processing runner in-process.
-- `pnpm build`: compile the backend packages, API app, and worker app.
-- `pnpm test`: run EPUB, processing, API, worker, and web tests.
+- `pnpm build`: compile the backend packages and API app.
+- `pnpm test`: run EPUB, processing, API, and web tests.
 - `pnpm api:dev`: run only the API app on port `3000`.
-- `pnpm worker:dev`: run the legacy Redis/BullMQ worker explicitly.
 - `pnpm web:dev`: run the Next.js web app on port `3001`.
 - `pnpm web:build`: build the Next.js web app.
 - `pnpm web:lint`: run the web lint script.
@@ -76,7 +72,6 @@ For local auth, the API supports `/api/auth/dev` through `DEV_USER_EMAIL` and
 - `pnpm db:migrate`: apply Drizzle migrations using `.env`.
 - `pnpm --filter @reader/api <script>`: run an API-specific script directly.
 - `pnpm --filter @reader/web <script>`: run a web-specific script directly.
-- `pnpm --filter @reader/worker <script>`: run a worker-specific script directly.
 
 ## Development Flow
 

@@ -10,7 +10,6 @@ RUN corepack enable && corepack prepare pnpm@10.11.1 --activate
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 COPY apps/api/package.json apps/api/package.json
-COPY apps/worker/package.json apps/worker/package.json
 COPY apps/web/package.json apps/web/package.json
 COPY packages/epub/package.json packages/epub/package.json
 COPY packages/jobs/package.json packages/jobs/package.json

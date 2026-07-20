@@ -7,10 +7,6 @@
     "scripts": {
         "build": "tsc -p tsconfig.json"
     },
-    "dependencies": {
-        "bullmq": "^5.0.0",
-        "ioredis": "^5.0.0"
-    },
     "devDependencies": {
         "@types/node": "^22.10.2",
         "typescript": "^5.7.2"

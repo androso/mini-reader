@@ -160,11 +160,9 @@ const isMissingVectorCollectionError = (error: unknown) => {
     if (
         detail.status === 404 ||
         detail.statusCode === 404 ||
-        detail.$metadata?.httpStatusCode === 404
+        detail.$metadata?.httpStatusCode === 404 ||
+        detail.code === "NotFound"
     ) {
-        return true;
-    }
-    if (["NotFound", "ChromaNotFoundError"].includes(String(detail.code))) {
         return true;
     }
     const message =
