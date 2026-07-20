@@ -873,7 +873,7 @@ const runBookChatTraceIfNeeded = <T>(
  *   post:
  *     tags: [Chat]
  *     summary: Create an authorized book conversation and stream its answer
- *     description: The API persists the new user message, loads bounded PostgreSQL history, and fails closed when book context is unavailable. SSE ends with a terminal event described by ChatTerminalEvent.
+ *     description: The API persists the new user message, loads bounded PostgreSQL history, and fails closed when book context is unavailable. Normal SSE completion emits ChatTerminalEvent and [DONE]; a fatal error after headers were sent emits ChatFatalErrorEvent and closes the stream.
  *     parameters:
  *       - in: path
  *         name: resourceType
@@ -890,7 +890,7 @@ const runBookChatTraceIfNeeded = <T>(
  *           schema: { $ref: '#/components/schemas/ChatRequest' }
  *     responses:
  *       200:
- *         description: SSE conversation id, content/source events, and terminal outcome
+ *         description: SSE conversation id, content/source events, and terminal outcome, or a fatal post-header error event
  *         content:
  *           text/event-stream:
  *             schema: { $ref: '#/components/schemas/ChatStreamEvent' }
@@ -1070,7 +1070,7 @@ router.get(
  *   post:
  *     tags: [Chat]
  *     summary: Persist a user message and stream an authorized answer
- *     description: Client roles and transcripts are ignored. The server uses the newest PostgreSQL history fitting 30 messages and 60,000 characters.
+ *     description: Client roles and transcripts are ignored. The server uses the newest PostgreSQL history fitting 30 messages and 60,000 characters. Normal SSE completion emits ChatTerminalEvent and [DONE]; a fatal error after headers were sent emits ChatFatalErrorEvent and closes the stream.
  *     parameters:
  *       - in: path
  *         name: resourceType
@@ -1091,7 +1091,7 @@ router.get(
  *           schema: { $ref: '#/components/schemas/ChatRequest' }
  *     responses:
  *       200:
- *         description: SSE content/source events and terminal outcome
+ *         description: SSE content/source events and terminal outcome, or a fatal post-header error event
  *         content:
  *           text/event-stream:
  *             schema: { $ref: '#/components/schemas/ChatStreamEvent' }
