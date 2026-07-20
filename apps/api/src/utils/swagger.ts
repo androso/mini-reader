@@ -261,14 +261,24 @@ const createDefinition = (nodeEnv = process.env.NODE_ENV) => {
                         },
                     },
                 },
+                ChatFatalErrorEvent: {
+                    description:
+                        "Fatal error after SSE headers were sent. The server closes the stream after this event without a terminal event or [DONE] sentinel.",
+                    type: "object",
+                    required: ["error"],
+                    properties: {
+                        error: { type: "string", enum: ["An error occurred"] },
+                    },
+                },
                 ChatStreamEvent: {
                     description:
-                        "JSON payload from an SSE data frame. The stream ends with the literal data sentinel [DONE].",
+                        "JSON payload from an SSE data frame. Normal streams end with a terminal event and the literal data sentinel [DONE]. A fatal error after headers were sent emits ChatFatalErrorEvent and closes without terminal or [DONE].",
                     oneOf: [
                         { $ref: "#/components/schemas/ChatConversationEvent" },
                         { $ref: "#/components/schemas/ChatContentEvent" },
                         { $ref: "#/components/schemas/ChatSourcesEvent" },
                         { $ref: "#/components/schemas/ChatContextErrorEvent" },
+                        { $ref: "#/components/schemas/ChatFatalErrorEvent" },
                         { $ref: "#/components/schemas/ChatTerminalEvent" },
                     ],
                 },
