@@ -1,31 +1,33 @@
-/* Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V4
- * Hallmark · genre: playful · theme: Hum · design-system: design.md · designed-as-app
+/* Hallmark · macrostructure: Catalogue / Split Studio · theme: custom
+ * vibe: "night sea, calm, literary" · paper: oklch(97% 0.012 95) · accent: oklch(70% 0.13 195)
+ * display: Plus Jakarta Sans · body: Plus Jakarta Sans · axes: light / geometric-sans / chromatic-teal ~195°
+ * studied: no · context: user-provided · design-system: design.md · v0.8.0
  */
 :root {
     --color-paper: oklch(97% 0.012 95);
     --color-paper-2: oklch(94% 0.016 95);
     --color-paper-3: oklch(91% 0.02 95);
     --color-paper-raised: oklch(99% 0.008 95);
-    --color-ink: oklch(20% 0.012 250);
-    --color-ink-2: oklch(42% 0.02 250);
-    --color-ink-soft: oklch(58% 0.018 250);
-    --color-rule: oklch(84% 0.025 95);
-    --color-rule-strong: oklch(72% 0.03 95);
-    --color-accent: oklch(86% 0.18 95);
-    --color-accent-deep: oklch(72% 0.16 95);
-    --color-accent-ink: oklch(20% 0.012 250);
-    --color-accent-2: oklch(66% 0.18 235);
-    --color-accent-2-soft: oklch(92% 0.05 235);
-    --color-accent-3: oklch(68% 0.24 18);
-    --color-accent-3-soft: oklch(94% 0.04 18);
+    --color-ink: oklch(20% 0.025 245);
+    --color-ink-2: oklch(42% 0.028 225);
+    --color-ink-soft: oklch(54% 0.025 220);
+    --color-rule: oklch(84% 0.025 205);
+    --color-rule-strong: oklch(72% 0.035 205);
+    --color-accent: oklch(70% 0.13 195);
+    --color-accent-deep: oklch(58% 0.12 195);
+    --color-accent-ink: oklch(20% 0.025 245);
+    --color-accent-2: oklch(58% 0.12 215);
+    --color-accent-2-soft: oklch(84% 0.07 205);
+    --color-accent-3: oklch(56% 0.18 25);
+    --color-accent-3-soft: oklch(93% 0.04 25);
     --color-success: oklch(58% 0.15 150);
     --color-success-soft: oklch(93% 0.04 150);
-    --color-focus: oklch(48% 0.16 250);
-    --color-chat: oklch(24% 0.025 250);
-    --color-chat-raised: oklch(29% 0.03 250);
-    --color-chat-rule: oklch(40% 0.03 250);
+    --color-focus: oklch(58% 0.18 195);
+    --color-chat: oklch(20% 0.025 245);
+    --color-chat-raised: oklch(26% 0.035 235);
+    --color-chat-rule: oklch(39% 0.04 225);
     --color-chat-text: oklch(94% 0.014 95);
-    --color-chat-muted: oklch(76% 0.025 250);
+    --color-chat-muted: oklch(77% 0.035 210);
 
     --font-display: "Plus Jakarta Sans", ui-rounded, sans-serif;
     --font-body: "Plus Jakarta Sans", ui-rounded, sans-serif;

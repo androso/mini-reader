@@ -123,13 +123,13 @@ export default function Login() {
                 </div>
                 <div>
                     <h1 id="mentarie-intro">Stay with the question.</h1>
-                    <p className="mt-6 max-w-xl text-lg leading-relaxed text-[var(--color-ink-2)]">
+                    <p className="mt-6 max-w-xl text-lg leading-relaxed text-[var(--color-chat-muted)]">
                         Read the book in front of you, then ask about the
                         history, people, and ideas around it. Mentarie keeps the
                         full text in view while you explore beyond the page.
                     </p>
                     <div className="mt-10 grid max-w-xl gap-3 sm:grid-cols-2">
-                        <div className="rounded-[var(--radius-card)] bg-[var(--color-paper-raised)] p-5">
+                        <div className="rounded-[var(--radius-card)] bg-[var(--color-paper-raised)] p-5 text-[var(--color-ink)]">
                             <BookOpenText className="h-6 w-6 text-[var(--color-focus)]" />
                             <p className="mt-4 font-bold">
                                 Read without leaving your place
@@ -143,7 +143,7 @@ export default function Login() {
                         </div>
                     </div>
                 </div>
-                <p className="text-sm text-[var(--color-ink-2)]">
+                <p className="text-sm text-[var(--color-chat-muted)]">
                     EPUB and PDF reading, grounded conversations, one workspace.
                 </p>
             </section>

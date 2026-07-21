@@ -77,7 +77,7 @@ function ChatHistory({
                         </div>
                     )}
                     {isError && (
-                        <div className="px-4 py-5 text-sm text-[var(--color-accent-3)]">
+                        <div className="px-4 py-5 text-sm text-[var(--color-accent-3-soft)]">
                             Unable to load chats.
                         </div>
                     )}

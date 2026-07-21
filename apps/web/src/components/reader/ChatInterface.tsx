@@ -9,6 +9,8 @@ import {
     Quote,
     X,
     PanelLeftOpen,
+    Maximize2,
+    Minimize2,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import MessageList, { Message } from "./MessageList";
@@ -36,23 +38,27 @@ interface ChatInterfaceProps {
 const ChatLayout = ({
     isMobile,
     isExpanded,
+    hasConversation,
     children,
 }: {
     isMobile: boolean;
     isExpanded: boolean;
+    hasConversation: boolean;
     children: React.ReactNode;
 }) => {
     const layoutClasses = useMemo(() => {
         const baseClasses = `flex flex-col ${!isMobile && "h-full flex-1"} overflow-hidden`;
         const mobileClasses = isMobile
             ? `absolute bottom-4 w-[calc(100%-2rem)] left-1/2 -translate-x-1/2 rounded-[var(--radius-panel)] ${
-                  isExpanded
-                      ? "h-[80dvh] bg-[var(--color-chat)]"
-                      : "bg-transparent"
+                  isExpanded ? "h-[80dvh]" : ""
+              } ${
+                  isExpanded || hasConversation
+                      ? "border border-[var(--color-chat-rule)] bg-[var(--color-chat)] text-[var(--color-chat-text)]"
+                      : "border border-transparent bg-transparent"
               }`
             : "";
         return `${baseClasses} ${mobileClasses} ${!isMobile ? "bg-[var(--color-chat)]" : ""}`;
-    }, [isMobile, isExpanded]);
+    }, [hasConversation, isMobile, isExpanded]);
 
     return <div className={layoutClasses}>{children}</div>;
 };
@@ -74,6 +80,7 @@ export function ChatInterface({
         retryError,
     } = useBookProcessingStatus(bookId);
     const [selectedModel, setSelectedModel] = useState(CHAT_MODELS[0].value);
+    const [hasComposerBeenFocused, setHasComposerBeenFocused] = useState(false);
     const [isDesktopHistoryVisible, setIsDesktopHistoryVisible] =
         useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -96,6 +103,28 @@ export function ChatInterface({
         startNewConversation,
     } = useChat(bookId);
     const conversations = conversationsData?.conversations ?? [];
+    const hasVisibleConversation =
+        chatState.isChatOpen &&
+        (chatState.messages.length > 0 || chatState.isHistoryOpen);
+
+    const handleMobileChatResize = () => {
+        setChatState((prev) => ({
+            ...prev,
+            isExpanded: !prev.isExpanded,
+            isHistoryOpen: prev.isExpanded ? false : prev.isHistoryOpen,
+        }));
+    };
+
+    const handleMobileChatClose = () => {
+        inputRef.current?.blur();
+        setHasComposerBeenFocused(false);
+        setChatState((prev) => ({
+            ...prev,
+            isChatOpen: false,
+            isExpanded: false,
+            isHistoryOpen: false,
+        }));
+    };
 
     useEffect(() => {
         if (isMobile || !highlightContext || !isDocumentReady) return;
@@ -120,7 +149,11 @@ export function ChatInterface({
                     />
                 </div>
             )}
-            <ChatLayout isMobile={isMobile} isExpanded={chatState.isExpanded}>
+            <ChatLayout
+                isMobile={isMobile}
+                isExpanded={chatState.isExpanded}
+                hasConversation={hasVisibleConversation}
+            >
                 {!isMobile && onBack && (
                     <div className="flex shrink-0 items-center gap-1 px-6 pt-6 md:px-8 md:pt-8">
                         {!isDesktopHistoryVisible && (
@@ -147,6 +180,13 @@ export function ChatInterface({
                             <ArrowLeft className="h-[18px] w-[18px]" />
                         </button>
                     </div>
+                )}
+                {isMobile && hasVisibleConversation && (
+                    <MobileChatToolbar
+                        isExpanded={chatState.isExpanded}
+                        onResize={handleMobileChatResize}
+                        onClose={handleMobileChatClose}
+                    />
                 )}
                 {isMobile &&
                     chatState.isChatOpen &&
@@ -194,6 +234,8 @@ export function ChatInterface({
                     selectedModel={selectedModel}
                     setSelectedModel={setSelectedModel}
                     inputRef={inputRef}
+                    showModelSelector={!isMobile || hasComposerBeenFocused}
+                    onInputFocus={() => setHasComposerBeenFocused(true)}
                     onHistoryClick={() => {
                         if (isMobile) {
                             refetchConversations();
@@ -251,6 +293,50 @@ const ChatMessages = ({
     </div>
 );
 
+const MobileChatToolbar = ({
+    isExpanded,
+    onResize,
+    onClose,
+}: {
+    isExpanded: boolean;
+    onResize: () => void;
+    onClose: () => void;
+}) => {
+    const resizeLabel = isExpanded ? "Minimize" : "Expand";
+    const ResizeIcon = isExpanded ? Minimize2 : Maximize2;
+
+    return (
+        <div className="flex min-h-14 shrink-0 items-center gap-2 border-b border-[var(--color-chat-rule)] px-3 py-2">
+            <span className="font-label text-xs font-semibold text-[var(--color-chat-muted)]">
+                Chat
+            </span>
+            <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={onResize}
+                aria-label={`${resizeLabel} chat`}
+                title={`${resizeLabel} chat`}
+                className="ml-auto h-11 rounded-[var(--radius-pill)] px-3 text-[var(--color-chat-text)] transition-[background-color,color,transform] duration-short hover:bg-[var(--color-chat-raised)] hover:text-[var(--color-chat-text)] active:translate-y-px focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-[var(--color-accent-2)] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+                <ResizeIcon className="mr-2 h-4 w-4" />
+                <span className="whitespace-nowrap">{resizeLabel}</span>
+            </Button>
+            <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                onClick={onClose}
+                aria-label="Close chat"
+                title="Close chat"
+                className="h-11 w-11 rounded-[var(--radius-pill)] text-[var(--color-chat-muted)] transition-[background-color,color,transform] duration-short hover:bg-[var(--color-chat-raised)] hover:text-[var(--color-chat-text)] active:translate-y-px focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-[var(--color-accent-2)] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+                <X className="h-5 w-5" />
+            </Button>
+        </div>
+    );
+};
+
 const ChatInput = ({
     input,
     setInput,
@@ -267,6 +353,8 @@ const ChatInput = ({
     selectedModel,
     setSelectedModel,
     inputRef,
+    showModelSelector,
+    onInputFocus,
     onHistoryClick,
     showHistoryButton,
     historyButtonLabel,
@@ -287,6 +375,8 @@ const ChatInput = ({
     selectedModel: string;
     setSelectedModel: (value: string) => void;
     inputRef: React.RefObject<HTMLInputElement | null>;
+    showModelSelector: boolean;
+    onInputFocus: () => void;
     onHistoryClick: () => void;
     showHistoryButton: boolean;
     historyButtonLabel: string;
@@ -320,23 +410,25 @@ const ChatInput = ({
                 )}
             </div>
         )}
-        <div className="mb-2 flex justify-end">
-            <div className="relative">
-                <select
-                    value={selectedModel}
-                    onChange={(e) => setSelectedModel(e.target.value)}
-                    aria-label="Chat model"
-                    className="h-11 appearance-none rounded-[var(--radius-input)] border border-[var(--color-chat-rule)] bg-[var(--color-chat-raised)] pl-3 pr-8 text-sm font-semibold text-[var(--color-chat-text)] outline-none transition-[background-color,border-color] duration-short hover:bg-[var(--color-chat)] focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-[var(--color-accent-2)]"
-                >
-                    {CHAT_MODELS.map((model) => (
-                        <option key={model.value} value={model.value}>
-                            {model.label}
-                        </option>
-                    ))}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-chat-muted)]" />
+        {showModelSelector && (
+            <div className="mb-2 flex justify-end">
+                <div className="relative">
+                    <select
+                        value={selectedModel}
+                        onChange={(e) => setSelectedModel(e.target.value)}
+                        aria-label="Chat model"
+                        className="h-11 appearance-none rounded-[var(--radius-input)] border border-[var(--color-chat-rule)] bg-[var(--color-chat-raised)] pl-3 pr-8 text-sm font-semibold text-[var(--color-chat-text)] outline-none transition-[background-color,border-color] duration-short hover:bg-[var(--color-chat)] focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-[var(--color-accent-2)]"
+                    >
+                        {CHAT_MODELS.map((model) => (
+                            <option key={model.value} value={model.value}>
+                                {model.label}
+                            </option>
+                        ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-chat-muted)]" />
+                </div>
             </div>
-        </div>
+        )}
         {highlightContext && (
             <div className="mb-2 rounded-[var(--radius-input)] border border-[var(--color-chat-rule)] bg-[var(--color-chat-raised)] px-3 py-2 text-[var(--color-chat-text)]">
                 <div className="mb-1 flex items-center gap-2 text-xs font-semibold text-[var(--color-chat-muted)]">
@@ -378,6 +470,8 @@ const ChatInput = ({
                 ref={inputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
+                onFocus={onInputFocus}
+                onPointerDown={onInputFocus}
                 placeholder={
                     isDocumentReady
                         ? "Ask about this document..."
@@ -393,6 +487,7 @@ const ChatInput = ({
                 size="icon"
                 variant="default"
                 disabled={!isDocumentReady}
+                aria-label="Send message"
                 className="h-11 w-11 rounded-[var(--radius-pill)] bg-[var(--color-accent)] text-[var(--color-accent-ink)] hover:bg-[var(--color-accent-deep)] disabled:bg-[var(--color-rule)]"
             >
                 <SendHorizontal className="h-5 w-5" />

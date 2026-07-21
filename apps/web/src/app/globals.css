@@ -1,4 +1,4 @@
-/* Hallmark · pre-emit critique: P5 H5 E5 S5 R5 V4 · genre: playful · tone: soft · anchor: pear · macrostructure: Catalogue + Split Studio · contrast: pass (40–41) · nav: N3 · footer: none · slop: pass (42–45) · honest: pass (46) · chrome: pass (47) · tokens: pass (48) · responsive: pass (49) · icons: pass (30) · mobile: pass (34, 49, 50–57) */
+/* Hallmark · pre-emit critique: P5 H5 E5 S5 R5 V4 · genre: playful · tone: soft-atmospheric · anchor: night-sea teal · macrostructure: Catalogue + Split Studio · contrast: pass (40–41) · nav: N3 · footer: none · slop: pass (42–45) · honest: pass (46) · chrome: pass (47) · tokens: pass (48) · responsive: pass (49) · icons: pass (30) · mobile: pass (34, 49, 50–57) */
 @import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap");
 @import "katex/dist/katex.min.css";
 @import "../../../../tokens.css";
@@ -10,29 +10,29 @@
 @layer base {
     :root {
         --background: 97 0.012 95;
-        --foreground: 20 0.012 250;
+        --foreground: 20 0.025 245;
         --card: 99 0.008 95;
-        --card-foreground: 20 0.012 250;
+        --card-foreground: 20 0.025 245;
         --popover: 99 0.008 95;
-        --popover-foreground: 20 0.012 250;
-        --primary: 86 0.18 95;
-        --primary-foreground: 20 0.012 250;
-        --secondary: 92 0.05 235;
-        --secondary-foreground: 20 0.012 250;
+        --popover-foreground: 20 0.025 245;
+        --primary: 70 0.13 195;
+        --primary-foreground: 20 0.025 245;
+        --secondary: 84 0.07 205;
+        --secondary-foreground: 20 0.025 245;
         --muted: 94 0.016 95;
-        --muted-foreground: 42 0.02 250;
-        --accent: 92 0.05 235;
-        --accent-foreground: 20 0.012 250;
-        --destructive: 68 0.24 18;
-        --destructive-foreground: 20 0.012 250;
-        --border: 84 0.025 95;
-        --input: 84 0.025 95;
-        --ring: 48 0.16 250;
-        --chart-1: 68% 0.24 18;
+        --muted-foreground: 42 0.028 225;
+        --accent: 84 0.07 205;
+        --accent-foreground: 20 0.025 245;
+        --destructive: 56 0.18 25;
+        --destructive-foreground: 97 0.012 95;
+        --border: 84 0.025 205;
+        --input: 84 0.025 205;
+        --ring: 58 0.18 195;
+        --chart-1: 56% 0.18 25;
         --chart-2: 58% 0.15 150;
-        --chart-3: 48% 0.16 250;
-        --chart-4: 86% 0.18 95;
-        --chart-5: 66% 0.18 235;
+        --chart-3: 58% 0.18 195;
+        --chart-4: 70% 0.13 195;
+        --chart-5: 58% 0.12 215;
         --radius: 0.75rem;
     }
 }
@@ -526,7 +526,8 @@
 
 .auth-story {
     display: none;
-    background: var(--color-accent-2-soft);
+    background: var(--color-chat);
+    color: var(--color-chat-text);
     padding: clamp(var(--space-xl), 6vw, var(--space-3xl));
 }
 
