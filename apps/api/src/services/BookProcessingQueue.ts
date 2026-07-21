@@ -1,4 +1,4 @@
-import type { BookProcessingJobData } from "@reader/jobs";
+import type { ProcessUploadedBookPayload } from "./BookProcessingService";
 import { pool } from "../db";
 
 const parsePositiveIntegerEnv = (name: string, fallback: number) => {
@@ -10,7 +10,7 @@ export const createBookProcessingJobId = (bookId: string) =>
     `book-processing-${bookId}`;
 
 export const enqueueUploadedBookForProcessing = async (
-    payload: BookProcessingJobData
+    payload: ProcessUploadedBookPayload
 ) => {
     const maxAttempts = parsePositiveIntegerEnv(
         "BOOK_PROCESSING_MAX_ATTEMPTS",

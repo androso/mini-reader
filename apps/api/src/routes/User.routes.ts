@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { authenticate } from "../middleware/auth";
+import { authResponse } from "./Auth.routes";
 
 const router = Router();
 //@ts-ignore
@@ -44,7 +45,7 @@ const router = Router();
  */
 
 router.get("/", authenticate, (req, res) => {
-    res.json({ user: req.user });
+    res.json(authResponse(req.user));
 });
 
 export default router;

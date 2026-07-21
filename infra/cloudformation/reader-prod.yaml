@@ -27,19 +27,6 @@ Parameters:
     Type: String
     Default: ""
     Description: Leave empty to create a Reader uploads/backups bucket.
-  AppApiPort:
-    Type: Number
-    Default: 3000
-  AppWebPort:
-    Type: Number
-    Default: 3001
-  GoogleClientId:
-    Type: String
-  GoogleClientSecretValue:
-    Type: String
-    NoEcho: true
-    Default: ""
-    Description: Deprecated compatibility input; ignored by the deployment.
   OpenAiApiKeySecretValue:
     Type: String
     NoEcho: true

@@ -12,6 +12,8 @@ const expectedPaths = [
     "/health",
     "/api/auth/google",
     "/api/auth/dev",
+    "/api/auth/signup",
+    "/api/auth/login",
     "/api/auth/logout",
     "/api/user",
     "/api/books",
@@ -78,6 +80,8 @@ test("OpenAPI advertises the active environment cookie without global env mutati
         ["/health", "get"],
         ["/api/auth/google", "post"],
         ["/api/auth/dev", "post"],
+        ["/api/auth/signup", "post"],
+        ["/api/auth/login", "post"],
         ["/api/auth/logout", "post"],
     ]) {
         assert.deepEqual(development.paths[pathName][method].security, []);

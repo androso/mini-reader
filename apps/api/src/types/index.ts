@@ -30,7 +30,7 @@ export interface User {
     image?: string | null;
     googleId: string | null;
     username?: string | null;
-    password?: string | null;
+    passwordHash?: string | null;
     createdAt: Date;
     updatedAt: Date;
 }

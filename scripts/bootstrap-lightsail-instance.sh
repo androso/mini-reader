@@ -40,7 +40,7 @@ export DEBIAN_FRONTEND=noninteractive
 
 install -d -m 0755 /etc/apt/keyrings
 apt-get update -o Acquire::Retries=5
-apt-get install -y ca-certificates curl debian-keyring debian-archive-keyring gettext-base git gnupg unzip ufw
+apt-get install -y ca-certificates curl debian-keyring debian-archive-keyring git gnupg unzip
 
 if ! command -v aws >/dev/null 2>&1; then
     aws_cli_arch="$(uname -m)"
@@ -71,15 +71,8 @@ cat >/etc/apt/sources.list.d/docker.list <<DOCKER_APT
 deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu ${VERSION_CODENAME} stable
 DOCKER_APT
 
-if [ ! -f /usr/share/keyrings/caddy-stable-archive-keyring.gpg ]; then
-    curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
-        | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-fi
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
-    >/etc/apt/sources.list.d/caddy-stable.list
-
 apt-get update -o Acquire::Retries=5
-apt-get install -y caddy containerd.io docker-buildx-plugin docker-ce docker-ce-cli docker-compose-plugin
+apt-get install -y containerd.io docker-buildx-plugin docker-ce docker-ce-cli docker-compose-plugin
 usermod -aG docker "$READER_USER" || true
 
 if ! swapon --show=NAME | grep -qx /swapfile; then
@@ -103,15 +96,12 @@ POSTGRES_DB=${POSTGRES_DB:-reader}
 
 JWT_SECRET=$JWT_SECRET
 FRONTEND_URL=$FRONTEND_URL
-API_PORT=${API_PORT:-3000}
-WEB_PORT=${WEB_PORT:-3001}
 NEXT_PUBLIC_API_URL=
 NEXT_PUBLIC_GOOGLE_CLIENT_ID=$NEXT_PUBLIC_GOOGLE_CLIENT_ID
 GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID
 
 OPENAI_API_KEY=$OPENAI_API_KEY
 OPENAI_EMBEDDING_MODEL=${OPENAI_EMBEDDING_MODEL:-text-embedding-ada-002}
-VECTOR_STORE_DRIVER=pg
 VECTOR_STORE_BATCH_SIZE=${VECTOR_STORE_BATCH_SIZE:-25}
 VECTOR_STORE_BATCH_RETRY_ATTEMPTS=${VECTOR_STORE_BATCH_RETRY_ATTEMPTS:-4}
 VECTOR_STORE_BATCH_RETRY_DELAY_MS=${VECTOR_STORE_BATCH_RETRY_DELAY_MS:-1000}
@@ -127,7 +117,6 @@ BOOK_PROCESSING_MAX_ATTEMPTS=${BOOK_PROCESSING_MAX_ATTEMPTS:-3}
 BOOK_PROCESSING_POLL_INTERVAL_MS=${BOOK_PROCESSING_POLL_INTERVAL_MS:-2000}
 BOOK_PROCESSING_RETRY_DELAY_MS=${BOOK_PROCESSING_RETRY_DELAY_MS:-5000}
 BOOK_PROCESSING_STALE_LOCK_MS=${BOOK_PROCESSING_STALE_LOCK_MS:-900000}
-BOOK_PROCESSING_CONCURRENCY=1
 
 LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
 LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
@@ -140,29 +129,29 @@ ENV
 chmod 600 "$READER_ENV_FILE"
 chown "$READER_USER:$READER_GROUP" "$READER_ENV_FILE"
 
-ufw allow OpenSSH
-ufw allow 80/tcp
-ufw allow 443/tcp
-ufw --force enable
-
-cd "$READER_ROOT"
-docker compose --env-file "$READER_ENV_FILE" -f docker-compose.prod.yml build app
-docker compose --env-file "$READER_ENV_FILE" -f docker-compose.prod.yml up -d postgres
-docker compose --env-file "$READER_ENV_FILE" -f docker-compose.prod.yml run --rm app pnpm db:migrate
-docker compose --env-file "$READER_ENV_FILE" -f docker-compose.prod.yml up -d
-
-set -a
-. "$READER_ENV_FILE"
-set +a
-envsubst < "$READER_ROOT/Caddyfile" >/etc/caddy/Caddyfile
-caddy validate --config /etc/caddy/Caddyfile
-systemctl enable caddy
-systemctl reload caddy || systemctl restart caddy
-
 cron_file="/etc/cron.d/reader-db-backup"
 cat >"$cron_file" <<CRON
 15 3 * * * $READER_USER cd $READER_ROOT && ./scripts/backup-lightsail-db.sh >> $READER_ROOT/backups/backup.log 2>&1
 CRON
 chmod 0644 "$cron_file"
+
+cd "$READER_ROOT"
+docker compose --env-file "$READER_ENV_FILE" -f docker-compose.prod.yml config >/dev/null
+docker compose --env-file "$READER_ENV_FILE" -f docker-compose.prod.yml build app
+docker compose --env-file "$READER_ENV_FILE" -f docker-compose.prod.yml up -d --wait postgres
+docker compose --env-file "$READER_ENV_FILE" -f docker-compose.prod.yml run --rm app pnpm db:migrate
+
+if systemctl list-unit-files 2>/dev/null | grep -q '^caddy\.service'; then
+    echo "Disabling host caddy.service..."
+    systemctl stop caddy.service || true
+    systemctl disable caddy.service || true
+fi
+
+if ss -tlnp 2>/dev/null | grep -E ':(80|443)\b' | grep -qv 'docker'; then
+    echo "ERROR: Port 80 or 443 is occupied by a non-Docker host process after disabling caddy.service." >&2
+    exit 1
+fi
+
+docker compose --env-file "$READER_ENV_FILE" -f docker-compose.prod.yml up -d --wait
 
 echo "Reader host bootstrap finished at $(date -Is)"

@@ -91,8 +91,6 @@ const values = {
   POSTGRES_DB: "reader",
   JWT_SECRET: param("JwtSecretValue"),
   FRONTEND_URL: `https://${param("DomainName")}`,
-  API_PORT: param("AppApiPort", "3000"),
-  WEB_PORT: param("AppWebPort", "3001"),
   NEXT_PUBLIC_GOOGLE_CLIENT_ID: param("GoogleClientId"),
   GOOGLE_CLIENT_ID: param("GoogleClientId"),
   OPENAI_API_KEY: param("OpenAiApiKeySecretValue"),

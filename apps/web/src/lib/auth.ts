@@ -5,8 +5,43 @@ import { apiUrl } from "./api";
 export interface User {
     id: string;
     name: string;
-    email?: string;
-    provider?: string;
+    email: string;
+    image?: string | null;
+    username?: string | null;
+    createdAt?: string;
+    updatedAt?: string;
+}
+
+export interface EmailLoginCredentials {
+    email: string;
+    password: string;
+}
+
+export interface EmailSignupCredentials {
+    username: string;
+    email: string;
+    password: string;
+}
+
+async function jsonAuthPost<T>(urlPath: string, payload?: unknown): Promise<T> {
+    const res = await fetch(apiUrl(urlPath), {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: payload !== undefined ? JSON.stringify(payload) : undefined,
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+        const message =
+            data && typeof data.message === "string"
+                ? data.message
+                : "Authentication failed";
+        throw new Error(message);
+    }
+    return data as T;
 }
 
 export function useUser() {
@@ -96,6 +131,35 @@ export function useDevSignIn() {
                     error
                 );
             }
+        },
+    });
+}
+
+export function useEmailLogin() {
+    return useMutation({
+        mutationFn: async (credentials: EmailLoginCredentials) => {
+            return jsonAuthPost<{ user: User }>("/api/auth/login", credentials);
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({
+                queryKey: [apiUrl("/api/user")],
+            });
+        },
+    });
+}
+
+export function useEmailSignup() {
+    return useMutation({
+        mutationFn: async (credentials: EmailSignupCredentials) => {
+            return jsonAuthPost<{ user: User }>(
+                "/api/auth/signup",
+                credentials
+            );
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({
+                queryKey: [apiUrl("/api/user")],
+            });
         },
     });
 }

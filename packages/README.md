@@ -5,9 +5,6 @@ These packages hold implementation shared across the compact API and web app:
 - `epub` parses EPUB metadata, spine, table of contents, hrefs, and text blocks.
   It is also the single HTML sanitization boundary used before book markup is
   rendered.
-- `jobs` defines the book-processing payload containing both public `bookId`
-  and private `fileKey`. The default API runner uses this payload with its
-  PostgreSQL queue.
 - `processing` performs lossless PDF/EPUB extraction and ingestion and derives
   new collection names from the book UUID.
   pgvector is the only vector store driver; Chroma has been removed.

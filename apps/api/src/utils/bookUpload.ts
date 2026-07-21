@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { BookProcessingJobData } from "@reader/jobs";
+import type { ProcessUploadedBookPayload } from "../services/BookProcessingService";
 
 export const createOriginalUploadKey = (userId: string, bookId: string) =>
     `users/${userId}/books/${bookId}/original`;
@@ -7,7 +7,7 @@ export const createOriginalUploadKey = (userId: string, bookId: string) =>
 export const createBookUploadPlan = (
     userId: string,
     title: string,
-    fileType: BookProcessingJobData["fileType"],
+    fileType: ProcessUploadedBookPayload["fileType"],
     createId: () => string = randomUUID
 ) => {
     const bookId = createId();
@@ -28,6 +28,6 @@ export const createBookUploadPlan = (
             userId,
             fileKey,
             fileType,
-        } satisfies BookProcessingJobData,
+        } satisfies ProcessUploadedBookPayload,
     };
 };

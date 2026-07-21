@@ -6,8 +6,6 @@
   { "ParameterKey": "InstanceBundleId", "ParameterValue": "nano_2_0" },
   { "ParameterKey": "AvailabilityZone", "ParameterValue": "" },
   { "ParameterKey": "ExistingBucketName", "ParameterValue": "" },
-  { "ParameterKey": "AppApiPort", "ParameterValue": "3000" },
-  { "ParameterKey": "AppWebPort", "ParameterValue": "3001" },
   { "ParameterKey": "GoogleClientId", "ParameterValue": "your-google-client-id.apps.googleusercontent.com" },
   { "ParameterKey": "OpenAiApiKeySecretValue", "ParameterValue": "sk-your-openai-api-key" },
   { "ParameterKey": "JwtSecretValue", "ParameterValue": "change-me-long-random-secret" },

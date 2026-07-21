@@ -1,4 +1,4 @@
-import type { BookProcessingJobData } from "@reader/jobs";
+import type { ProcessUploadedBookPayload } from "./BookProcessingService";
 import { createBookUploadPlan } from "../utils/bookUpload";
 import { validateBookUpload } from "../utils/validateBookUpload";
 
@@ -7,7 +7,7 @@ type UploadPlan = ReturnType<typeof createBookUploadPlan>;
 export interface BookUploadAcceptanceDependencies<T> {
     uploadFile(fileKey: string, buffer: Buffer): Promise<void>;
     insertBook(book: UploadPlan["book"]): Promise<T>;
-    enqueue(job: BookProcessingJobData): Promise<void>;
+    enqueue(job: ProcessUploadedBookPayload): Promise<void>;
 }
 
 export class BookUploadValidationError extends Error {
@@ -28,7 +28,7 @@ export const acceptBookUpload = async <T>(
     input: { userId: string; title: string; buffer: Buffer },
     dependencies: BookUploadAcceptanceDependencies<T>
 ) => {
-    let fileType: BookProcessingJobData["fileType"];
+    let fileType: ProcessUploadedBookPayload["fileType"];
     try {
         fileType = await validateBookUpload(input.buffer);
     } catch {

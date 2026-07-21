@@ -5,10 +5,10 @@ This is the manual fallback for the low-cost AWS deployment. Prefer
 
 This deploys Reader on one AWS Lightsail instance with:
 
-- one app container for the API, web app, and in-process book processor
+- one app container for Express, Next.js 15, and in-process book processor in one Node process
 - one local Postgres container with pgvector
+- one Caddy container (`caddy:2.11.4-alpine`) for HTTPS reverse proxy
 - S3 for uploaded EPUB/PDF files and optional DB backup uploads
-- Caddy on the host for HTTPS
 
 The target instance is the Lightsail 2GB plan. Add swap before building the app.
 
@@ -42,7 +42,7 @@ The target instance is the Lightsail 2GB plan. Add swap before building the app.
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y ca-certificates curl git ufw awscli gettext-base
+sudo apt-get install -y ca-certificates curl git awscli
 
 sudo install -m 0755 -d /etc/apt/keyrings
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
@@ -108,15 +108,14 @@ For this deployment, keep:
 ```bash
 NEXT_PUBLIC_API_URL=
 STORAGE_DRIVER=s3
-VECTOR_STORE_DRIVER=pg
 BOOK_PROCESSING_RUNNER_ENABLED=true
 ```
 
 Set `FRONTEND_URL` to exactly `https://$READER_DOMAIN` and keep
 `NEXT_PUBLIC_API_URL` empty. That makes the browser and API same-origin through
 Caddy, which is required by the API's unsafe-request Origin check and secure
-`__Host-reader_session` cookie. The Compose file exposes the app ports only on
-loopback, so Caddy remains the sole public and trusted proxy hop.
+`__Host-reader_session` cookie. Compose exposes port 3000 internally to Caddy;
+only Caddy publishes public ports 80/443.
 
 ## 4. Build, migrate, and start
 
@@ -124,7 +123,7 @@ loopback, so Caddy remains the sole public and trusted proxy hop.
 docker compose --env-file .env.prod -f docker-compose.prod.yml build app
 docker compose --env-file .env.prod -f docker-compose.prod.yml up -d postgres
 docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm app pnpm db:migrate
-docker compose --env-file .env.prod -f docker-compose.prod.yml up -d
+docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --wait
 ```
 
 Check health:
@@ -133,33 +132,6 @@ Check health:
 curl http://127.0.0.1:3000/health
 docker compose --env-file .env.prod -f docker-compose.prod.yml logs -f app
 ```
-
-## 5. Configure Caddy
-
-Install Caddy:
-
-```bash
-sudo apt-get install -y debian-keyring debian-archive-keyring apt-transport-https
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
-  | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
-  | sudo tee /etc/apt/sources.list.d/caddy-stable.list
-sudo apt-get update
-sudo apt-get install -y caddy
-```
-
-Install the repo Caddyfile:
-
-```bash
-set -a
-. ./.env.prod
-set +a
-envsubst < Caddyfile | sudo tee /etc/caddy/Caddyfile
-sudo caddy validate --config /etc/caddy/Caddyfile
-sudo systemctl reload caddy
-```
-
-Visit `https://$READER_DOMAIN`.
 
 ## Runtime and compatibility guarantees
 
@@ -212,9 +184,9 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml logs -f app
 
 ## Smoke test
 
-1. Sign in and confirm production sets an HttpOnly, Secure
+1. Sign up with email and password, confirm production sets an HttpOnly, Secure
    `__Host-reader_session`; log out and confirm the API returns `204` and clears
-   both supported cookie names.
+   both supported cookie names, then log back in with the email credentials.
 2. Confirm a malformed PDF or EPUB receives a generic `400` before a book or S3
    object is created, then upload one small valid book.
 3. Use its UUID with `/api/books/{bookId}/status`, open the protected file, and

@@ -1,8 +1,12 @@
-import express, { Router } from "express";
+import express, { Request, RequestHandler, Response, Router } from "express";
 import {
     getOrCreateDevUser,
     generateToken,
     verifyGoogleToken,
+    registerEmailUser,
+    authenticateEmailUser,
+    emailAuthRepository,
+    EmailAuthRepository,
 } from "../services/AuthService";
 import { db } from "../db";
 import { Users } from "../db/schema";
@@ -11,7 +15,30 @@ import { clearAuthCookies, setAuthCookie } from "../utils/authCookie";
 import { asyncHandler } from "../middleware/asyncHandler";
 const router: Router = express.Router();
 
-export const authResponse = <T>(user: T) => ({ user });
+export interface PublicUser {
+    id: string;
+    email: string;
+    name: string;
+    image: string | null;
+    username: string | null;
+    createdAt: Date | string;
+    updatedAt: Date | string;
+}
+
+export const toPublicUser = (user: unknown): PublicUser => {
+    const u = user as Record<string, unknown>;
+    return {
+        id: u.id as string,
+        email: u.email as string,
+        name: u.name as string,
+        image: (u.image as string | null | undefined) ?? null,
+        username: (u.username as string | null | undefined) ?? null,
+        createdAt: u.createdAt as Date | string,
+        updatedAt: u.updatedAt as Date | string,
+    };
+};
+
+export const authResponse = (user: unknown) => ({ user: toPublicUser(user) });
 
 /**
  * @swagger
@@ -142,6 +169,165 @@ router.post(
         }
     })
 );
+
+/**
+ * @swagger
+ * /api/auth/signup:
+ *   post:
+ *     tags:
+ *       - Auth
+ *     security: []
+ *     summary: Register a new email/password user
+ *     description: Creates a user with unique email and username, hashes the password, and sets an HttpOnly session cookie
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - username
+ *               - email
+ *               - password
+ *             properties:
+ *               username:
+ *                 type: string
+ *                 example: "reader_one"
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: "reader@example.com"
+ *               password:
+ *                 type: string
+ *                 format: password
+ *                 example: "securePassword123"
+ *     responses:
+ *       201:
+ *         description: Registration successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 user:
+ *                   $ref: '#/components/schemas/User'
+ *       400:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *       409:
+ *         description: Email or username already registered
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Email or username is already registered"
+ *       403:
+ *         description: Origin does not match FRONTEND_URL
+ *       429:
+ *         description: Authentication limit exceeded; Retry-After is returned
+ */
+export const createSignupHandler = (
+    repository: EmailAuthRepository = emailAuthRepository
+): RequestHandler =>
+    asyncHandler(async (req: Request, res: Response) => {
+        const result = await registerEmailUser(req.body, repository);
+        if (!result.ok) {
+            res.status(result.status).json({ message: result.message });
+            return;
+        }
+        // TODO(email-confirmation): require verification before issuing a signup session once mail delivery is available.
+        const token = generateToken(result.user);
+        setAuthCookie(res, token);
+        res.status(201).json(authResponse(result.user));
+    });
+
+router.post("/signup", createSignupHandler());
+
+/**
+ * @swagger
+ * /api/auth/login:
+ *   post:
+ *     tags:
+ *       - Auth
+ *     security: []
+ *     summary: Authenticate user with email and password
+ *     description: Verifies email credentials and sets an HttpOnly session cookie
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - password
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: "reader@example.com"
+ *               password:
+ *                 type: string
+ *                 format: password
+ *                 example: "securePassword123"
+ *     responses:
+ *       200:
+ *         description: Authentication successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 user:
+ *                   $ref: '#/components/schemas/User'
+ *       400:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *       401:
+ *         description: Invalid credentials
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Invalid email or password"
+ *       403:
+ *         description: Origin does not match FRONTEND_URL
+ *       429:
+ *         description: Authentication limit exceeded; Retry-After is returned
+ */
+export const createLoginHandler = (
+    repository: EmailAuthRepository = emailAuthRepository
+): RequestHandler =>
+    asyncHandler(async (req: Request, res: Response) => {
+        const result = await authenticateEmailUser(req.body, repository);
+        if (!result.ok) {
+            res.status(result.status).json({ message: result.message });
+            return;
+        }
+        const token = generateToken(result.user);
+        setAuthCookie(res, token);
+        res.status(200).json(authResponse(result.user));
+    });
+
+router.post("/login", createLoginHandler());
 
 /**
  * @swagger

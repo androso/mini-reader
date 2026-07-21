@@ -16,6 +16,10 @@ type CookieCall = {
     options: Record<string, unknown>;
 };
 
+const setNodeEnv = (value?: string) => {
+    (process.env as Record<string, string | undefined>).NODE_ENV = value;
+};
+
 const responseRecorder = () => {
     const set: CookieCall[] = [];
     const cleared: CookieCall[] = [];
@@ -34,7 +38,7 @@ const responseRecorder = () => {
 
 test("production sessions use a secure __Host cookie for seven days", () => {
     const previous = process.env.NODE_ENV;
-    process.env.NODE_ENV = "production";
+    setNodeEnv("production");
     try {
         const { response, set } = responseRecorder();
         setAuthCookie(response, "reader-jwt");
@@ -53,13 +57,13 @@ test("production sessions use a secure __Host cookie for seven days", () => {
         ]);
         assert.equal("domain" in set[0].options, false);
     } finally {
-        process.env.NODE_ENV = previous;
+        setNodeEnv(previous);
     }
 });
 
 test("development sessions use a non-secure reader_session cookie", () => {
     const previous = process.env.NODE_ENV;
-    process.env.NODE_ENV = "development";
+    setNodeEnv("development");
     try {
         const { response, set } = responseRecorder();
         setAuthCookie(response, "reader-jwt");
@@ -72,13 +76,13 @@ test("development sessions use a non-secure reader_session cookie", () => {
             maxAge: AUTH_COOKIE_MAX_AGE_SECONDS * 1000,
         });
     } finally {
-        process.env.NODE_ENV = previous;
+        setNodeEnv(previous);
     }
 });
 
 test("production authentication accepts only the __Host session cookie", () => {
     const previous = process.env.NODE_ENV;
-    process.env.NODE_ENV = "production";
+    setNodeEnv("production");
     try {
         assert.equal(
             getAuthToken({
@@ -95,13 +99,13 @@ test("production authentication accepts only the __Host session cookie", () => {
             undefined
         );
     } finally {
-        process.env.NODE_ENV = previous;
+        setNodeEnv(previous);
     }
 });
 
 test("non-production authentication accepts only the development session cookie", () => {
     const previous = process.env.NODE_ENV;
-    process.env.NODE_ENV = "test";
+    setNodeEnv("development");
     try {
         assert.equal(
             getAuthToken({
@@ -119,7 +123,7 @@ test("non-production authentication accepts only the development session cookie"
         );
         assert.equal(getAuthToken({ headers: {} }), undefined);
     } finally {
-        process.env.NODE_ENV = previous;
+        setNodeEnv(previous);
     }
 });
 

@@ -1,4 +1,4 @@
-import type { BookProcessingJobData } from "@reader/jobs";
+import type { ProcessUploadedBookPayload } from "./BookProcessingService";
 import { and, eq } from "drizzle-orm";
 import { createLogger } from "@reader/providers";
 import { db } from "../db";
@@ -12,7 +12,7 @@ export interface BookProcessingEnqueueRepository {
 }
 
 export interface BookProcessingEnqueueDependencies {
-    enqueue(payload: BookProcessingJobData): Promise<void>;
+    enqueue(payload: ProcessUploadedBookPayload): Promise<void>;
     repository: BookProcessingEnqueueRepository;
 }
 
@@ -46,7 +46,7 @@ const bookProcessingEnqueueRepository: BookProcessingEnqueueRepository = {
 };
 
 export const handleBookProcessingEnqueue = async (
-    payload: BookProcessingJobData,
+    payload: ProcessUploadedBookPayload,
     dependencies: BookProcessingEnqueueDependencies = {
         enqueue: enqueueUploadedBookForProcessing,
         repository: bookProcessingEnqueueRepository,

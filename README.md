@@ -57,7 +57,7 @@ Local development expects these services to be available:
 - OpenAI credentials, via `OPENAI_API_KEY`, when ingesting books or chatting with document context.
 
 For local auth, the API supports `/api/auth/dev` through `DEV_USER_EMAIL` and
-`DEV_USER_NAME`. Google OAuth values are still required for production.
+`DEV_USER_NAME`, alongside email/password signup and login. Google OAuth values remain supported in production.
 
 ## Commands
 
@@ -95,9 +95,17 @@ rate-limit store.
 
 ## Browser security and authentication
 
-The browser sends a Google Identity Services ID token to
+The browser can sign up with email and password via `POST /api/auth/signup`
+or log in via `POST /api/auth/login`. Signups collect a unique email, password,
+and username (3-30 characters using letters, numbers, or underscores). The
+backend normalizes email and username to lowercase, hashes passwords with
+scrypt, and sets a seven-day HttpOnly session cookie without returning a bearer
+token. Email confirmation is intentionally deferred, and signup returns `409`
+if an email or username is already registered. Missing users, Google-only rows,
+and wrong passwords return `401 Invalid email or password` with constant-time scrypt path execution.
+Alternatively, the browser sends a Google Identity Services ID token to
 `POST /api/auth/google`. The API verifies it against `GOOGLE_CLIENT_ID` and
-sets a seven-day HttpOnly session cookie; it does not return a bearer token.
+sets the session cookie.
 Production uses `__Host-reader_session` with `Secure`, `SameSite=Lax`, and
 `Path=/`, while local development uses the non-secure `reader_session` name.
 Browser API calls include credentials, and `POST /api/auth/logout` clears both

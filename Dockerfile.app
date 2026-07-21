@@ -12,7 +12,6 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 COPY apps/api/package.json apps/api/package.json
 COPY apps/web/package.json apps/web/package.json
 COPY packages/epub/package.json packages/epub/package.json
-COPY packages/jobs/package.json packages/jobs/package.json
 COPY packages/processing/package.json packages/processing/package.json
 COPY packages/providers/package.json packages/providers/package.json
 
@@ -25,14 +24,12 @@ ARG NEXT_PUBLIC_GOOGLE_CLIENT_ID
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_GOOGLE_CLIENT_ID=$NEXT_PUBLIC_GOOGLE_CLIENT_ID
 
-RUN pnpm build && pnpm web:build
+RUN pnpm build
 
 ENV NODE_ENV=production
-ENV API_PORT=3000
-ENV WEB_PORT=3001
+ENV PORT=3000
 ENV BOOK_PROCESSING_RUNNER_ENABLED=true
-ENV VECTOR_STORE_DRIVER=pg
 
-EXPOSE 3000 3001
+EXPOSE 3000
 
-CMD ["bash", "scripts/start-lightsail-app.sh"]
+CMD ["node", "apps/api/build/production.js"]

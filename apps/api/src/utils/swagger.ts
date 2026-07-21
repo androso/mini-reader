@@ -12,10 +12,13 @@ export type OpenApiSpecOptions = {
     nodeEnv?: string;
 };
 
-export const getOpenApiCookieName = (nodeEnv = process.env.NODE_ENV) =>
-    nodeEnv === "production" ? PROD_AUTH_COOKIE : DEV_AUTH_COOKIE;
+export const getOpenApiCookieName = (
+    nodeEnv: string | undefined = process.env.NODE_ENV
+) => (nodeEnv === "production" ? PROD_AUTH_COOKIE : DEV_AUTH_COOKIE);
 
-const createDefinition = (nodeEnv = process.env.NODE_ENV) => {
+const createDefinition = (
+    nodeEnv: string | undefined = process.env.NODE_ENV
+) => {
     const cookieName = getOpenApiCookieName(nodeEnv);
     const alternateCookieName =
         cookieName === PROD_AUTH_COOKIE ? DEV_AUTH_COOKIE : PROD_AUTH_COOKIE;
@@ -48,7 +51,7 @@ const createDefinition = (nodeEnv = process.env.NODE_ENV) => {
                         name: { type: "string" },
                         email: { type: "string", format: "email" },
                         image: { type: "string", nullable: true },
-                        googleId: { type: "string", nullable: true },
+                        username: { type: "string", nullable: true },
                         createdAt: { type: "string", format: "date-time" },
                         updatedAt: { type: "string", format: "date-time" },
                     },

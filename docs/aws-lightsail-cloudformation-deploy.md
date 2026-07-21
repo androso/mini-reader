@@ -6,9 +6,9 @@ Reader's uploads and database backups.
 
 The app runs with Docker Compose on the instance:
 
-- `app`: web, API, and in-process book processor
+- `app`: Express, Next.js 15, and in-process book processor in one Node process
 - `postgres`: local Postgres with pgvector
-- host Caddy: HTTPS reverse proxy
+- `caddy`: HTTPS reverse proxy container (`caddy:2.11.4-alpine`)
 - S3: uploaded books and optional DB backups
 
 ## 1. Prepare parameters
@@ -102,15 +102,15 @@ sudo tail -f /var/log/cloud-init-output.log
 
 The bootstrap process:
 
-1. installs Docker, Docker Compose, Caddy, Git, AWS CLI v2, UFW, and support packages;
+1. installs Docker, Docker Compose, Git, AWS CLI v2, and support packages;
 2. creates a 4GB swap file;
 3. clones the configured repo and branch into `/opt/reader`;
 4. writes `/opt/reader/.env.prod`;
 5. builds the app image;
 6. starts Postgres;
 7. runs `pnpm db:migrate` inside the app container;
-8. starts the full Compose stack;
-9. installs the rendered Caddyfile and reloads Caddy;
+8. disables host `caddy.service` if present;
+9. starts the full Compose stack (`postgres`, `app`, `caddy`) with `docker compose up -d --wait`;
 10. registers a nightly database backup cron job.
 
 Check the app locally on the instance:
@@ -118,8 +118,7 @@ Check the app locally on the instance:
 ```bash
 cd /opt/reader
 docker compose --env-file .env.prod -f docker-compose.prod.yml ps
-curl http://127.0.0.1:3000/health
-```
+docker compose --env-file .env.prod -f docker-compose.prod.yml exec app node -e "fetch('http://127.0.0.1:3000/health').then(r=>console.log(r.status))"
 
 After DNS is pointed at the static IP, visit `https://reader.example.com`.
 Caddy will request and renew the TLS certificate automatically.
@@ -127,8 +126,8 @@ Caddy will request and renew the TLS certificate automatically.
 The bootstrap sets `FRONTEND_URL` to that exact HTTPS origin and leaves
 `NEXT_PUBLIC_API_URL` empty. Browser mutations therefore satisfy the API Origin
 check and use the Secure, HttpOnly `__Host-reader_session` cookie through one
-same-origin Caddy entrypoint. Compose binds the API and web ports to loopback;
-Caddy is the only public ingress and trusted proxy hop.
+same-origin Caddy entrypoint. Compose exposes port 3000 internally to Caddy;
+only Caddy publishes public ports 80/443.
 
 ## 4. Updates
 
@@ -184,8 +183,8 @@ curl http://127.0.0.1:3000/health
 
 Run a product smoke test:
 
-1. sign in and verify the production session cookie, then log out and verify the
-   `204` response clears both supported cookie names;
+1. sign up with email and password and verify the production session cookie, then
+   log out and verify the `204` response clears both supported cookie names, and log back in;
 2. reject a malformed upload with a generic `400`, then upload a small valid
    EPUB or PDF;
 3. use its UUID to confirm `/api/books/{bookId}/status` moves from `processing`
@@ -201,9 +200,8 @@ Run a product smoke test:
 
 - This stack intentionally does not create ECS, RDS, Redis, ElastiCache, EFS,
   Chroma, ALBs, or GitHub Actions deployment roles.
-- The vector store is pgvector via `VECTOR_STORE_DRIVER=pg`.
-- Book processing is single-flight in the app process through the Postgres-backed
-  runner; `BOOK_PROCESSING_CONCURRENCY` is not a runtime tuning knob.
+- The vector store is pgvector.
+- Book processing is single-flight in the app process through the Postgres-backed runner.
 - Migrations `0012` through `0016` add the Postgres queue/pgvector path, legacy
   file-type compatibility, UUID progress constraints, completion outcomes, and
   private execution metadata. Existing object keys and collection names remain

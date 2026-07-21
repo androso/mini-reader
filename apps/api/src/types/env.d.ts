@@ -12,9 +12,7 @@ declare global {
             DEV_USER_NAME?: string;
             JWT_SECRET: string;
             LOCAL_STORAGE_DIR?: string;
-            NODE_ENV?: string;
             STORAGE_DRIVER?: "s3" | "local";
-            VECTOR_STORE_DRIVER?: "pg";
             BOOK_PROCESSING_RUNNER_ENABLED?: string;
             BOOK_PROCESSING_MAX_ATTEMPTS?: string;
             BOOK_PROCESSING_POLL_INTERVAL_MS?: string;

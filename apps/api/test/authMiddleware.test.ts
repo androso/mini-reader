@@ -4,11 +4,15 @@ import test from "node:test";
 process.env.JWT_SECRET ??= "test-jwt-secret";
 process.env.GOOGLE_CLIENT_ID ??= "reader-web.apps.googleusercontent.com";
 
+const setNodeEnv = (value?: string) => {
+    (process.env as Record<string, string | undefined>).NODE_ENV = value;
+};
+
 test("auth middleware token lookup follows the active environment", async () => {
     const { readSessionToken } = await import("../src/middleware/auth");
     const previous = process.env.NODE_ENV;
     try {
-        process.env.NODE_ENV = "production";
+        setNodeEnv("production");
         assert.equal(
             readSessionToken({
                 headers: {
@@ -24,7 +28,7 @@ test("auth middleware token lookup follows the active environment", async () => 
             undefined
         );
 
-        process.env.NODE_ENV = "test";
+        setNodeEnv("test");
         assert.equal(
             readSessionToken({
                 headers: {
@@ -46,6 +50,6 @@ test("auth middleware token lookup follows the active environment", async () => 
             undefined
         );
     } finally {
-        process.env.NODE_ENV = previous;
+        setNodeEnv(previous);
     }
 });

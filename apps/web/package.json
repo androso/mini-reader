@@ -7,7 +7,6 @@
     "prebuild": "pnpm --filter @reader/epub build",
     "dev": "next dev --turbopack -p 3001",
     "build": "next build",
-    "start": "next start",
     "lint": "next lint",
     "test": "tsc -p tsconfig.test.json && node --test ../../.tmp/apps-web-test/test/*.js",
     "test:epub": "pnpm --filter @reader/epub test"

@@ -1,11 +1,13 @@
-import type { BookProcessingJobData } from "@reader/jobs";
 import { createLogger } from "@reader/providers";
 import { pool } from "../db";
-import { processUploadedBook } from "./BookProcessingService";
+import {
+    processUploadedBook,
+    type ProcessUploadedBookPayload,
+} from "./BookProcessingService";
 
 const log = createLogger("BookProcessingRunner");
 
-interface ClaimedBookProcessingJob extends BookProcessingJobData {
+interface ClaimedBookProcessingJob extends ProcessUploadedBookPayload {
     id: string;
     attemptsMade: number;
     maxAttempts: number;

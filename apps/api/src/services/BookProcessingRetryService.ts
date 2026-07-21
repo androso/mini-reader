@@ -1,4 +1,4 @@
-import type { BookProcessingJobData } from "@reader/jobs";
+import type { ProcessUploadedBookPayload } from "./BookProcessingService";
 import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import { db } from "../db";
 import { Books } from "../db/schema";
@@ -12,7 +12,7 @@ export type RetryableBook = {
     id: string;
     userId: string;
     fileKey: string;
-    fileType: BookProcessingJobData["fileType"] | null;
+    fileType: ProcessUploadedBookPayload["fileType"] | null;
     processingStatus: string;
 };
 
@@ -26,7 +26,7 @@ export interface BookProcessingRetryRepository {
 
 export interface BookProcessingRetryDependencies {
     repository: BookProcessingRetryRepository;
-    enqueue(payload: BookProcessingJobData): Promise<void>;
+    enqueue(payload: ProcessUploadedBookPayload): Promise<void>;
 }
 
 export class BookProcessingRetryNotFoundError extends Error {
