@@ -1,5 +1,6 @@
 import React, { useState, memo } from "react";
 import { type EpubContent } from "@/types/EpubReader";
+import { ChevronDown, ChevronRight } from "lucide-react";
 
 interface SidebarProps {
     epubContent: EpubContent;
@@ -65,9 +66,9 @@ const Sidebar: React.FC<SidebarProps> = memo(
             return (
                 <div key={`${entry.id}-${index}`}>
                     <div
-                        className={`toc-item level-${entry.level} flex cursor-pointer items-center rounded-lg px-3 py-2 transition-colors hover:bg-[#eeeeee] ${entry.href === activeHref ? "bg-[#e2e1f1] text-[#1a1b26]" : "text-[#47464c]"}`}
+                        className={`toc-item level-${entry.level} flex min-h-11 cursor-pointer items-center rounded-[var(--radius-input)] px-3 py-2 transition-colors hover:bg-[var(--color-paper-2)] ${entry.href === activeHref ? "bg-[var(--color-accent-2-soft)] text-[var(--color-ink)]" : "text-[var(--color-ink-2)]"}`}
                         style={{
-                            paddingLeft: `${entry.level * 1.5}rem`,
+                            paddingInlineStart: `calc(${entry.level} * var(--space-lg))`,
                         }}
                         onClick={() => {
                             onTocItemClick(entry.href!);
@@ -81,9 +82,18 @@ const Sidebar: React.FC<SidebarProps> = memo(
                                     e.stopPropagation();
                                     handleToggle(index);
                                 }}
-                                className="mr-1 cursor-pointer border-none bg-transparent p-1 text-[#616363]"
+                                className="mr-1 grid h-8 w-8 cursor-pointer place-items-center rounded-[var(--radius-pill)] border-none bg-transparent text-[var(--color-ink-2)]"
+                                aria-label={
+                                    isExpanded
+                                        ? "Collapse section"
+                                        : "Expand section"
+                                }
                             >
-                                {isExpanded ? "▼" : "▶"}
+                                {isExpanded ? (
+                                    <ChevronDown className="h-4 w-4" />
+                                ) : (
+                                    <ChevronRight className="h-4 w-4" />
+                                )}
                             </button>
                         )}
                         <a
@@ -104,16 +114,16 @@ const Sidebar: React.FC<SidebarProps> = memo(
 
         return (
             <div
-                className={`absolute left-0 z-30 h-full overflow-x-hidden border-r border-[#c8c5cc] bg-white shadow-lg transition-transform duration-300 ease-in-out ${
+                className={`ease-hallmark-in-out absolute left-0 z-[var(--z-dropdown)] h-full overflow-x-hidden border-r border-[var(--color-rule)] bg-[var(--color-paper-raised)] transition-transform duration-long ${
                     isOpen ? "translate-x-0" : "-translate-x-full"
                 }`}
             >
                 <div className="h-full w-72 p-5 pt-[5rem]">
                     <div className="">
-                        <h3 className="font-sans text-lg font-semibold leading-tight text-[#1a1c1c]">
+                        <h3 className="font-sans text-lg font-semibold leading-tight text-[var(--color-ink)]">
                             {epubContent.metadata.title}
                         </h3>
-                        <p className="mb-4 mt-2 font-serif text-sm italic text-[#616363]">
+                        <p className="mb-4 mt-2 font-serif text-sm italic text-[var(--color-ink-2)]">
                             {epubContent.metadata.creator}
                         </p>
                     </div>

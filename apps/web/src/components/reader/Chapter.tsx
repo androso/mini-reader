@@ -30,8 +30,8 @@ const Chapter = memo(
                 <div className="flex justify-center py-8">
                     <button
                         onClick={onNextChapter}
-                        className="bg-blue-500 hover:bg-blue-600 text-white rounded-full p-3 transition-colors"
-                        aria-label="Next Chapter"
+                        className="grid h-12 w-12 place-items-center rounded-[var(--radius-pill)] bg-[var(--color-accent)] text-[var(--color-accent-ink)] transition-[background-color,transform] duration-short hover:bg-[var(--color-accent-deep)] active:translate-y-px"
+                        aria-label="Next chapter"
                     >
                         <svg
                             xmlns="http://www.w3.org/2000/svg"

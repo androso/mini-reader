@@ -45,11 +45,13 @@ const ChatLayout = ({
     const layoutClasses = useMemo(() => {
         const baseClasses = `flex flex-col ${!isMobile && "h-full flex-1"} overflow-hidden`;
         const mobileClasses = isMobile
-            ? `absolute bottom-4 w-[calc(100%-2rem)] left-1/2 -translate-x-1/2 rounded-2xl shadow-[0px_18px_50px_rgba(0,0,0,0.28)] ${
-                  isExpanded ? "h-[80dvh] bg-[#343541]" : "bg-transparent"
+            ? `absolute bottom-4 w-[calc(100%-2rem)] left-1/2 -translate-x-1/2 rounded-[var(--radius-panel)] ${
+                  isExpanded
+                      ? "h-[80dvh] bg-[var(--color-chat)]"
+                      : "bg-transparent"
               }`
             : "";
-        return `${baseClasses} ${mobileClasses} ${!isMobile ? "bg-[#343541]" : ""}`;
+        return `${baseClasses} ${mobileClasses} ${!isMobile ? "bg-[var(--color-chat)]" : ""}`;
     }, [isMobile, isExpanded]);
 
     return <div className={layoutClasses}>{children}</div>;
@@ -73,7 +75,7 @@ export function ChatInterface({
     } = useBookProcessingStatus(bookId);
     const [selectedModel, setSelectedModel] = useState(CHAT_MODELS[0].value);
     const [isDesktopHistoryVisible, setIsDesktopHistoryVisible] =
-        useState(true);
+        useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
     const isDocumentReady = processingStatus?.ready ?? false;
     const processingError =
@@ -128,7 +130,7 @@ export function ChatInterface({
                                     refetchConversations();
                                     setIsDesktopHistoryVisible(true);
                                 }}
-                                className="flex h-8 w-8 items-center justify-center rounded-md text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+                                className="flex h-11 w-11 items-center justify-center rounded-[var(--radius-pill)] text-[var(--color-chat-muted)] transition-[background-color,color] duration-short hover:bg-[var(--color-chat-raised)] hover:text-[var(--color-chat-text)]"
                                 aria-label="Show previous chats"
                                 title="Show previous chats"
                             >
@@ -138,7 +140,7 @@ export function ChatInterface({
                         <button
                             type="button"
                             onClick={onBack}
-                            className="flex h-8 w-8 items-center justify-center rounded-md text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+                            className="flex h-11 w-11 items-center justify-center rounded-[var(--radius-pill)] text-[var(--color-chat-muted)] transition-[background-color,color] duration-short hover:bg-[var(--color-chat-raised)] hover:text-[var(--color-chat-text)]"
                             aria-label="Back"
                             title="Back"
                         >
@@ -293,10 +295,10 @@ const ChatInput = ({
     <form onSubmit={handleSubmit} className="mt-auto shrink-0 p-6 md:p-8">
         {!isDocumentReady && (
             <div
-                className={`mb-2 rounded-md border px-3 py-2 text-sm ${
+                className={`mb-3 rounded-[var(--radius-input)] border px-3 py-2 text-sm ${
                     processingError
-                        ? "border-red-200 bg-red-50 text-red-700"
-                        : "border-amber-200 bg-amber-50 text-amber-800"
+                        ? "border-[var(--color-accent-3)] bg-[var(--color-accent-3-soft)] text-[var(--color-ink)]"
+                        : "border-[var(--color-accent-deep)] bg-[var(--color-paper-2)] text-[var(--color-ink)]"
                 }`}
             >
                 {processingError ||
@@ -309,7 +311,7 @@ const ChatInput = ({
                             type="button"
                             onClick={onRetryProcessing}
                             disabled={isRetrying}
-                            className="rounded border border-current px-2 py-1 text-xs font-semibold disabled:opacity-60"
+                            className="min-h-11 rounded-[var(--radius-pill)] border border-current px-3 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60"
                         >
                             {isRetrying ? "Retrying..." : "Retry processing"}
                         </button>
@@ -324,7 +326,7 @@ const ChatInput = ({
                     value={selectedModel}
                     onChange={(e) => setSelectedModel(e.target.value)}
                     aria-label="Chat model"
-                    className="h-9 appearance-none rounded-md border border-white/10 bg-[#2b2c32] pl-3 pr-8 text-sm font-semibold text-white shadow-sm outline-none transition-colors hover:bg-[#303139] focus:border-white/30 focus:ring-2 focus:ring-white/20"
+                    className="h-11 appearance-none rounded-[var(--radius-input)] border border-[var(--color-chat-rule)] bg-[var(--color-chat-raised)] pl-3 pr-8 text-sm font-semibold text-[var(--color-chat-text)] outline-none transition-[background-color,border-color] duration-short hover:bg-[var(--color-chat)] focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-[var(--color-accent-2)]"
                 >
                     {CHAT_MODELS.map((model) => (
                         <option key={model.value} value={model.value}>
@@ -332,29 +334,29 @@ const ChatInput = ({
                         </option>
                     ))}
                 </select>
-                <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-white/70" />
+                <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-chat-muted)]" />
             </div>
         </div>
         {highlightContext && (
-            <div className="mb-2 rounded-lg border border-white/10 bg-[#2b2c32] px-3 py-2 text-white shadow-sm">
-                <div className="mb-1 flex items-center gap-2 text-xs font-semibold text-white/75">
-                    <Quote className="h-3.5 w-3.5 text-[#c6c5d4]" />
+            <div className="mb-2 rounded-[var(--radius-input)] border border-[var(--color-chat-rule)] bg-[var(--color-chat-raised)] px-3 py-2 text-[var(--color-chat-text)]">
+                <div className="mb-1 flex items-center gap-2 text-xs font-semibold text-[var(--color-chat-muted)]">
+                    <Quote className="h-3.5 w-3.5 text-[var(--color-accent-2)]" />
                     <span>Selected text</span>
                     <button
                         type="button"
                         onClick={onClearHighlightContext}
-                        className="ml-auto rounded-full p-1 text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+                        className="ml-auto grid h-8 w-8 place-items-center rounded-[var(--radius-pill)] text-[var(--color-chat-muted)] transition-[background-color,color] duration-short hover:bg-[var(--color-chat)] hover:text-[var(--color-chat-text)]"
                         aria-label="Remove selected text"
                     >
                         <X className="h-3.5 w-3.5" />
                     </button>
                 </div>
-                <p className="max-h-20 overflow-y-auto whitespace-pre-wrap break-words text-xs font-medium leading-relaxed text-[#d6d5e3]">
+                <p className="max-h-20 overflow-y-auto whitespace-pre-wrap break-words text-xs font-medium leading-relaxed text-[var(--color-chat-muted)]">
                     {highlightContext.text}
                 </p>
             </div>
         )}
-        <div className="flex items-center gap-2 rounded-full bg-white py-2 pl-2 pr-3 shadow-[0px_10px_30px_rgba(0,0,0,0.15)]">
+        <div className="flex items-center gap-2 rounded-[var(--radius-pill)] bg-[var(--color-paper-raised)] py-2 pl-2 pr-3">
             {showHistoryButton && (
                 <Button
                     type="button"
@@ -363,9 +365,9 @@ const ChatInput = ({
                     onClick={onHistoryClick}
                     aria-label={historyButtonLabel}
                     title={historyButtonLabel}
-                    className={`h-10 w-10 rounded-full text-[#616363] hover:bg-[#eeeeee] hover:text-[#1a1c1c] ${
+                    className={`h-11 w-11 rounded-[var(--radius-pill)] text-[var(--color-ink-2)] hover:bg-[var(--color-paper-2)] hover:text-[var(--color-ink)] ${
                         isHistoryButtonActive
-                            ? "bg-[#eeeeee] text-[#1a1c1c]"
+                            ? "bg-[var(--color-paper-2)] text-[var(--color-ink)]"
                             : ""
                     }`}
                 >
@@ -383,7 +385,7 @@ const ChatInput = ({
                           ? "Document text processing failed"
                           : "Document context is processing..."
                 }
-                className="h-11 flex-1 border-0 bg-transparent px-2 font-sans text-sm font-semibold text-[#1a1c1c] shadow-none ring-0 placeholder:text-[#9ea3a8] focus-visible:ring-0 focus-visible:ring-offset-0"
+                className="h-11 flex-1 border-0 bg-transparent px-2 font-sans text-sm font-semibold text-[var(--color-ink)] shadow-none outline-none placeholder:text-[var(--color-ink-soft)] focus-visible:outline-none"
                 disabled={!isDocumentReady}
             />
             <Button
@@ -391,7 +393,7 @@ const ChatInput = ({
                 size="icon"
                 variant="default"
                 disabled={!isDocumentReady}
-                className="h-10 w-10 rounded-full bg-[#5c5d66] text-white hover:bg-[#4f5058] disabled:bg-[#c6c6c7]"
+                className="h-11 w-11 rounded-[var(--radius-pill)] bg-[var(--color-accent)] text-[var(--color-accent-ink)] hover:bg-[var(--color-accent-deep)] disabled:bg-[var(--color-rule)]"
             >
                 <SendHorizontal className="h-5 w-5" />
             </Button>

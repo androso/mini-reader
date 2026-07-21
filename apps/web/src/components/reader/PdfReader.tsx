@@ -63,7 +63,7 @@ const PdfReader: React.FC<PdfReaderProps> = memo(({ url }) => {
     }, [url]);
 
     if (error) {
-        return <div className="p-4 text-red-600">{error}</div>;
+        return <div className="p-4 text-[var(--color-accent-3)]">{error}</div>;
     }
 
     if (!pdfUrl) {
@@ -71,7 +71,7 @@ const PdfReader: React.FC<PdfReaderProps> = memo(({ url }) => {
     }
 
     return (
-        <div className="h-full bg-neutral-100">
+        <div className="h-full bg-[var(--color-paper-2)]">
             <iframe
                 src={pdfUrl}
                 title="PDF reader"

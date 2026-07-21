@@ -55,22 +55,28 @@ const TextBlock = memo(
             return (
                 <div className="absolute left-0 top-0 h-full flex flex-col items-center justify-center gap-2 pl-4">
                     <button
-                        className="rounded-full bg-[#e2e1f1] p-2 transition-all hover:bg-[#c6c5d4]"
+                        type="button"
+                        className="grid h-11 w-11 place-items-center rounded-[var(--radius-pill)] bg-[var(--color-accent-2-soft)] transition-[background-color,transform,opacity] duration-short hover:bg-[var(--color-paper-3)]"
                         style={{ opacity, transform: `scale(${scale})` }}
+                        aria-label="Ask about paragraph"
                     >
-                        <MessageCircle className="h-5 w-5 text-[#454652]" />
+                        <MessageCircle className="h-5 w-5 text-[var(--color-ink-2)]" />
                     </button>
                     <button
-                        className="rounded-full bg-[#e2e1f1] p-2 transition-all hover:bg-[#c6c5d4]"
+                        type="button"
+                        className="grid h-11 w-11 place-items-center rounded-[var(--radius-pill)] bg-[var(--color-accent-2-soft)] transition-[background-color,transform,opacity] duration-short hover:bg-[var(--color-paper-3)]"
                         style={{ opacity, transform: `scale(${scale})` }}
+                        aria-label="Bookmark paragraph"
                     >
-                        <Bookmark className="h-5 w-5 text-[#454652]" />
+                        <Bookmark className="h-5 w-5 text-[var(--color-ink-2)]" />
                     </button>
                     <button
-                        className="rounded-full bg-[#e2e1f1] p-2 transition-all hover:bg-[#c6c5d4]"
+                        type="button"
+                        className="grid h-11 w-11 place-items-center rounded-[var(--radius-pill)] bg-[var(--color-accent-2-soft)] transition-[background-color,transform,opacity] duration-short hover:bg-[var(--color-paper-3)]"
                         style={{ opacity, transform: `scale(${scale})` }}
+                        aria-label="Share paragraph"
                     >
-                        <Share2 className="h-5 w-5 text-[#454652]" />
+                        <Share2 className="h-5 w-5 text-[var(--color-ink-2)]" />
                     </button>
                 </div>
             );
@@ -79,10 +85,10 @@ const TextBlock = memo(
         return (
             <div
                 id={id}
-                className="relative transform cursor-grab select-none transition-all md:cursor-auto md:select-text"
+                className="ease-hallmark-out relative transform cursor-grab select-none transition-transform duration-short lg:cursor-auto lg:select-text"
             >
                 <div
-                    className="absolute inset-0 z-10 md:pointer-events-none"
+                    className="absolute inset-0 z-10 lg:pointer-events-none"
                     onTouchStart={(e) => {
                         const touch = e.touches[0];
                         setStartX(touch.clientX);
@@ -110,16 +116,16 @@ const TextBlock = memo(
                     <div
                         className={`reader-text-block relative z-10 mb-6 rounded-lg px-4 py-1 ${
                             isActive
-                                ? "border-l-4 border-[#5d5d6b] bg-[#eeeeee]"
+                                ? "border-l-4 border-[var(--color-accent-2)] bg-[var(--color-accent-2-soft)]"
                                 : "border-l-4 border-transparent"
                         } ${isDragging || isLocked ? "shadow-lg" : ""} ${
                             isLocked ? "cursor-pointer" : ""
-                        } ${isLocked ? "pointer-events-auto" : "pointer-events-none md:pointer-events-auto"}`}
+                        } ${isLocked ? "pointer-events-auto" : "pointer-events-none lg:pointer-events-auto"}`}
                         onClick={handleParagraphClick}
                         style={{
                             transform: `translateX(${offset}px)`,
                             transition: !isDragging
-                                ? "transform 0.2s ease-out"
+                                ? "transform var(--dur-short) var(--ease-out)"
                                 : "none",
                         }}
                         dangerouslySetInnerHTML={{ __html: content }}

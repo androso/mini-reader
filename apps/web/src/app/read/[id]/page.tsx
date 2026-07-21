@@ -36,7 +36,7 @@ export default function Reader() {
     const params = useParams();
     const bookId = params.id as string | null;
     const { width } = useWindowSize();
-    const isMobile = width < 768;
+    const isMobile = width < 1024;
     const searchParams = useSearchParams();
     const fileType = searchParams.get("type");
     const [highlightContext, setHighlightContext] =
@@ -236,7 +236,7 @@ export default function Reader() {
             }`}
             style={{ flexBasis: `${chatPaneWidthPercent}%` }}
         >
-            <div className="h-full overflow-hidden rounded-xl bg-[#343541]">
+            <div className="reader-chat-pane h-full overflow-hidden rounded-[var(--radius-panel)]">
                 <ChatInterface
                     isMobile={false}
                     bookId={bookId ?? ""}
@@ -246,7 +246,7 @@ export default function Reader() {
                 />
             </div>
             <div
-                className={`absolute top-1/2 z-[75] flex w-7 -translate-y-1/2 flex-col items-center gap-1 rounded-full border border-white/10 bg-[#2b2c32] p-1 text-white/75 shadow-lg ${
+                className={`reader-pane-tools absolute top-1/2 z-[var(--z-raised)] flex w-8 -translate-y-1/2 flex-col items-center gap-1 rounded-[var(--radius-pill)] p-1 ${
                     chatSidebarSide === "left" ? "-right-3.5" : "-left-3.5"
                 }`}
             >
@@ -255,7 +255,7 @@ export default function Reader() {
                     onClick={toggleChatSidebarSide}
                     aria-label={`Move chat sidebar ${chatSidebarSide === "left" ? "right" : "left"}`}
                     title={`Move chat sidebar ${chatSidebarSide === "left" ? "right" : "left"}`}
-                    className="flex h-6 w-6 items-center justify-center rounded-full text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+                    className="flex h-7 w-7 items-center justify-center text-[var(--color-chat-muted)] transition-[background-color,color] duration-short hover:bg-[var(--color-chat-raised)] hover:text-[var(--color-chat-text)]"
                 >
                     <ArrowLeftRight className="h-3.5 w-3.5" />
                 </button>
@@ -273,10 +273,10 @@ export default function Reader() {
                     onPointerCancel={handleResizePointerCancel}
                     onDoubleClick={resetChatPaneWidth}
                     onKeyDown={handleResizeKeyDown}
-                    className={`flex h-14 w-6 touch-none items-center justify-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-white/35 ${
+                    className={`flex h-14 w-7 touch-none items-center justify-center text-[var(--color-chat-muted)] transition-[background-color,color] duration-short focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-[var(--color-accent-2)] ${
                         isResizingChatPane
-                            ? "cursor-col-resize bg-white/15 text-white"
-                            : "cursor-col-resize hover:bg-white/10 hover:text-white"
+                            ? "cursor-col-resize bg-[var(--color-chat-raised)] text-[var(--color-chat-text)]"
+                            : "cursor-col-resize hover:bg-[var(--color-chat-raised)] hover:text-[var(--color-chat-text)]"
                     }`}
                     title="Drag to resize panels. Double-click to reset."
                 >
@@ -289,7 +289,7 @@ export default function Reader() {
     const desktopViewerPane = (
         <div
             key="desktop-viewer-pane"
-            className="relative order-2 min-w-[420px] flex-1 overflow-hidden rounded-xl bg-[#f9f9f9]"
+            className="reader-viewer-pane relative order-2 min-w-[420px] flex-1 overflow-hidden rounded-[var(--radius-panel)]"
         >
             {isPdf ? (
                 <PdfReader url={bookUrl} />
@@ -309,19 +309,19 @@ export default function Reader() {
     );
 
     return (
-        <div className="min-h-[100dvh] bg-[#2b2b31] p-0 text-[#1a1c1c] md:flex md:items-center md:justify-center md:p-[2.5dvh]">
+        <main className="reader-workspace p-0 lg:flex lg:items-center lg:justify-center lg:p-[2.5dvh]">
             <div
                 ref={readerShellRef}
-                className={`relative flex h-[100dvh] w-full overflow-hidden bg-transparent shadow-2xl md:h-[95dvh] md:w-[95vw] md:gap-3 md:rounded-xl ${
+                className={`reader-shell relative flex h-[100dvh] w-full overflow-hidden bg-transparent lg:h-[95dvh] lg:w-[95%] lg:gap-3 lg:rounded-[var(--radius-panel)] ${
                     isMobile ? "flex-col" : "justify-center"
                 } ${isResizingChatPane ? "select-none" : ""}`}
             >
                 {isMobile ? (
-                    <div className="relative h-full w-full overflow-hidden bg-[#f9f9f9]">
+                    <div className="reader-viewer-pane relative h-full w-full overflow-hidden">
                         <button
                             type="button"
                             onClick={handleBack}
-                            className="absolute left-4 top-4 z-[70] flex h-11 w-11 items-center justify-center rounded-full bg-[#343541]/90 text-white shadow-lg transition-colors hover:bg-[#343541]"
+                            className="absolute left-4 top-4 z-[var(--z-dropdown)] flex h-11 w-11 items-center justify-center rounded-[var(--radius-pill)] bg-[var(--color-chat)] text-[var(--color-chat-text)] transition-[background-color,transform] duration-short hover:bg-[var(--color-chat-raised)] active:translate-y-px"
                             aria-label="Back to library"
                         >
                             <ArrowLeft className="h-5 w-5" />
@@ -340,6 +340,6 @@ export default function Reader() {
                     </>
                 )}
             </div>
-        </div>
+        </main>
     );
 }

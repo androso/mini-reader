@@ -9,6 +9,15 @@ import BookCover from "@/components/BookCover";
 import type { Book } from "@/types/bookTypes";
 import { apiUrl } from "@/lib/api";
 import { createReaderPath } from "@/lib/bookReaderRouting";
+import {
+    BookOpenText,
+    Clock3,
+    FileText,
+    LibraryBig,
+    LogOut,
+    Trash2,
+    Upload,
+} from "lucide-react";
 
 function formatRelativeDate(date: Date | string): string {
     const d = new Date(date);
@@ -129,267 +138,245 @@ function Home() {
         router.push(createReaderPath(book));
     };
 
-    const navLinkClass = (active: boolean) =>
-        `flex items-center gap-3 py-2 w-full text-left rounded-lg text-xs transition-colors group ${
-            active
-                ? "text-on-primary font-semibold"
-                : "text-on-primary-container/70 hover:text-on-primary"
-        }`;
-
     return (
-        <div className="bg-background text-on-background min-h-screen flex flex-col md:flex-row overflow-hidden">
-            {/* Mobile Top Nav */}
-            <nav className="md:hidden flex items-center justify-between w-full px-10 py-4 bg-background z-20 sticky top-0 border-b border-surface-container-highest">
-                <div className="text-2xl font-bold text-primary">Mentarie</div>
-                <button className="text-on-surface-variant hover:text-on-surface transition-colors">
-                    <span className="material-symbols-outlined">menu</span>
-                </button>
+        <div className="mentarie-shell flex flex-col md:flex-row">
+            <nav className="library-rail sticky top-0 z-[var(--z-sticky)] flex items-center justify-between gap-4 px-4 py-3 md:hidden">
+                <div className="library-mobile-wordmark mentarie-wordmark flex shrink-0 items-center gap-2">
+                    <span className="mentarie-mark" aria-hidden="true" />
+                    Mentarie
+                </div>
+                <div className="flex gap-1" aria-label="Filter library">
+                    {(["all", "epub", "pdf"] as const).map((type) => (
+                        <button
+                            key={type}
+                            type="button"
+                            onClick={() => setFilter(type)}
+                            className="min-h-11 whitespace-nowrap rounded-[var(--radius-pill)] px-2 text-xs font-bold uppercase"
+                            aria-pressed={filter === type}
+                        >
+                            {type}
+                        </button>
+                    ))}
+                </div>
             </nav>
 
-            {/* Desktop Sidebar */}
-            <aside className="hidden md:flex flex-col w-[280px] h-screen bg-primary-container z-20 shrink-0 p-8 fixed left-0 top-0 border-r border-white/10">
-                <div className="mb-12">
-                    <h1 className="text-3xl font-bold text-on-primary tracking-tight mb-1">
-                        Mentarie
-                    </h1>
-                    <p className="text-xs text-on-primary-container uppercase tracking-wider opacity-80">
-                        Academic Assistant
-                    </p>
+            <aside className="library-rail fixed inset-y-0 left-0 z-[var(--z-sticky)] hidden w-64 flex-col p-6 md:flex lg:w-72 lg:p-8">
+                <div className="mentarie-wordmark flex items-center gap-3">
+                    <span className="mentarie-mark" aria-hidden="true" />
+                    Mentarie
                 </div>
-                <nav className="flex-1 space-y-2">
-                    <div className="space-y-6">
-                        <div className="space-y-1">
-                            <button
-                                onClick={() => setFilter("all")}
-                                className="flex items-center gap-3 px-4 py-3 w-full text-left rounded-lg bg-white/20 text-on-primary font-semibold text-sm transition-all"
-                            >
-                                <span
-                                    className="material-symbols-outlined"
-                                    style={{
-                                        fontVariationSettings: "'FILL' 1",
-                                    }}
-                                >
-                                    library_books
-                                </span>
-                                Library
-                            </button>
-                            <div className="pl-11 space-y-1 mt-1">
-                                <button
-                                    onClick={() => setFilter("epub")}
-                                    className={navLinkClass(filter === "epub")}
-                                >
-                                    <span className="material-symbols-outlined text-lg opacity-70 group-hover:opacity-100">
-                                        description
-                                    </span>
-                                    Epubs
-                                </button>
-                                <button
-                                    onClick={() => setFilter("pdf")}
-                                    className={navLinkClass(filter === "pdf")}
-                                >
-                                    <span className="material-symbols-outlined text-lg opacity-70 group-hover:opacity-100">
-                                        picture_as_pdf
-                                    </span>
-                                    PDFs
-                                </button>
-                            </div>
-                        </div>
-                    </div>
+                <p className="mt-3 max-w-[18rem] text-sm leading-relaxed text-[var(--color-chat-muted)]">
+                    Read closely. Ask beyond the page.
+                </p>
+                <nav className="mt-12 grid gap-2" aria-label="Library filters">
+                    <button
+                        type="button"
+                        onClick={() => setFilter("all")}
+                        className="library-nav-button"
+                    >
+                        <LibraryBig className="h-5 w-5" />
+                        All books
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setFilter("epub")}
+                        className="library-filter"
+                        data-active={filter === "epub"}
+                    >
+                        <BookOpenText className="h-5 w-5" />
+                        EPUB
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setFilter("pdf")}
+                        className="library-filter"
+                        data-active={filter === "pdf"}
+                    >
+                        <FileText className="h-5 w-5" />
+                        PDF
+                    </button>
                 </nav>
+                <p className="mt-auto text-xs leading-relaxed text-[var(--color-chat-muted)]">
+                    Your questions stay attached to the book that sparked them.
+                </p>
             </aside>
 
-            {/* Main Content */}
-            <main className="flex-1 md:ml-[280px] bg-background h-screen overflow-y-auto pb-24 md:pb-0 pl-3">
-                {/* Header */}
-                <header className="px-10 py-8 flex items-center justify-between sticky top-0 z-10 bg-background/80 backdrop-blur-md">
+            <main className="library-main min-h-[100dvh] flex-1 md:ml-64 lg:ml-72">
+                <header className="library-header sticky top-[68px] z-[var(--z-sticky)] flex flex-col gap-5 border-b border-[var(--color-rule)] px-4 py-5 sm:flex-row sm:items-end sm:justify-between sm:px-8 md:top-0 lg:px-12 lg:py-8">
                     <div>
-                        <h2 className="text-3xl font-bold text-on-background">
-                            Library
-                        </h2>
-                        <p className="text-sm font-semibold text-on-surface-variant mt-1">
-                            Your academic repository.
+                        <h1 className="library-title">Your reading room</h1>
+                        <p className="library-copy mt-2">
+                            Open a book, keep your place, and ask for the
+                            context the page assumes you already know.
                         </p>
                     </div>
-                    <div className="flex items-center gap-4">
+                    <div className="flex flex-wrap gap-3">
                         <input
                             ref={fileInputRef}
                             type="file"
                             accept=".epub,.pdf"
                             onChange={handleFileChange}
-                            className="hidden"
+                            className="sr-only"
+                            aria-label="Choose an EPUB or PDF"
                         />
                         <button
+                            type="button"
                             onClick={() => fileInputRef.current?.click()}
                             disabled={isUploading}
-                            className="glass-panel text-sm font-semibold text-on-surface px-6 py-2.5 rounded-full flex items-center gap-2 hover:bg-surface-container transition-colors disabled:opacity-60"
+                            className="primary-button"
                         >
-                            <span className="material-symbols-outlined text-lg">
-                                upload
-                            </span>
-                            {isUploading ? "Uploading..." : "Upload File"}
+                            <Upload className="h-4 w-4" />
+                            {isUploading ? "Uploading…" : "Upload book"}
                         </button>
                         <button
+                            type="button"
                             onClick={async () => {
                                 await signOut();
                                 router.push("/login");
                             }}
-                            className="bg-error text-on-error text-sm font-semibold px-6 py-2.5 rounded-full hover:bg-error-container hover:text-on-error-container transition-colors shadow-sm"
+                            className="secondary-button"
                         >
-                            Logout
+                            <LogOut className="h-4 w-4" />
+                            Sign out
                         </button>
                     </div>
                 </header>
 
-                <div className="px-10 pb-12">
-                    {/* Recent Activity */}
+                <div className="px-4 py-8 sm:px-8 lg:px-12 lg:py-12">
                     {recentBook && filter === "all" && (
-                        <section className="mb-12">
-                            <h3 className="text-2xl font-semibold text-on-surface mb-6 flex items-center gap-2">
-                                <span className="material-symbols-outlined text-primary">
-                                    schedule
-                                </span>
-                                Recent Activity
-                            </h3>
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                <div
-                                    onClick={() => handleBookClick(recentBook)}
-                                    className="glass-panel p-6 rounded-xl flex gap-6 items-start group cursor-pointer relative overflow-hidden"
+                        <section
+                            className="mb-14"
+                            aria-labelledby="continue-reading-title"
+                        >
+                            <div className="mb-5 flex items-center gap-3">
+                                <Clock3 className="h-5 w-5 text-[var(--color-focus)]" />
+                                <h2
+                                    id="continue-reading-title"
+                                    className="text-xl font-bold tracking-[-0.025em]"
                                 >
-                                    <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                                    <BookCover
-                                        book={recentBook}
-                                        className="h-32 w-24 shrink-0 rounded-lg book-cover"
-                                    />
-                                    <div className="flex-1 relative z-10">
-                                        <span className="text-xs font-semibold text-primary uppercase tracking-wider mb-2 inline-block">
-                                            Recently Added
-                                        </span>
-                                        <h4 className="text-xl font-semibold text-on-surface mb-2 leading-tight">
-                                            {recentBook.title}
-                                        </h4>
-                                        <div className="mt-4 flex items-center gap-4">
-                                            <span className="bg-surface-container-high px-3 py-1 rounded-full text-xs font-semibold text-on-surface">
-                                                .{recentBook.fileType ?? "epub"}
-                                            </span>
-                                            <span className="text-xs font-semibold text-on-surface-variant flex items-center gap-1">
-                                                <span
-                                                    className="material-symbols-outlined"
-                                                    style={{ fontSize: "14px" }}
-                                                >
-                                                    calendar_today
-                                                </span>
-                                                {formatRelativeDate(
-                                                    recentBook.createdAt
-                                                )}
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
+                                    Continue reading
+                                </h2>
                             </div>
+                            <button
+                                type="button"
+                                onClick={() => handleBookClick(recentBook)}
+                                className="recent-book w-full text-left"
+                            >
+                                <BookCover
+                                    book={recentBook}
+                                    className="aspect-[3/4] h-full max-h-64 w-full rounded-[var(--radius-card)]"
+                                />
+                                <span className="flex min-w-0 flex-col justify-between gap-6 py-2">
+                                    <span>
+                                        <span className="file-chip">
+                                            {recentBook.fileType ?? "epub"}
+                                        </span>
+                                        <span className="recent-book__title mt-4 block text-2xl font-bold leading-tight tracking-[-0.035em] sm:text-3xl">
+                                            {recentBook.title}
+                                        </span>
+                                    </span>
+                                    <span className="book-meta flex items-center gap-2 text-[var(--color-ink-2)]">
+                                        <Clock3 className="h-4 w-4" />
+                                        {formatRelativeDate(
+                                            recentBook.createdAt
+                                        )}
+                                    </span>
+                                </span>
+                            </button>
                         </section>
                     )}
 
-                    {/* All Documents */}
-                    <section>
-                        <div className="flex items-center justify-between mb-6">
-                            <h3 className="text-2xl font-semibold text-on-surface flex items-center gap-2">
-                                <span className="material-symbols-outlined text-primary">
-                                    folder_open
-                                </span>
-                                {filter === "all"
-                                    ? "All Documents"
-                                    : filter === "epub"
-                                      ? "Epubs"
-                                      : "PDFs"}
-                            </h3>
-                            <div className="flex items-center gap-2">
-                                <button
-                                    onClick={() => setFilter("all")}
-                                    className={`p-2 rounded-full transition-colors ${
-                                        filter === "all"
-                                            ? "bg-surface-container text-on-surface"
-                                            : "hover:bg-surface-container text-on-surface-variant opacity-50"
-                                    }`}
-                                    title="All documents"
+                    <section aria-labelledby="library-books-title">
+                        <div className="mb-6 flex items-end justify-between gap-4">
+                            <div>
+                                <h2
+                                    id="library-books-title"
+                                    className="text-2xl font-bold tracking-[-0.03em]"
                                 >
-                                    <span className="material-symbols-outlined text-xl">
-                                        grid_view
-                                    </span>
-                                </button>
+                                    {filter === "all"
+                                        ? "All books"
+                                        : filter === "epub"
+                                          ? "EPUB books"
+                                          : "PDF books"}
+                                </h2>
+                                <p className="mt-1 text-sm text-[var(--color-ink-2)]">
+                                    {filteredBooks.length}{" "}
+                                    {filteredBooks.length === 1
+                                        ? "book"
+                                        : "books"}
+                                </p>
                             </div>
                         </div>
 
                         {filteredBooks.length === 0 ? (
-                            <div className="text-center py-16 text-on-surface-variant">
-                                <span className="material-symbols-outlined text-5xl mb-4 block opacity-40">
-                                    library_books
-                                </span>
-                                <p className="text-sm font-semibold">
+                            <div className="empty-library">
+                                <LibraryBig className="mx-auto h-9 w-9 text-[var(--color-ink-2)]" />
+                                <h3 className="mt-4 text-lg font-bold">
+                                    No books here yet
+                                </h3>
+                                <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-[var(--color-ink-2)]">
                                     {filter === "all"
-                                        ? "No documents yet. Upload your first file!"
-                                        : `No ${filter.toUpperCase()} files found.`}
+                                        ? "Add an EPUB or PDF to start reading and asking questions."
+                                        : `Your library has no ${filter.toUpperCase()} books.`}
                                 </p>
+                                {filter === "all" && (
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            fileInputRef.current?.click()
+                                        }
+                                        className="primary-button mt-6"
+                                    >
+                                        <Upload className="h-4 w-4" />
+                                        Upload book
+                                    </button>
+                                )}
                             </div>
                         ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                            <div className="book-grid">
                                 {filteredBooks.map((book) => (
-                                    <div
+                                    <article
                                         key={book.id}
-                                        onClick={() => handleBookClick(book)}
-                                        className="bg-surface rounded-xl p-4 border border-surface-container-highest hover:border-outline-variant transition-colors group cursor-pointer flex gap-4 h-52 book-cover"
+                                        className="book-card group relative"
                                     >
-                                        <BookCover
-                                            book={book}
-                                            className="h-full w-28 shrink-0 rounded-lg"
-                                            iconClassName="text-3xl"
-                                        />
-                                        <div className="flex min-w-0 flex-1 flex-col justify-between">
-                                            <div>
-                                                <div className="flex justify-between items-start mb-3 gap-2">
-                                                    <span
-                                                        className={`px-2.5 py-1 rounded text-xs font-semibold tracking-wide uppercase ${
-                                                            book.fileType ===
-                                                            "epub"
-                                                                ? "bg-primary/10 text-primary"
-                                                                : "bg-secondary/10 text-secondary"
-                                                        }`}
-                                                    >
-                                                        .
-                                                        {book.fileType ??
-                                                            "epub"}
-                                                    </span>
-                                                    <button
-                                                        className="text-on-surface-variant opacity-0 group-hover:opacity-100 transition-opacity hover:text-error"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            deleteItem(book.id);
-                                                        }}
-                                                        title="Delete"
-                                                    >
-                                                        <span className="material-symbols-outlined text-lg">
-                                                            delete
-                                                        </span>
-                                                    </button>
-                                                </div>
-                                                <h4 className="text-base font-semibold text-on-surface line-clamp-3 leading-snug">
-                                                    {book.title}
-                                                </h4>
-                                            </div>
-                                            <div className="flex items-center gap-2 mt-4 text-on-surface-variant">
-                                                <span
-                                                    className="material-symbols-outlined"
-                                                    style={{ fontSize: "16px" }}
-                                                >
-                                                    calendar_today
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                handleBookClick(book)
+                                            }
+                                            className="min-w-0 text-left"
+                                            aria-label={`Open ${book.title}`}
+                                        >
+                                            <BookCover
+                                                book={book}
+                                                className="book-card__cover"
+                                                iconClassName="h-8 w-8"
+                                            />
+                                            <span className="book-card__body">
+                                                <span className="file-chip">
+                                                    {book.fileType ?? "epub"}
                                                 </span>
-                                                <span className="text-xs font-semibold">
+                                                <span className="book-card__title line-clamp-2">
+                                                    {book.title}
+                                                </span>
+                                                <span className="book-meta flex items-center gap-2 text-[var(--color-ink-2)]">
+                                                    <Clock3 className="h-4 w-4" />
                                                     {formatRelativeDate(
                                                         book.createdAt
                                                     )}
                                                 </span>
-                                            </div>
-                                        </div>
-                                    </div>
+                                            </span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="book-delete absolute right-4 top-4 bg-[var(--color-paper-raised)]"
+                                            onClick={() => deleteItem(book.id)}
+                                            aria-label={`Delete ${book.title}`}
+                                            title="Delete book"
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                        </button>
+                                    </article>
                                 ))}
                             </div>
                         )}

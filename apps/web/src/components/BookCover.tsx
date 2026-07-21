@@ -10,6 +10,7 @@ import {
     startLazyBookCoverLoad,
     type VisibilityObserverFactory,
 } from "./bookCoverLoading";
+import { BookOpenText, FileText } from "lucide-react";
 
 interface BookCoverProps {
     book: Book;
@@ -105,7 +106,7 @@ const extractEpubCoverUrl = async (file: Blob) => {
 export default function BookCover({
     book,
     className = "",
-    iconClassName = "text-4xl",
+    iconClassName = "h-10 w-10",
 }: BookCoverProps) {
     const [coverUrl, setCoverUrl] = useState<string | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -164,22 +165,25 @@ export default function BookCover({
                     className="h-full w-full object-cover"
                 />
             ) : (
-                <>
-                    <div
-                        className={`absolute inset-0 ${
-                            book.fileType === "pdf"
-                                ? "bg-gradient-to-br from-secondary/20 via-surface-container to-error/10"
-                                : "bg-gradient-to-br from-primary/15 via-surface-container to-tertiary/10"
-                        }`}
-                    />
-                    <span
-                        className={`material-symbols-outlined relative z-10 text-on-surface-variant ${iconClassName}`}
-                    >
-                        {book.fileType === "pdf"
-                            ? "picture_as_pdf"
-                            : "menu_book"}
-                    </span>
-                </>
+                <div
+                    className={`absolute inset-0 grid place-items-center ${
+                        book.fileType === "pdf"
+                            ? "bg-[var(--color-accent-3-soft)]"
+                            : "bg-[var(--color-accent-2-soft)]"
+                    }`}
+                >
+                    {book.fileType === "pdf" ? (
+                        <FileText
+                            className={`text-[var(--color-ink-2)] ${iconClassName}`}
+                            aria-hidden="true"
+                        />
+                    ) : (
+                        <BookOpenText
+                            className={`text-[var(--color-ink-2)] ${iconClassName}`}
+                            aria-hidden="true"
+                        />
+                    )}
+                </div>
             )}
         </div>
     );

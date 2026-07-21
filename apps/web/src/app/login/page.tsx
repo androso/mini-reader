@@ -14,6 +14,7 @@ import {
     useEmailLogin,
     useEmailSignup,
 } from "@/lib/auth";
+import { BookOpenText, MessageCircleQuestion } from "lucide-react";
 
 export default function Login() {
     const router = useRouter();
@@ -114,180 +115,209 @@ export default function Login() {
     }
 
     return (
-        <div className="container mx-auto flex items-center justify-center min-h-screen p-4">
-            <Card className="w-full max-w-md p-6">
-                <div className="flex border-b mb-6" role="tablist">
-                    <button
-                        type="button"
-                        role="tab"
-                        aria-selected={mode === "login"}
-                        disabled={isPending}
-                        className={`flex-1 py-2 text-center text-sm font-medium border-b-2 transition-colors ${
-                            mode === "login"
-                                ? "border-primary text-primary"
-                                : "border-transparent text-muted-foreground hover:text-foreground"
-                        }`}
-                        onClick={() => handleModeSwitch("login")}
-                    >
-                        Login
-                    </button>
-                    <button
-                        type="button"
-                        role="tab"
-                        aria-selected={mode === "signup"}
-                        disabled={isPending}
-                        className={`flex-1 py-2 text-center text-sm font-medium border-b-2 transition-colors ${
-                            mode === "signup"
-                                ? "border-primary text-primary"
-                                : "border-transparent text-muted-foreground hover:text-foreground"
-                        }`}
-                        onClick={() => handleModeSwitch("signup")}
-                    >
-                        Sign up
-                    </button>
+        <main className="auth-shell">
+            <section className="auth-story" aria-labelledby="mentarie-intro">
+                <div className="mentarie-wordmark flex items-center gap-3">
+                    <span className="mentarie-mark" aria-hidden="true" />
+                    Mentarie
                 </div>
-
-                <div
-                    role="alert"
-                    aria-live="polite"
-                    className={`text-sm text-destructive font-medium min-h-[1.5rem] mb-4 ${
-                        errorMessage ? "block" : "hidden"
-                    }`}
-                >
-                    {errorMessage}
+                <div>
+                    <h1 id="mentarie-intro">Stay with the question.</h1>
+                    <p className="mt-6 max-w-xl text-lg leading-relaxed text-[var(--color-ink-2)]">
+                        Read the book in front of you, then ask about the
+                        history, people, and ideas around it. Mentarie keeps the
+                        full text in view while you explore beyond the page.
+                    </p>
+                    <div className="mt-10 grid max-w-xl gap-3 sm:grid-cols-2">
+                        <div className="rounded-[var(--radius-card)] bg-[var(--color-paper-raised)] p-5">
+                            <BookOpenText className="h-6 w-6 text-[var(--color-focus)]" />
+                            <p className="mt-4 font-bold">
+                                Read without leaving your place
+                            </p>
+                        </div>
+                        <div className="rounded-[var(--radius-card)] bg-[var(--color-accent)] p-5 text-[var(--color-accent-ink)]">
+                            <MessageCircleQuestion className="h-6 w-6" />
+                            <p className="mt-4 font-bold">
+                                Ask with the whole book in context
+                            </p>
+                        </div>
+                    </div>
                 </div>
+                <p className="text-sm text-[var(--color-ink-2)]">
+                    EPUB and PDF reading, grounded conversations, one workspace.
+                </p>
+            </section>
 
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    {mode === "signup" && (
-                        <div className="space-y-1">
-                            <label
-                                htmlFor="username"
-                                className="text-sm font-medium text-foreground"
-                            >
-                                Username
-                            </label>
+            <section className="auth-panel" aria-label="Account access">
+                <Card className="auth-card">
+                    <div className="mb-8 md:hidden">
+                        <div className="mentarie-wordmark flex items-center gap-3">
+                            <span
+                                className="mentarie-mark"
+                                aria-hidden="true"
+                            />
+                            Mentarie
+                        </div>
+                        <p className="mt-2 text-sm leading-relaxed text-[var(--color-ink-2)]">
+                            Read closely. Ask beyond the page.
+                        </p>
+                    </div>
+                    <h2 className="text-2xl font-bold tracking-[-0.035em]">
+                        {mode === "login"
+                            ? "Welcome back"
+                            : "Create your reading room"}
+                    </h2>
+                    <p className="mt-2 text-sm leading-relaxed text-[var(--color-ink-2)]">
+                        {mode === "login"
+                            ? "Return to your books and conversations."
+                            : "Keep books, questions, and context together."}
+                    </p>
+
+                    <div className="auth-tabs mt-7" role="tablist">
+                        <button
+                            type="button"
+                            role="tab"
+                            aria-selected={mode === "login"}
+                            disabled={isPending}
+                            className="auth-tab"
+                            onClick={() => handleModeSwitch("login")}
+                        >
+                            Login
+                        </button>
+                        <button
+                            type="button"
+                            role="tab"
+                            aria-selected={mode === "signup"}
+                            disabled={isPending}
+                            className="auth-tab"
+                            onClick={() => handleModeSwitch("signup")}
+                        >
+                            Sign up
+                        </button>
+                    </div>
+
+                    <div
+                        role="alert"
+                        aria-live="polite"
+                        className={`mt-4 min-h-6 text-sm font-medium text-[var(--color-accent-3)] ${
+                            errorMessage ? "block" : "hidden"
+                        }`}
+                    >
+                        {errorMessage}
+                    </div>
+
+                    <form onSubmit={handleSubmit} className="mt-5 space-y-4">
+                        {mode === "signup" && (
+                            <div className="auth-field">
+                                <label htmlFor="username">Username</label>
+                                <Input
+                                    id="username"
+                                    type="text"
+                                    value={username}
+                                    onChange={(e) =>
+                                        setUsername(e.target.value)
+                                    }
+                                    autoComplete="username"
+                                    minLength={3}
+                                    maxLength={30}
+                                    pattern="^[A-Za-z0-9_]+$"
+                                    required
+                                    disabled={isPending}
+                                    placeholder="reader_one"
+                                />
+                            </div>
+                        )}
+
+                        <div className="auth-field">
+                            <label htmlFor="email">Email</label>
                             <Input
-                                id="username"
-                                type="text"
-                                value={username}
-                                onChange={(e) => setUsername(e.target.value)}
-                                autoComplete="username"
-                                minLength={3}
-                                maxLength={30}
-                                pattern="^[A-Za-z0-9_]+$"
+                                id="email"
+                                type="email"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                autoComplete="email"
+                                maxLength={254}
                                 required
                                 disabled={isPending}
-                                placeholder="reader_one"
+                                placeholder="you@example.com"
+                            />
+                        </div>
+
+                        <div className="auth-field">
+                            <label htmlFor="password">Password</label>
+                            <Input
+                                id="password"
+                                type="password"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                autoComplete={
+                                    mode === "signup"
+                                        ? "new-password"
+                                        : "current-password"
+                                }
+                                minLength={8}
+                                maxLength={128}
+                                required
+                                disabled={isPending}
+                            />
+                        </div>
+
+                        <Button
+                            type="submit"
+                            className="w-full"
+                            disabled={isPending}
+                        >
+                            {isPending
+                                ? mode === "login"
+                                    ? "Signing in..."
+                                    : "Signing up..."
+                                : mode === "login"
+                                  ? "Sign in"
+                                  : "Create account"}
+                        </Button>
+                    </form>
+
+                    <div className="auth-divider my-6">or</div>
+
+                    {isDevelopment ? (
+                        <Button
+                            type="button"
+                            variant="outline"
+                            className="w-full"
+                            onClick={handleDevLogin}
+                            disabled={isPending}
+                        >
+                            {devPending
+                                ? "Signing in..."
+                                : "Continue as Dev User"}
+                        </Button>
+                    ) : (
+                        <div className="flex min-h-11 justify-center">
+                            <GoogleLogin
+                                onSuccess={async ({ credential }) => {
+                                    if (!credential) return;
+                                    setErrorMessage(null);
+                                    try {
+                                        await signInGoogle(credential);
+                                        router.push("/");
+                                    } catch (err: unknown) {
+                                        const message =
+                                            err instanceof Error
+                                                ? err.message
+                                                : "Google login failed";
+                                        setErrorMessage(message);
+                                    }
+                                }}
+                                onError={() =>
+                                    setErrorMessage(
+                                        "Google sign-in was cancelled or failed"
+                                    )
+                                }
                             />
                         </div>
                     )}
-
-                    <div className="space-y-1">
-                        <label
-                            htmlFor="email"
-                            className="text-sm font-medium text-foreground"
-                        >
-                            Email
-                        </label>
-                        <Input
-                            id="email"
-                            type="email"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            autoComplete="email"
-                            maxLength={254}
-                            required
-                            disabled={isPending}
-                            placeholder="you@example.com"
-                        />
-                    </div>
-
-                    <div className="space-y-1">
-                        <label
-                            htmlFor="password"
-                            className="text-sm font-medium text-foreground"
-                        >
-                            Password
-                        </label>
-                        <Input
-                            id="password"
-                            type="password"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            autoComplete={
-                                mode === "signup"
-                                    ? "new-password"
-                                    : "current-password"
-                            }
-                            minLength={8}
-                            maxLength={128}
-                            required
-                            disabled={isPending}
-                        />
-                    </div>
-
-                    <Button
-                        type="submit"
-                        className="w-full"
-                        disabled={isPending}
-                    >
-                        {isPending
-                            ? mode === "login"
-                                ? "Signing in..."
-                                : "Signing up..."
-                            : mode === "login"
-                              ? "Sign in"
-                              : "Create account"}
-                    </Button>
-                </form>
-
-                <div className="relative my-6">
-                    <div className="absolute inset-0 flex items-center">
-                        <span className="w-full border-t" />
-                    </div>
-                    <div className="relative flex justify-center text-xs uppercase">
-                        <span className="bg-card px-2 text-muted-foreground">
-                            Or
-                        </span>
-                    </div>
-                </div>
-
-                {isDevelopment ? (
-                    <Button
-                        type="button"
-                        variant="outline"
-                        className="w-full"
-                        onClick={handleDevLogin}
-                        disabled={isPending}
-                    >
-                        {devPending ? "Signing in..." : "Continue as Dev User"}
-                    </Button>
-                ) : (
-                    <div className="flex justify-center">
-                        <GoogleLogin
-                            onSuccess={async ({ credential }) => {
-                                if (!credential) return;
-                                setErrorMessage(null);
-                                try {
-                                    await signInGoogle(credential);
-                                    router.push("/");
-                                } catch (err: unknown) {
-                                    const message =
-                                        err instanceof Error
-                                            ? err.message
-                                            : "Google login failed";
-                                    setErrorMessage(message);
-                                }
-                            }}
-                            onError={() =>
-                                setErrorMessage(
-                                    "Google sign-in was cancelled or failed"
-                                )
-                            }
-                        />
-                    </div>
-                )}
-            </Card>
-        </div>
+                </Card>
+            </section>
+        </main>
     );
 }

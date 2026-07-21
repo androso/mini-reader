@@ -1,5 +1,5 @@
 import { ScrollArea } from "@radix-ui/react-scroll-area";
-import { BookOpenText, ChevronDown, Sparkles } from "lucide-react";
+import { BookOpenText, ChevronDown } from "lucide-react";
 import { memo } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeKatex from "rehype-katex";
@@ -35,27 +35,27 @@ const formatScore = (score: number) =>
     Number.isFinite(score) ? score.toFixed(4) : "n/a";
 
 const MessageSources = ({ sources }: { sources: ContextSource[] }) => (
-    <details className="group max-w-[85%] rounded-lg border border-white/10 bg-[#2f3039] text-[#d6d5e3] shadow-sm">
-        <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-xs font-semibold text-white/85 marker:hidden [&::-webkit-details-marker]:hidden">
-            <BookOpenText className="h-4 w-4 text-[#c6c5d4]" />
+    <details className="group max-w-[85%] rounded-[var(--radius-input)] border border-[var(--color-chat-rule)] bg-[var(--color-chat-raised)] text-[var(--color-chat-muted)]">
+        <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 py-2 text-xs font-semibold text-[var(--color-chat-text)] marker:hidden [&::-webkit-details-marker]:hidden">
+            <BookOpenText className="h-4 w-4 text-[var(--color-accent-2)]" />
             <span>Sources</span>
-            <span className="rounded-full bg-white/10 px-2 py-0.5 text-[11px] leading-4 text-white/70">
+            <span className="rounded-[var(--radius-pill)] bg-[var(--color-chat)] px-2 py-0.5 text-[11px] leading-4 text-[var(--color-chat-muted)]">
                 {sources.length}
             </span>
-            <ChevronDown className="ml-auto h-4 w-4 text-white/60 transition-transform group-open:rotate-180" />
+            <ChevronDown className="ml-auto h-4 w-4 text-[var(--color-chat-muted)] transition-transform group-open:rotate-180" />
         </summary>
-        <div className="max-h-80 space-y-3 overflow-y-auto border-t border-white/10 px-3 py-3">
+        <div className="max-h-80 space-y-3 overflow-y-auto border-t border-[var(--color-chat-rule)] px-3 py-3">
             {sources.map((source, index) => (
                 <div
                     key={`${source.id}-${index}`}
-                    className="border-b border-white/10 pb-3 last:border-b-0 last:pb-0"
+                    className="border-b border-[var(--color-chat-rule)] pb-3 last:border-b-0 last:pb-0"
                 >
-                    <div className="mb-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-semibold uppercase tracking-normal text-white/60">
+                    <div className="font-label mb-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-semibold uppercase tracking-normal text-[var(--color-chat-muted)]">
                         <span>Chunk {source.chunkIndex}</span>
                         <span>Score {formatScore(source.score)}</span>
                         <span>Rank {source.bestRank}</span>
                     </div>
-                    <p className="whitespace-pre-wrap break-words text-xs leading-relaxed text-[#c6c5d4]">
+                    <p className="whitespace-pre-wrap break-words text-xs leading-relaxed text-[var(--color-chat-muted)]">
                         {source.excerpt}
                     </p>
                 </div>
@@ -112,24 +112,24 @@ const MessageList = memo(
                             >
                                 <div className="flex items-center gap-3">
                                     {isAssistant && (
-                                        <div className="flex h-8 w-8 items-center justify-center rounded-full border border-white/20 bg-[#1f202b] text-white">
-                                            <Sparkles className="h-4 w-4" />
+                                        <div className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-pill)] border border-[var(--color-chat-rule)] bg-[var(--color-accent)] text-[var(--color-accent-ink)]">
+                                            <BookOpenText className="h-4 w-4" />
                                         </div>
                                     )}
-                                    <span className="font-sans text-xs font-medium leading-4 text-[#9e9dac]/70">
+                                    <span className="font-label text-xs font-medium leading-4 text-[var(--color-chat-muted)]">
                                         {isAssistant ? "Mentarie" : "You"}
                                     </span>
                                     {!isAssistant && (
-                                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#5d5f5f] text-xs font-bold text-white">
+                                        <div className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-pill)] bg-[var(--color-accent-2)] text-xs font-bold text-[var(--color-ink)]">
                                             U
                                         </div>
                                     )}
                                 </div>
                                 <div
-                                    className={`max-w-[85%] rounded-2xl p-4 shadow-sm ${
+                                    className={`max-w-[85%] rounded-[var(--radius-card)] p-4 ${
                                         isAssistant
-                                            ? "rounded-tl-none border border-white/5 bg-[#3e3f4b] text-[#c6c5d4]"
-                                            : "rounded-tr-none bg-[#444654] text-white"
+                                            ? "rounded-tl-sm border border-[var(--color-chat-rule)] bg-[var(--color-chat-raised)] text-[var(--color-chat-text)]"
+                                            : "rounded-tr-sm bg-[var(--color-accent-2)] text-[var(--color-ink)]"
                                     }`}
                                 >
                                     {isAssistant ? (
@@ -149,7 +149,7 @@ const MessageList = memo(
                                 )}
                                 {isAssistant && completionNotice && (
                                     <p
-                                        className="max-w-[85%] text-xs leading-relaxed text-amber-200/80"
+                                        className="max-w-[85%] text-xs leading-relaxed text-[var(--color-accent)]"
                                         role="status"
                                     >
                                         {completionNotice}

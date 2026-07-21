@@ -44,14 +44,14 @@ function ChatHistory({
     onSelectConversation: (conversation: Conversation) => void;
 }) {
     return (
-        <div className="h-full border-r border-white/10 bg-[#2f3039] text-white">
-            <div className="border-b border-white/10 p-4 md:px-8 md:pb-4 md:pt-6">
+        <div className="h-full border-r border-[var(--color-chat-rule)] bg-[var(--color-chat-raised)] text-[var(--color-chat-text)]">
+            <div className="border-b border-[var(--color-chat-rule)] p-4 md:px-6 md:pb-4 md:pt-6">
                 <div className="flex items-center gap-2">
                     {onHideHistory && (
                         <button
                             type="button"
                             onClick={onHideHistory}
-                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+                            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius-pill)] text-[var(--color-chat-muted)] transition-[background-color,color] duration-short hover:bg-[var(--color-chat)] hover:text-[var(--color-chat-text)]"
                             aria-label="Hide previous chats"
                             title="Hide previous chats"
                         >
@@ -62,7 +62,7 @@ function ChatHistory({
                         onClick={onNewConversation}
                         size="sm"
                         variant="outline"
-                        className="min-w-0 flex-1 justify-start gap-2 border-white/15 bg-transparent text-[#f1f1f1] hover:bg-white/10 hover:text-white"
+                        className="min-w-0 flex-1 justify-start gap-2 border-[var(--color-chat-rule)] bg-transparent text-[var(--color-chat-text)] hover:bg-[var(--color-chat)] hover:text-[var(--color-chat-text)]"
                     >
                         <Plus className="h-4 w-4 shrink-0" />
                         <span className="truncate">New chat</span>
@@ -72,17 +72,17 @@ function ChatHistory({
             <ScrollArea className="h-full">
                 <div className="pb-16">
                     {isLoading && (
-                        <div className="px-4 py-5 text-sm text-[#c6c5d4]">
-                            Loading chats...
+                        <div className="px-4 py-5 text-sm text-[var(--color-chat-muted)]">
+                            Loading chats…
                         </div>
                     )}
                     {isError && (
-                        <div className="px-4 py-5 text-sm text-red-200">
+                        <div className="px-4 py-5 text-sm text-[var(--color-accent-3)]">
                             Unable to load chats.
                         </div>
                     )}
                     {!isLoading && !isError && conversations.length === 0 && (
-                        <div className="px-4 py-5 text-sm leading-5 text-[#c6c5d4]">
+                        <div className="px-4 py-5 text-sm leading-5 text-[var(--color-chat-muted)]">
                             No previous chats for this document.
                         </div>
                     )}
@@ -97,17 +97,19 @@ function ChatHistory({
                                     onClick={() =>
                                         onSelectConversation(conversation)
                                     }
-                                    className={`w-full border-b border-white/10 p-4 text-left transition-colors hover:bg-white/10 ${
-                                        isSelected ? "bg-white/10" : ""
+                                    className={`min-h-16 w-full border-b border-[var(--color-chat-rule)] p-4 text-left transition-colors hover:bg-[var(--color-chat)] ${
+                                        isSelected
+                                            ? "bg-[var(--color-chat)]"
+                                            : ""
                                     }`}
                                 >
                                     <div className="mb-1 flex items-center gap-2">
-                                        <MessageSquareText className="h-4 w-4 shrink-0 text-[#c6c5d4]" />
-                                        <span className="truncate text-sm font-medium text-[#f1f1f1]">
+                                        <MessageSquareText className="h-4 w-4 shrink-0 text-[var(--color-accent-2)]" />
+                                        <span className="truncate text-sm font-medium text-[var(--color-chat-text)]">
                                             {conversation.title}
                                         </span>
                                     </div>
-                                    <span className="text-xs text-[#9e9dac]">
+                                    <span className="font-label text-xs text-[var(--color-chat-muted)]">
                                         {formatConversationDate(
                                             conversation.lastMessageAt ??
                                                 conversation.createdAt
