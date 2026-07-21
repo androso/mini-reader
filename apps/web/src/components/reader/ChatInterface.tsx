@@ -9,8 +9,6 @@ import {
     Quote,
     X,
     PanelLeftOpen,
-    Maximize2,
-    Minimize2,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import MessageList, { Message } from "./MessageList";
@@ -38,27 +36,23 @@ interface ChatInterfaceProps {
 const ChatLayout = ({
     isMobile,
     isExpanded,
-    hasConversation,
     children,
 }: {
     isMobile: boolean;
     isExpanded: boolean;
-    hasConversation: boolean;
     children: React.ReactNode;
 }) => {
     const layoutClasses = useMemo(() => {
         const baseClasses = `flex flex-col ${!isMobile && "h-full flex-1"} overflow-hidden`;
         const mobileClasses = isMobile
             ? `absolute bottom-4 w-[calc(100%-2rem)] left-1/2 -translate-x-1/2 rounded-[var(--radius-panel)] ${
-                  isExpanded ? "h-[80dvh]" : ""
-              } ${
-                  isExpanded || hasConversation
-                      ? "border border-[var(--color-chat-rule)] bg-[var(--color-chat)] text-[var(--color-chat-text)]"
+                  isExpanded
+                      ? "h-[80dvh] border border-[var(--color-chat-rule)] bg-[var(--color-chat)] text-[var(--color-chat-text)]"
                       : "border border-transparent bg-transparent"
               }`
             : "";
         return `${baseClasses} ${mobileClasses} ${!isMobile ? "bg-[var(--color-chat)]" : ""}`;
-    }, [hasConversation, isMobile, isExpanded]);
+    }, [isMobile, isExpanded]);
 
     return <div className={layoutClasses}>{children}</div>;
 };
@@ -80,7 +74,7 @@ export function ChatInterface({
         retryError,
     } = useBookProcessingStatus(bookId);
     const [selectedModel, setSelectedModel] = useState(CHAT_MODELS[0].value);
-    const [hasComposerBeenFocused, setHasComposerBeenFocused] = useState(false);
+    const [isComposerFocused, setIsComposerFocused] = useState(false);
     const [isDesktopHistoryVisible, setIsDesktopHistoryVisible] =
         useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -103,27 +97,22 @@ export function ChatInterface({
         startNewConversation,
     } = useChat(bookId);
     const conversations = conversationsData?.conversations ?? [];
-    const hasVisibleConversation =
-        chatState.isChatOpen &&
-        (chatState.messages.length > 0 || chatState.isHistoryOpen);
-
-    const handleMobileChatResize = () => {
-        setChatState((prev) => ({
-            ...prev,
-            isExpanded: !prev.isExpanded,
-            isHistoryOpen: prev.isExpanded ? false : prev.isHistoryOpen,
-        }));
-    };
+    const isMobileChatOpen =
+        isMobile && chatState.isChatOpen && chatState.isExpanded;
 
     const handleMobileChatClose = () => {
         inputRef.current?.blur();
-        setHasComposerBeenFocused(false);
+        setIsComposerFocused(false);
         setChatState((prev) => ({
             ...prev,
             isChatOpen: false,
             isExpanded: false,
             isHistoryOpen: false,
         }));
+    };
+
+    const handleComposerFocusChange = (focused: boolean) => {
+        setIsComposerFocused(focused);
     };
 
     useEffect(() => {
@@ -149,11 +138,7 @@ export function ChatInterface({
                     />
                 </div>
             )}
-            <ChatLayout
-                isMobile={isMobile}
-                isExpanded={chatState.isExpanded}
-                hasConversation={hasVisibleConversation}
-            >
+            <ChatLayout isMobile={isMobile} isExpanded={chatState.isExpanded}>
                 {!isMobile && onBack && (
                     <div className="flex shrink-0 items-center gap-1 px-6 pt-6 md:px-8 md:pt-8">
                         {!isDesktopHistoryVisible && (
@@ -181,12 +166,8 @@ export function ChatInterface({
                         </button>
                     </div>
                 )}
-                {isMobile && hasVisibleConversation && (
-                    <MobileChatToolbar
-                        isExpanded={chatState.isExpanded}
-                        onResize={handleMobileChatResize}
-                        onClose={handleMobileChatClose}
-                    />
+                {isMobileChatOpen && (
+                    <MobileChatToolbar onClose={handleMobileChatClose} />
                 )}
                 {isMobile &&
                     chatState.isChatOpen &&
@@ -204,13 +185,11 @@ export function ChatInterface({
                             />
                         </div>
                     )}
-                {chatState.isChatOpen && !chatState.isHistoryOpen && (
-                    <ChatMessages
-                        messages={chatState.messages}
-                        isMobile={isMobile}
-                        isExpanded={chatState.isExpanded}
-                    />
-                )}
+                {chatState.isChatOpen &&
+                    !chatState.isHistoryOpen &&
+                    (!isMobile || chatState.isExpanded) && (
+                        <ChatMessages messages={chatState.messages} />
+                    )}
                 <ChatInput
                     input={input}
                     setInput={setInput}
@@ -234,8 +213,8 @@ export function ChatInterface({
                     selectedModel={selectedModel}
                     setSelectedModel={setSelectedModel}
                     inputRef={inputRef}
-                    showModelSelector={!isMobile || hasComposerBeenFocused}
-                    onInputFocus={() => setHasComposerBeenFocused(true)}
+                    showModelSelector={!isMobile || isComposerFocused}
+                    onComposerFocusChange={handleComposerFocusChange}
                     onHistoryClick={() => {
                         if (isMobile) {
                             refetchConversations();
@@ -275,36 +254,13 @@ export function ChatInterface({
     );
 }
 
-const ChatMessages = ({
-    messages,
-    isMobile,
-    isExpanded,
-}: {
-    messages: Message[];
-    isMobile: boolean;
-    isExpanded: boolean;
-}) => (
+const ChatMessages = ({ messages }: { messages: Message[] }) => (
     <div className="min-h-0 flex-1">
-        <MessageList
-            messages={messages}
-            isMobile={isMobile}
-            isExpanded={isExpanded}
-        />
+        <MessageList messages={messages} />
     </div>
 );
 
-const MobileChatToolbar = ({
-    isExpanded,
-    onResize,
-    onClose,
-}: {
-    isExpanded: boolean;
-    onResize: () => void;
-    onClose: () => void;
-}) => {
-    const resizeLabel = isExpanded ? "Minimize" : "Expand";
-    const ResizeIcon = isExpanded ? Minimize2 : Maximize2;
-
+const MobileChatToolbar = ({ onClose }: { onClose: () => void }) => {
     return (
         <div className="flex min-h-14 shrink-0 items-center gap-2 border-b border-[var(--color-chat-rule)] px-3 py-2">
             <span className="font-label text-xs font-semibold text-[var(--color-chat-muted)]">
@@ -312,24 +268,12 @@ const MobileChatToolbar = ({
             </span>
             <Button
                 type="button"
-                size="sm"
-                variant="ghost"
-                onClick={onResize}
-                aria-label={`${resizeLabel} chat`}
-                title={`${resizeLabel} chat`}
-                className="ml-auto h-11 rounded-[var(--radius-pill)] px-3 text-[var(--color-chat-text)] transition-[background-color,color,transform] duration-short hover:bg-[var(--color-chat-raised)] hover:text-[var(--color-chat-text)] active:translate-y-px focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-[var(--color-accent-2)] disabled:cursor-not-allowed disabled:opacity-60"
-            >
-                <ResizeIcon className="mr-2 h-4 w-4" />
-                <span className="whitespace-nowrap">{resizeLabel}</span>
-            </Button>
-            <Button
-                type="button"
                 size="icon"
                 variant="ghost"
                 onClick={onClose}
                 aria-label="Close chat"
                 title="Close chat"
-                className="h-11 w-11 rounded-[var(--radius-pill)] text-[var(--color-chat-muted)] transition-[background-color,color,transform] duration-short hover:bg-[var(--color-chat-raised)] hover:text-[var(--color-chat-text)] active:translate-y-px focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-[var(--color-accent-2)] disabled:cursor-not-allowed disabled:opacity-60"
+                className="ml-auto h-11 w-11 rounded-[var(--radius-pill)] text-[var(--color-chat-muted)] transition-[background-color,color,transform] duration-short hover:bg-[var(--color-chat-raised)] hover:text-[var(--color-chat-text)] active:translate-y-px focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-[var(--color-accent-2)] disabled:cursor-not-allowed disabled:opacity-60"
             >
                 <X className="h-5 w-5" />
             </Button>
@@ -354,7 +298,7 @@ const ChatInput = ({
     setSelectedModel,
     inputRef,
     showModelSelector,
-    onInputFocus,
+    onComposerFocusChange,
     onHistoryClick,
     showHistoryButton,
     historyButtonLabel,
@@ -376,13 +320,23 @@ const ChatInput = ({
     setSelectedModel: (value: string) => void;
     inputRef: React.RefObject<HTMLInputElement | null>;
     showModelSelector: boolean;
-    onInputFocus: () => void;
+    onComposerFocusChange: (focused: boolean) => void;
     onHistoryClick: () => void;
     showHistoryButton: boolean;
     historyButtonLabel: string;
     isHistoryButtonActive: boolean;
 }) => (
-    <form onSubmit={handleSubmit} className="mt-auto shrink-0 p-6 md:p-8">
+    <form
+        onSubmit={handleSubmit}
+        onFocus={() => onComposerFocusChange(true)}
+        onBlur={(event) => {
+            const nextFocused = event.relatedTarget as Node | null;
+            if (!event.currentTarget.contains(nextFocused)) {
+                onComposerFocusChange(false);
+            }
+        }}
+        className="mt-auto shrink-0 p-6 md:p-8"
+    >
         {!isDocumentReady && (
             <div
                 className={`mb-3 rounded-[var(--radius-input)] border px-3 py-2 text-sm ${
@@ -470,8 +424,6 @@ const ChatInput = ({
                 ref={inputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                onFocus={onInputFocus}
-                onPointerDown={onInputFocus}
                 placeholder={
                     isDocumentReady
                         ? "Ask about this document..."

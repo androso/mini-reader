@@ -80,87 +80,73 @@ const AssistantMessageContent = ({ content }: { content: string }) => (
     </ReactMarkdown>
 );
 
-const MessageList = memo(
-    ({
-        messages,
-        isMobile,
-        isExpanded,
-    }: {
-        messages: Message[];
-        isMobile: boolean;
-        isExpanded: boolean;
-    }) => {
-        return (
-            <ScrollArea
-                className={`${isMobile ? (isExpanded ? "h-full" : "h-[200px]") : "h-full"} space-y-3 overflow-y-scroll p-6 md:p-8`}
-            >
-                {(isMobile && !isExpanded ? messages.slice(-2) : messages)
-                    .filter(Boolean)
-                    .map((message: Message, index: number) => {
-                        const isAssistant = message.role === "assistant";
-                        const sources = message.contextSources ?? [];
-                        const completionNotice = message.completionStatus
-                            ? completionNotices[message.completionStatus]
-                            : undefined;
+const MessageList = memo(({ messages }: { messages: Message[] }) => {
+    return (
+        <ScrollArea className="h-full space-y-3 overflow-y-scroll p-6 md:p-8">
+            {messages.filter(Boolean).map((message: Message, index: number) => {
+                const isAssistant = message.role === "assistant";
+                const sources = message.contextSources ?? [];
+                const completionNotice = message.completionStatus
+                    ? completionNotices[message.completionStatus]
+                    : undefined;
 
-                        return (
-                            <div
-                                key={index}
-                                className={`mb-4 flex flex-col gap-2 ${
-                                    isAssistant ? "items-start" : "items-end"
-                                }`}
+                return (
+                    <div
+                        key={index}
+                        className={`mb-4 flex flex-col gap-2 ${
+                            isAssistant ? "items-start" : "items-end"
+                        }`}
+                    >
+                        <div className="flex items-center gap-3">
+                            {isAssistant && (
+                                <div className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-pill)] border border-[var(--color-chat-rule)] bg-[var(--color-accent)] text-[var(--color-accent-ink)]">
+                                    <BookOpenText className="h-4 w-4" />
+                                </div>
+                            )}
+                            <span className="font-label text-xs font-medium leading-4 text-[var(--color-chat-muted)]">
+                                {isAssistant ? "Mentarie" : "You"}
+                            </span>
+                            {!isAssistant && (
+                                <div className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-pill)] bg-[var(--color-accent-2)] text-xs font-bold text-[var(--color-ink)]">
+                                    U
+                                </div>
+                            )}
+                        </div>
+                        <div
+                            className={`max-w-[85%] rounded-[var(--radius-card)] p-4 ${
+                                isAssistant
+                                    ? "rounded-tl-sm border border-[var(--color-chat-rule)] bg-[var(--color-chat-raised)] text-[var(--color-chat-text)]"
+                                    : "rounded-tr-sm bg-[var(--color-accent-2)] text-[var(--color-ink)]"
+                            }`}
+                        >
+                            {isAssistant ? (
+                                <div className="chat-markdown font-sans text-sm font-semibold leading-relaxed">
+                                    <AssistantMessageContent
+                                        content={message.content}
+                                    />
+                                </div>
+                            ) : (
+                                <p className="whitespace-pre-wrap font-sans text-sm font-semibold leading-relaxed">
+                                    {message.content}
+                                </p>
+                            )}
+                        </div>
+                        {isAssistant && sources.length > 0 && (
+                            <MessageSources sources={sources} />
+                        )}
+                        {isAssistant && completionNotice && (
+                            <p
+                                className="max-w-[85%] text-xs leading-relaxed text-[var(--color-accent)]"
+                                role="status"
                             >
-                                <div className="flex items-center gap-3">
-                                    {isAssistant && (
-                                        <div className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-pill)] border border-[var(--color-chat-rule)] bg-[var(--color-accent)] text-[var(--color-accent-ink)]">
-                                            <BookOpenText className="h-4 w-4" />
-                                        </div>
-                                    )}
-                                    <span className="font-label text-xs font-medium leading-4 text-[var(--color-chat-muted)]">
-                                        {isAssistant ? "Mentarie" : "You"}
-                                    </span>
-                                    {!isAssistant && (
-                                        <div className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-pill)] bg-[var(--color-accent-2)] text-xs font-bold text-[var(--color-ink)]">
-                                            U
-                                        </div>
-                                    )}
-                                </div>
-                                <div
-                                    className={`max-w-[85%] rounded-[var(--radius-card)] p-4 ${
-                                        isAssistant
-                                            ? "rounded-tl-sm border border-[var(--color-chat-rule)] bg-[var(--color-chat-raised)] text-[var(--color-chat-text)]"
-                                            : "rounded-tr-sm bg-[var(--color-accent-2)] text-[var(--color-ink)]"
-                                    }`}
-                                >
-                                    {isAssistant ? (
-                                        <div className="chat-markdown font-sans text-sm font-semibold leading-relaxed">
-                                            <AssistantMessageContent
-                                                content={message.content}
-                                            />
-                                        </div>
-                                    ) : (
-                                        <p className="whitespace-pre-wrap font-sans text-sm font-semibold leading-relaxed">
-                                            {message.content}
-                                        </p>
-                                    )}
-                                </div>
-                                {isAssistant && sources.length > 0 && (
-                                    <MessageSources sources={sources} />
-                                )}
-                                {isAssistant && completionNotice && (
-                                    <p
-                                        className="max-w-[85%] text-xs leading-relaxed text-[var(--color-accent)]"
-                                        role="status"
-                                    >
-                                        {completionNotice}
-                                    </p>
-                                )}
-                            </div>
-                        );
-                    })}
-            </ScrollArea>
-        );
-    }
-);
+                                {completionNotice}
+                            </p>
+                        )}
+                    </div>
+                );
+            })}
+        </ScrollArea>
+    );
+});
 MessageList.displayName = "MessageList";
 export default MessageList;

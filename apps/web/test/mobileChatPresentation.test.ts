@@ -6,29 +6,48 @@ const chatSource = readFileSync(
     "src/components/reader/ChatInterface.tsx",
     "utf8"
 );
+const messageListSource = readFileSync(
+    "src/components/reader/MessageList.tsx",
+    "utf8"
+);
+const useChatSource = readFileSync("src/hooks/chat/useChat.ts", "utf8");
 
-test("mobile chat gains an opaque surface only when conversation UI exists", () => {
-    assert.match(chatSource, /isExpanded \|\| hasConversation/);
+test("mobile chat uses a full opaque panel only when expanded", () => {
     assert.match(
         chatSource,
-        /chatState\.messages\.length > 0 \|\| chatState\.isHistoryOpen/
+        /isExpanded\s*\?\s*"h-\[80dvh\] border border-\[var\(--color-chat-rule\)\] bg-\[var\(--color-chat\)\]/
     );
-    assert.match(chatSource, /bg-\[var\(--color-chat\)\]/);
-    assert.match(chatSource, /text-\[var\(--color-chat-text\)\]/);
+    assert.doesNotMatch(chatSource, /isExpanded \|\| hasConversation/);
+    assert.doesNotMatch(chatSource, /hasVisibleConversation/);
+    assert.match(chatSource, /isMobileChatOpen/);
 });
 
-test("mobile model selection appears after the composer has been focused", () => {
-    assert.match(chatSource, /hasComposerBeenFocused/);
-    assert.match(chatSource, /showModelSelector=\{!isMobile \|\|/);
-    assert.match(chatSource, /onFocus=\{onInputFocus\}/);
-    assert.match(chatSource, /onPointerDown=\{onInputFocus\}/);
+test("mobile model selector tracks live composer focus and clears on blur", () => {
+    assert.match(chatSource, /isComposerFocused/);
+    assert.match(
+        chatSource,
+        /showModelSelector=\{!isMobile \|\| isComposerFocused\}/
+    );
+    assert.match(chatSource, /onComposerFocusChange/);
+    assert.match(
+        chatSource,
+        /onFocus=\{\(\) => onComposerFocusChange\(true\)\}/
+    );
+    assert.match(chatSource, /onComposerFocusChange\(false\)/);
+    assert.doesNotMatch(chatSource, /hasComposerBeenFocused/);
     assert.match(chatSource, /aria-label="Send message"/);
 });
 
-test("visible mobile conversations can expand, minimize, and close", () => {
-    assert.match(chatSource, /hasVisibleConversation/);
-    assert.match(chatSource, /aria-label=\{`\$\{resizeLabel\} chat`\}/);
-    assert.match(chatSource, /isExpanded \? "Minimize" : "Expand"/);
+test("sending a message opens the full mobile chat instead of a compact view", () => {
+    assert.match(useChatSource, /isExpanded: true/);
+    assert.match(
+        useChatSource,
+        /messages: \[\.\.\.prev\.messages, userMessage\],[\s\S]*isExpanded: true/
+    );
+    assert.doesNotMatch(messageListSource, /h-\[200px\]/);
+    assert.doesNotMatch(messageListSource, /messages\.slice\(-2\)/);
+    assert.doesNotMatch(chatSource, /Minimize/);
+    assert.doesNotMatch(chatSource, /Maximize2/);
     assert.match(chatSource, /aria-label="Close chat"/);
     assert.match(chatSource, /isChatOpen: false/);
     assert.match(chatSource, /isExpanded: false/);

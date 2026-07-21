@@ -44,6 +44,7 @@ export const useChat = (bookId: string) => {
                 currentConversation: conversation,
                 isHistoryOpen: false,
                 isChatOpen: true,
+                isExpanded: true,
             }));
         },
         []
@@ -56,6 +57,7 @@ export const useChat = (bookId: string) => {
             currentConversation: null,
             isHistoryOpen: false,
             isChatOpen: true,
+            isExpanded: true,
         }));
         setInput("");
     }, []);
@@ -252,6 +254,8 @@ export const useChat = (bookId: string) => {
                     ...prev,
                     messages: [...prev.messages, userMessage],
                     isChatOpen: true,
+                    isExpanded: true,
+                    isHistoryOpen: false,
                 }));
 
                 const response = await fetch(endpoint, {
