@@ -19,8 +19,22 @@ const parsePositiveIntegerEnv = (name: string, fallback: number) => {
 const sleep = (delayMs: number) =>
     new Promise((resolve) => setTimeout(resolve, delayMs));
 
-const getErrorMessage = (error: unknown) =>
-    error instanceof Error ? error.message : "Book processing failed";
+export const getErrorMessage = (error: unknown): string => {
+    if (error instanceof Error) {
+        const nestedErrors = (error as Error & { errors?: unknown[] }).errors;
+        if (Array.isArray(nestedErrors)) {
+            const nestedMessages = nestedErrors
+                .map(getErrorMessage)
+                .filter((message) => message.length > 0);
+            if (nestedMessages.length > 0) return nestedMessages.join("; ");
+        }
+
+        return error.message || error.name || "Book processing failed";
+    }
+
+    const message = String(error);
+    return message || "Book processing failed";
+};
 
 const STALE_LOCK_ERROR = "Book processing lock expired";
 
