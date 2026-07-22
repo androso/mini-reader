@@ -1,15 +1,26 @@
 import { Bookmark, MessageCircle, Share2 } from "lucide-react";
 import React, { memo } from "react";
 
+const extractPlainText = (html: string): string => {
+    if (!html) return "";
+    if (typeof window === "undefined") {
+        return html.replace(/<[^>]*>/g, "").trim();
+    }
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    return doc.body.textContent?.trim() || "";
+};
+
 const TextBlock = memo(
     ({
         id,
         content,
         isActive,
+        onAddHighlightContext,
     }: {
         id: string;
         content: string;
         isActive: boolean;
+        onAddHighlightContext?: (text: string) => void;
     }) => {
         const [offset, setOffset] = React.useState(0);
         const [isDragging, setIsDragging] = React.useState(false);
@@ -65,7 +76,15 @@ const TextBlock = memo(
                 <div className="absolute left-0 top-0 h-full flex flex-col items-center justify-center gap-2 pl-4">
                     <button
                         type="button"
-                        className="grid h-11 w-11 place-items-center rounded-[var(--radius-pill)] bg-[var(--color-accent-2-soft)] transition-[background-color,transform,opacity] duration-short hover:bg-[var(--color-paper-3)]"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            const text = extractPlainText(content);
+                            if (text && onAddHighlightContext) {
+                                onAddHighlightContext(text);
+                            }
+                            handleUnlock();
+                        }}
+                        className="grid h-11 w-11 place-items-center rounded-[var(--radius-pill)] bg-[var(--color-accent-2-soft)] transition-[background-color,transform,opacity] duration-short hover:bg-[var(--color-paper-3)] active:translate-y-px"
                         style={{ opacity, transform: `scale(${scale})` }}
                         aria-label="Ask about paragraph"
                     >

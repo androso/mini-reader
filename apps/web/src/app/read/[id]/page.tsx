@@ -335,9 +335,22 @@ export default function Reader() {
                                 url={bookUrl}
                                 bookId={bookId ?? ""}
                                 onBack={handleBack}
+                                onAddHighlightContext={(text) =>
+                                    setHighlightContext({
+                                        sourceType: "epub",
+                                        text,
+                                    })
+                                }
                             />
                         )}
-                        <ChatInterface isMobile={true} bookId={bookId ?? ""} />
+                        <ChatInterface
+                            isMobile={true}
+                            bookId={bookId ?? ""}
+                            highlightContext={highlightContext}
+                            onClearHighlightContext={() =>
+                                setHighlightContext(null)
+                            }
+                        />
                     </div>
                 ) : (
                     <>

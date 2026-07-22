@@ -116,9 +116,17 @@ export function ChatInterface({
     };
 
     useEffect(() => {
-        if (isMobile || !highlightContext || !isDocumentReady) return;
+        if (!highlightContext || !isDocumentReady) return;
 
-        inputRef.current?.focus();
+        if (isMobile) {
+            setChatState((prev) => ({
+                ...prev,
+                isChatOpen: true,
+                isExpanded: true,
+            }));
+        } else {
+            inputRef.current?.focus();
+        }
     }, [highlightContext, isDocumentReady, isMobile]);
 
     return (
@@ -397,22 +405,25 @@ const ChatInput = ({
             </div>
         )}
         {highlightContext && (
-            <div className="mb-2 rounded-[var(--radius-input)] border border-[var(--color-chat-rule)] bg-[var(--color-chat-raised)] px-3 py-2 text-[var(--color-chat-text)]">
-                <div className="mb-1 flex items-center gap-2 text-xs font-semibold text-[var(--color-chat-muted)]">
-                    <Quote className="h-3.5 w-3.5 text-[var(--color-accent-2)]" />
-                    <span>Selected text</span>
+            <div className="mb-2 inline-flex items-center gap-2 rounded-[var(--radius-pill)] border border-[var(--color-chat-rule)] bg-[var(--color-chat-raised)] px-3 py-1.5 text-xs text-[var(--color-chat-text)]">
+                <Quote className="h-3.5 w-3.5 shrink-0 text-[var(--color-accent-2)]" />
+                <span
+                    className="font-semibold text-[var(--color-chat-text)]"
+                    title={highlightContext.text}
+                >
+                    1 context added
+                </span>
+                {onClearHighlightContext && (
                     <button
                         type="button"
                         onClick={onClearHighlightContext}
-                        className="ml-auto grid h-8 w-8 place-items-center rounded-[var(--radius-pill)] text-[var(--color-chat-muted)] transition-[background-color,color] duration-short hover:bg-[var(--color-chat)] hover:text-[var(--color-chat-text)]"
-                        aria-label="Remove selected text"
+                        className="ml-1 grid h-5 w-5 place-items-center rounded-full text-[var(--color-chat-muted)] transition-colors hover:bg-[var(--color-chat)] hover:text-[var(--color-chat-text)] focus-visible:outline focus-visible:outline-[2px] focus-visible:outline-[var(--color-accent-2)]"
+                        aria-label="Remove context"
+                        title="Remove context"
                     >
                         <X className="h-3.5 w-3.5" />
                     </button>
-                </div>
-                <p className="max-h-20 overflow-y-auto whitespace-pre-wrap break-words text-xs font-medium leading-relaxed text-[var(--color-chat-muted)]">
-                    {highlightContext.text}
-                </p>
+                )}
             </div>
         )}
         <div className="flex items-center gap-2 rounded-[var(--radius-pill)] bg-[var(--color-paper-raised)] py-2 pl-2 pr-3">

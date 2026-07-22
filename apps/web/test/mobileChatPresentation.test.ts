@@ -14,6 +14,11 @@ const chatHistorySource = readFileSync(
     "src/components/reader/ChatHistory.tsx",
     "utf8"
 );
+const textBlockSource = readFileSync(
+    "src/components/reader/TextBlock.tsx",
+    "utf8"
+);
+const pageSource = readFileSync("src/app/read/[id]/page.tsx", "utf8");
 const useChatSource = readFileSync("src/hooks/chat/useChat.ts", "utf8");
 
 test("mobile chat uses a full opaque panel only when expanded", () => {
@@ -72,4 +77,17 @@ test("sending a message opens the full mobile chat instead of a compact view", (
     assert.match(chatSource, /isChatOpen: false/);
     assert.match(chatSource, /isExpanded: false/);
     assert.match(chatSource, /isHistoryOpen: false/);
+});
+
+test("mobile chat displays a compact '1 context added' badge instead of full paragraph text", () => {
+    assert.match(chatSource, /1 context added/);
+    assert.match(chatSource, /isChatOpen: true/);
+    assert.match(chatSource, /isExpanded: true/);
+    assert.doesNotMatch(chatSource, /max-h-20 overflow-y-auto/);
+});
+
+test("swiping right and clicking ask about paragraph passes context on mobile", () => {
+    assert.match(textBlockSource, /extractPlainText\(content\)/);
+    assert.match(textBlockSource, /onAddHighlightContext\(text\)/);
+    assert.match(pageSource, /onAddHighlightContext=\{\(text\) =>/);
 });

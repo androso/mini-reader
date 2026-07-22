@@ -167,6 +167,9 @@ const EpubReader = memo(
                                         chapters,
                                         activeChapter
                                     )}
+                                    onAddHighlightContext={
+                                        onAddHighlightContext
+                                    }
                                     onNextChapter={() => {
                                         const nextChapter = getNextChapter(
                                             chapters,

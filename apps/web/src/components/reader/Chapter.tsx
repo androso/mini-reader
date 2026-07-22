@@ -11,11 +11,13 @@ const Chapter = memo(
         activeTextblockId,
         onNextChapter,
         isLastChapter,
+        onAddHighlightContext,
     }: {
         chapter: ChapterBlock;
         activeTextblockId: string | null;
         onNextChapter: () => void;
         isLastChapter: boolean;
+        onAddHighlightContext?: (text: string) => void;
     }) => (
         <div id={chapter.hrefId}>
             {chapter.textBlocks.map((textBlock: TextBlockType) => (
@@ -24,6 +26,7 @@ const Chapter = memo(
                     id={textBlock.id}
                     content={textBlock.content}
                     isActive={activeTextblockId === textBlock.id}
+                    onAddHighlightContext={onAddHighlightContext}
                 />
             ))}
             {!isLastChapter && (
