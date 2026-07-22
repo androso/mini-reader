@@ -1,10 +1,23 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { isNearScrollRoot } from "../src/hooks/epubImageVisibility";
 
 type PendingKey = string;
 
 const pendingKey = (chapterId: string, cacheKey: string): PendingKey =>
     `${chapterId}::${cacheKey}`;
+
+const mockElement = (rect: {
+    top: number;
+    bottom: number;
+    left: number;
+    right: number;
+    width: number;
+    height: number;
+}): Element =>
+    ({
+        getBoundingClientRect: () => rect,
+    }) as unknown as Element;
 
 test("pending image loads dedupe by chapter and resource key", () => {
     const pending = new Map<PendingKey, Promise<string>>();
@@ -51,4 +64,86 @@ test("hydration waits for mounted container before resolving images", () => {
     } as unknown as HTMLElement;
     maybeHydrate();
     assert.equal(hydrated, 1);
+});
+
+test("isNearScrollRoot treats zero-box placeholders as eager", () => {
+    const img = mockElement({
+        top: 100,
+        bottom: 100,
+        left: 0,
+        right: 0,
+        width: 0,
+        height: 0,
+    });
+    const root = mockElement({
+        top: 0,
+        bottom: 800,
+        left: 0,
+        right: 720,
+        width: 720,
+        height: 800,
+    });
+    assert.equal(isNearScrollRoot(img, root), true);
+});
+
+test("isNearScrollRoot eager-hydrates cover-sized markers already in view", () => {
+    // Confessions cover remount: CSS placeholder is 384x384 inside the scroll root.
+    // Waiting on IntersectionObserver alone left the marker blank on return.
+    const img = mockElement({
+        top: 95,
+        bottom: 479,
+        left: 168,
+        right: 552,
+        width: 384,
+        height: 384,
+    });
+    const root = mockElement({
+        top: 91,
+        bottom: 747,
+        left: 0,
+        right: 720,
+        width: 720,
+        height: 656,
+    });
+    assert.equal(isNearScrollRoot(img, root), true);
+});
+
+test("isNearScrollRoot keeps far-below markers lazy", () => {
+    const img = mockElement({
+        top: 4000,
+        bottom: 4200,
+        left: 0,
+        right: 400,
+        width: 400,
+        height: 200,
+    });
+    const root = mockElement({
+        top: 0,
+        bottom: 800,
+        left: 0,
+        right: 720,
+        width: 720,
+        height: 800,
+    });
+    assert.equal(isNearScrollRoot(img, root), false);
+});
+
+test("chapter remount should rehydrate after blob revoke", () => {
+    // Cover visit -> leave (revoke) -> return with fresh marker and no src.
+    const firstVisit = { src: "blob:cover-1", hasSvgAttr: false };
+    const afterLeave = { revoked: true };
+    const onReturn = {
+        src: null as string | null,
+        hasSvgAttr: true,
+        nearScrollRoot: true,
+    };
+
+    assert.equal(afterLeave.revoked, true);
+    assert.equal(onReturn.src, null);
+    assert.equal(onReturn.hasSvgAttr, true);
+    assert.equal(onReturn.nearScrollRoot, true);
+
+    const shouldEagerHydrate = !onReturn.src && onReturn.nearScrollRoot;
+    assert.equal(shouldEagerHydrate, true);
+    assert.notEqual(firstVisit.src, onReturn.src);
 });

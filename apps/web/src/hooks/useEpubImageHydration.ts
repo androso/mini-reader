@@ -2,6 +2,10 @@ import { useEffect, useRef } from "react";
 import type { RefObject } from "react";
 import { EPUB_IMAGE_MARKER_ATTRIBUTE } from "@reader/epub";
 import type { ResolveChapterImageOptions } from "@/hooks/useImageLoader";
+import {
+    EPUB_IMAGE_ROOT_MARGIN_PX,
+    isNearScrollRoot,
+} from "@/hooks/epubImageVisibility";
 
 type ResolveChapterImage = (
     options: ResolveChapterImageOptions
@@ -54,6 +58,8 @@ export const useEpubImageHydration = ({
     useEffect(() => {
         if (!enabled || !chapterId || !container) return;
 
+        let cancelled = false;
+
         const hydrate = async (img: HTMLImageElement) => {
             if (hydratedRef.current.has(img) || inFlightRef.current.has(img)) {
                 return;
@@ -80,7 +86,7 @@ export const useEpubImageHydration = ({
 
                 // Chapter may have swapped before completion; chapter release
                 // owns URL revocation for the previous scope.
-                if (!container.contains(img)) {
+                if (cancelled || !container.contains(img)) {
                     return;
                 }
 
@@ -115,7 +121,7 @@ export const useEpubImageHydration = ({
 
                 hydratedRef.current.add(img);
             } catch {
-                if (container.contains(img)) markUnavailable(img);
+                if (!cancelled && container.contains(img)) markUnavailable(img);
             } finally {
                 inFlightRef.current.delete(img);
             }
@@ -140,7 +146,7 @@ export const useEpubImageHydration = ({
             return;
         }
 
-        let cancelled = false;
+        const scrollRoot = scrollRootRef.current;
         const observer =
             typeof IntersectionObserver !== "undefined"
                 ? new IntersectionObserver(
@@ -153,8 +159,8 @@ export const useEpubImageHydration = ({
                           }
                       },
                       {
-                          root: scrollRootRef.current,
-                          rootMargin: "600px 0px",
+                          root: scrollRoot,
+                          rootMargin: `${EPUB_IMAGE_ROOT_MARGIN_PX}px 0px`,
                           // 0-area placeholders (cover imgs before src) must still
                           // count as intersecting once they enter the root.
                           threshold: 0,
@@ -164,11 +170,10 @@ export const useEpubImageHydration = ({
 
         for (const img of images) {
             if (cancelled) break;
-            // Cover / standalone markers often have 0x0 boxes before src is set.
-            // IntersectionObserver can miss those; hydrate them immediately.
-            const rect = img.getBoundingClientRect();
-            const hasNoBox = rect.width === 0 || rect.height === 0;
-            if (!observer || hasNoBox) {
+            // Eager-hydrate when IO cannot be trusted to deliver the first
+            // callback across chapter remounts: zero-box placeholders, already
+            // near the scroll root, or no IntersectionObserver support.
+            if (!observer || isNearScrollRoot(img, scrollRoot)) {
                 void hydrate(img);
                 continue;
             }

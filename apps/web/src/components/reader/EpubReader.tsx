@@ -471,6 +471,7 @@ const EpubReader = memo(
                                 <LoadingSpinner />
                             ) : (
                                 <Chapter
+                                    key={activeChapter.id}
                                     activeTextblockId={activeTextBlockId}
                                     chapter={activeChapter}
                                     isLastChapter={!canGoNext}
