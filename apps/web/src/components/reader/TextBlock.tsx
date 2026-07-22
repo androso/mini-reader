@@ -17,10 +17,19 @@ const TextBlock = memo(
         const [isLocked, setIsLocked] = React.useState(false);
         const dragThreshold = 80;
 
-        const handleDragMove = (e: React.TouchEvent) => {
+        const getClientX = (e: React.MouseEvent | React.TouchEvent) =>
+            "touches" in e ? e.touches[0].clientX : e.clientX;
+
+        const handleDragStart = (e: React.MouseEvent | React.TouchEvent) => {
+            setStartX(getClientX(e));
+            if (!isLocked) {
+                setIsDragging(true);
+            }
+        };
+
+        const handleDragMove = (e: React.MouseEvent | React.TouchEvent) => {
             if (!isDragging || isLocked) return;
-            const clientX = e.touches[0].clientX;
-            const deltaX = clientX - startX;
+            const deltaX = getClientX(e) - startX;
             setOffset(Math.min(Math.max(0, deltaX), 100));
         };
 
@@ -89,10 +98,11 @@ const TextBlock = memo(
             >
                 <div
                     className="absolute inset-0 z-10 lg:pointer-events-none"
-                    onTouchStart={(e) => {
-                        const touch = e.touches[0];
-                        setStartX(touch.clientX);
-                    }}
+                    onMouseDown={handleDragStart}
+                    onMouseMove={handleDragMove}
+                    onMouseUp={handleDragEnd}
+                    onMouseLeave={handleDragEnd}
+                    onTouchStart={handleDragStart}
                     onTouchMove={(e) => {
                         if (
                             !isDragging &&
