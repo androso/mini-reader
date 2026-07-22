@@ -297,6 +297,7 @@ export default function Reader() {
                 <EpubReader
                     url={bookUrl}
                     bookId={bookId ?? ""}
+                    isMobile={false}
                     onAddHighlightContext={(text) =>
                         setHighlightContext({
                             sourceType: "epub",
@@ -334,6 +335,7 @@ export default function Reader() {
                             <EpubReader
                                 url={bookUrl}
                                 bookId={bookId ?? ""}
+                                isMobile={true}
                                 onBack={handleBack}
                                 onAddHighlightContext={(text) =>
                                     setHighlightContext({

@@ -60,7 +60,7 @@ test("progress, status, chat, and deletion callers retain book IDs and cookies",
     );
     assert.match(
         epubReader,
-        /useTextBlockNavigation\(flatTextBlocks, contentRef, bookId\)/
+        /useTextBlockNavigation\(\s*flatTextBlocks,\s*contentRef,\s*bookId/
     );
     assert.equal(
         (reader.match(/<EpubReader[\s\S]*?bookId=\{bookId \?\? ""\}/g) ?? [])

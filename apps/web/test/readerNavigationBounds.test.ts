@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
     getNextChapter,
+    getPreviousChapter,
     getTextBlockNavigationTarget,
+    isFirstChapter,
     isLastChapter,
     shouldPersistVisibleTextBlock,
 } from "../src/lib/readerNavigationBounds";
@@ -82,4 +84,18 @@ test("visible progress persists only when the active block changes", () => {
     assert.equal(shouldPersistVisibleTextBlock(null, "block-1"), false);
     assert.equal(shouldPersistVisibleTextBlock("block-1", "block-1"), false);
     assert.equal(shouldPersistVisibleTextBlock("block-2", "block-1"), true);
+});
+
+test("previous chapter navigation mirrors next-chapter bounds", () => {
+    const chapters = [
+        { id: "chapter-1", hrefId: "chapter-1.xhtml" },
+        { id: "chapter-2", hrefId: "chapter-2.xhtml" },
+    ];
+
+    assert.equal(getPreviousChapter(chapters, chapters[1]), chapters[0]);
+    assert.equal(isFirstChapter(chapters, chapters[1]), false);
+    assert.equal(getPreviousChapter(chapters, chapters[0]), null);
+    assert.equal(isFirstChapter(chapters, chapters[0]), true);
+    assert.equal(getPreviousChapter(chapters, { id: "missing" }), null);
+    assert.equal(isFirstChapter(chapters, { id: "missing" }), true);
 });

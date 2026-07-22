@@ -265,7 +265,7 @@ export const buildTextBlocksFromDocument = (
             return {
                 id: `${chapterId}-block-${index}`,
                 content,
-                element: blockElement,
+                text: blockElement.textContent ?? "",
             };
         })
         .filter((block): block is TextBlock => block !== null);

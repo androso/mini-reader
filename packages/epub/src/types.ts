@@ -29,7 +29,7 @@ export interface EpubContent {
 export interface TextBlock {
     id: string;
     content: string;
-    element: Element;
+    text: string;
 }
 
 export interface ChapterBlock {

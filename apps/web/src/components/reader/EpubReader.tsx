@@ -1,28 +1,52 @@
-import React, { useEffect, useRef, memo } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, memo } from "react";
 import { ArrowLeft, Menu, MessageCirclePlus } from "lucide-react";
 import Sidebar from "./Sidebar";
+import ChapterPullAffordance from "./ChapterPullAffordance";
 import { useEpubProcessor } from "@/hooks/useEpubProcessor";
 import { useChapterLoader } from "@/hooks/useChapterLoader";
 import { useTextBlockNavigation } from "@/hooks/useTextBlockNavigation";
+import { useChapterPullNavigation } from "@/hooks/useChapterPullNavigation";
 import { useTextSelection } from "@/hooks/useTextSelection";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import Chapter from "./Chapter";
 import type { Chapter as EpubChapter } from "@/hooks/useChapterLoader";
-import { findChapterByHref } from "@/lib/epubNavigation";
-import { getNextChapter, isLastChapter } from "@/lib/readerNavigationBounds";
+import {
+    buildChapterOrder,
+    getAdjacentChapterId,
+    resolveChapterIdFromProgress,
+    resolveTocHrefToSpineId,
+    splitEpubHref,
+} from "@/lib/epubNavigation";
+import type { PullDirection } from "@/lib/chapterPullGesture";
 
 interface EpubReaderProps {
     url: string;
     bookId: string;
+    isMobile?: boolean;
     onBack?: () => void;
     onAddHighlightContext?: (text: string) => void;
 }
 
+type ScrollLanding = "top" | "bottom" | "block" | "fragment";
+
 const EpubReader = memo(
-    ({ url, bookId, onBack, onAddHighlightContext }: EpubReaderProps) => {
+    ({
+        url,
+        bookId,
+        isMobile = false,
+        onBack,
+        onAddHighlightContext,
+    }: EpubReaderProps) => {
         const { processEpub, isLoading, error, epubContent, zipData } =
             useEpubProcessor();
         const contentRef = useRef<HTMLDivElement>(null);
+        const scrollContainerRef = useRef<HTMLDivElement>(null);
+        const hasInitializedChapter = useRef(false);
+        const pendingScrollRef = useRef<{
+            mode: ScrollLanding;
+            target?: string | null;
+        } | null>(null);
+
         const {
             tooltipRef,
             tooltipPosition,
@@ -33,73 +57,315 @@ const EpubReader = memo(
             containerRef: contentRef,
             enabled: Boolean(onAddHighlightContext),
         });
-        const { chapters, loadAllChapters, flatTextBlocks } = useChapterLoader(
-            epubContent,
-            zipData
-        );
+
+        const {
+            loadSingleChapter,
+            flatTextBlocks,
+            isLoading: chaptersLoading,
+            error: chapterLoadError,
+            clearError,
+            chapters,
+        } = useChapterLoader(epubContent, zipData, {
+            singleChapterMode: true,
+        });
+
         const [activeChapter, setActiveChapter] =
             React.useState<EpubChapter | null>(null);
         const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
         const [activeHref, setActiveHref] = React.useState<string | null>(null);
-        const { activeTextBlockId, isLoading: textBlockIsLoading } =
-            useTextBlockNavigation(flatTextBlocks, contentRef, bookId);
+        const [restoreBlockId, setRestoreBlockId] = React.useState<
+            string | null
+        >(null);
+        const [failedSpineId, setFailedSpineId] = React.useState<string | null>(
+            null
+        );
 
-        const handleTocItemClick = (hrefId: string) => {
-            const targetChapter = findChapterByHref(chapters, hrefId);
-            if (!targetChapter) {
-                console.warn(`No chapter found for TOC href: ${hrefId}`);
-                return;
-            }
+        const chapterOrder = useMemo(
+            () => (epubContent ? buildChapterOrder(epubContent) : []),
+            [epubContent]
+        );
 
-            setActiveChapter(targetChapter);
-            setActiveHref(hrefId);
-            setTimeout(() => {
-                contentRef.current?.parentElement?.scrollTo({
-                    top: 0,
-                    behavior: "smooth",
+        const {
+            activeTextBlockId,
+            setActiveTextBlockId,
+            isLoading: textBlockIsLoading,
+            initialProgress,
+        } = useTextBlockNavigation(flatTextBlocks, contentRef, bookId, {
+            activeChapterId: activeChapter?.id ?? null,
+            restoreBlockId,
+        });
+
+        const scrollToLanding = useCallback(
+            (mode: ScrollLanding, target?: string | null) => {
+                const run = () => {
+                    const container = scrollContainerRef.current;
+                    if (!container) return;
+
+                    if (mode === "bottom") {
+                        container.scrollTo({
+                            top: container.scrollHeight,
+                            behavior: "auto",
+                        });
+                        const lastBlock =
+                            flatTextBlocks[flatTextBlocks.length - 1];
+                        if (lastBlock) {
+                            setActiveTextBlockId(lastBlock.id);
+                            setRestoreBlockId(lastBlock.id);
+                        }
+                        return;
+                    }
+
+                    if (mode === "block" && target) {
+                        const element = document.getElementById(target);
+                        if (element) {
+                            element.scrollIntoView({
+                                behavior: "smooth",
+                                block: "center",
+                            });
+                            setActiveTextBlockId(target);
+                            setRestoreBlockId(target);
+                            return;
+                        }
+                    }
+
+                    if (mode === "fragment" && target) {
+                        const element = document.getElementById(target);
+                        if (element) {
+                            element.scrollIntoView({
+                                behavior: "smooth",
+                                block: "start",
+                            });
+                            return;
+                        }
+                    }
+
+                    container.scrollTo({ top: 0, behavior: "auto" });
+                    const firstBlock = flatTextBlocks[0];
+                    if (firstBlock) {
+                        setActiveTextBlockId(firstBlock.id);
+                        setRestoreBlockId(firstBlock.id);
+                    }
+                };
+
+                // Wait a frame so the swapped chapter DOM is present.
+                requestAnimationFrame(() => {
+                    setTimeout(run, 50);
                 });
-            }, 100);
-        };
+            },
+            [flatTextBlocks, setActiveTextBlockId]
+        );
+
+        const activateChapter = useCallback(
+            (
+                chapter: EpubChapter,
+                href: string | null,
+                landing: ScrollLanding,
+                landingTarget?: string | null
+            ) => {
+                setActiveChapter(chapter);
+                setActiveHref(href ?? chapter.hrefId);
+                pendingScrollRef.current = {
+                    mode: landing,
+                    target: landingTarget,
+                };
+            },
+            []
+        );
+
+        const loadAndActivateChapter = useCallback(
+            async (
+                spineId: string,
+                href: string | null,
+                landing: ScrollLanding,
+                landingTarget?: string | null
+            ): Promise<boolean> => {
+                // Reuse the already-processed document for fragment-only TOC jumps.
+                if (activeChapter?.id === spineId) {
+                    setFailedSpineId(null);
+                    clearError();
+                    activateChapter(
+                        activeChapter,
+                        href,
+                        landing,
+                        landingTarget
+                    );
+                    scrollToLanding(landing, landingTarget);
+                    return true;
+                }
+
+                const chapter = await loadSingleChapter(spineId);
+                if (!chapter) {
+                    setFailedSpineId(spineId);
+                    return false;
+                }
+
+                setFailedSpineId(null);
+                activateChapter(chapter, href, landing, landingTarget);
+                return true;
+            },
+            [
+                activateChapter,
+                activeChapter,
+                clearError,
+                loadSingleChapter,
+                scrollToLanding,
+            ]
+        );
+
+        const handleTocItemClick = useCallback(
+            async (hrefId: string) => {
+                if (!epubContent) return;
+
+                const spineId = resolveTocHrefToSpineId(epubContent, hrefId);
+                if (!spineId) {
+                    console.warn(`No spine item for TOC href: ${hrefId}`);
+                    return;
+                }
+
+                const { fragment } = splitEpubHref(hrefId);
+                const ok = await loadAndActivateChapter(
+                    spineId,
+                    hrefId,
+                    fragment ? "fragment" : "top",
+                    fragment
+                );
+                if (!ok) {
+                    console.warn(`Failed to load TOC chapter: ${hrefId}`);
+                }
+            },
+            [epubContent, loadAndActivateChapter]
+        );
+
+        const canGoPrevious = useMemo(() => {
+            if (!activeChapter) return false;
+            return (
+                getAdjacentChapterId(
+                    chapterOrder,
+                    activeChapter.id,
+                    "previous"
+                ) !== null
+            );
+        }, [activeChapter, chapterOrder]);
+
+        const canGoNext = useMemo(() => {
+            if (!activeChapter) return false;
+            return (
+                getAdjacentChapterId(chapterOrder, activeChapter.id, "next") !==
+                null
+            );
+        }, [activeChapter, chapterOrder]);
+
+        const navigateAdjacentChapter = useCallback(
+            async (direction: PullDirection): Promise<boolean> => {
+                if (!activeChapter) return false;
+
+                const targetId = getAdjacentChapterId(
+                    chapterOrder,
+                    activeChapter.id,
+                    direction
+                );
+                if (!targetId) return false;
+
+                return loadAndActivateChapter(
+                    targetId,
+                    null,
+                    direction === "next" ? "top" : "bottom"
+                );
+            },
+            [activeChapter, chapterOrder, loadAndActivateChapter]
+        );
+
+        const { pullState, pullLabel, resetPull } = useChapterPullNavigation({
+            enabled: isMobile && Boolean(activeChapter),
+            scrollContainerRef,
+            canGoPrevious,
+            canGoNext,
+            onCommit: navigateAdjacentChapter,
+        });
 
         useEffect(() => {
             processEpub(url);
         }, [url, processEpub]);
 
         useEffect(() => {
-            if (epubContent && zipData) {
-                loadAllChapters();
-            }
-        }, [epubContent, zipData, loadAllChapters]);
+            hasInitializedChapter.current = false;
+            setActiveChapter(null);
+            setActiveHref(null);
+            setRestoreBlockId(null);
+            setFailedSpineId(null);
+        }, [bookId, url]);
 
-        // Set initial activeHref based on activeTextBlockId
+        // Restore progress into a single chapter (mobile and desktop).
         useEffect(() => {
             if (
-                !textBlockIsLoading &&
-                activeTextBlockId &&
-                chapters.length > 0
+                !epubContent ||
+                !zipData ||
+                textBlockIsLoading ||
+                hasInitializedChapter.current
             ) {
-                const chapterId = activeTextBlockId.split("-")[0];
-                const chapter = chapters.find(
-                    (c) =>
-                        c.hrefId.includes(chapterId) || c.id.includes(chapterId)
-                );
-                if (chapter && !activeHref) {
-                    setActiveChapter(chapter);
-                    setActiveHref(chapter.hrefId);
-                    // Give time for the chapter to render before scrolling
-                    setTimeout(() => {
-                        const element =
-                            document.getElementById(activeTextBlockId);
-                        if (element) {
-                            element.scrollIntoView({
-                                behavior: "smooth",
-                                block: "center",
-                            });
-                        }
-                    }, 100);
-                }
+                return;
             }
-        }, [textBlockIsLoading, activeTextBlockId, chapters]);
+
+            if (chapterOrder.length === 0) return;
+
+            hasInitializedChapter.current = true;
+
+            const progressChapterId = resolveChapterIdFromProgress({
+                progressChapter: initialProgress?.progressChapter,
+                progressPosition: initialProgress?.progressPosition,
+                availableChapterIds: chapterOrder,
+            });
+
+            const chapterId = progressChapterId || chapterOrder[0] || null;
+            if (!chapterId) return;
+
+            const progressPosition = initialProgress?.progressPosition ?? null;
+
+            (async () => {
+                const ok = await loadAndActivateChapter(
+                    chapterId,
+                    null,
+                    progressPosition ? "block" : "top",
+                    progressPosition
+                );
+                if (!ok) {
+                    hasInitializedChapter.current = false;
+                }
+            })();
+        }, [
+            chapterOrder,
+            epubContent,
+            initialProgress,
+            loadAndActivateChapter,
+            textBlockIsLoading,
+            zipData,
+        ]);
+
+        // Apply pending scroll after a chapter swap renders.
+        useEffect(() => {
+            if (!activeChapter || !pendingScrollRef.current) return;
+            if (chaptersLoading) return;
+
+            const pending = pendingScrollRef.current;
+            pendingScrollRef.current = null;
+            scrollToLanding(pending.mode, pending.target);
+        }, [activeChapter, chaptersLoading, flatTextBlocks, scrollToLanding]);
+
+        // Keep activeChapter in sync when loader atomically replaces it.
+        useEffect(() => {
+            if (!activeChapter || chapters.length === 0) return;
+            const synced = chapters.find(
+                (chapter) => chapter.id === activeChapter.id
+            );
+            if (synced && synced !== activeChapter) {
+                setActiveChapter(synced);
+            }
+        }, [activeChapter, chapters]);
+
+        useEffect(() => {
+            if (!chapterLoadError) return;
+            resetPull();
+        }, [chapterLoadError, resetPull]);
 
         if (isLoading) {
             return (
@@ -121,6 +387,9 @@ const EpubReader = memo(
         if (!epubContent || !zipData) {
             return null;
         }
+
+        const showInitialSpinner =
+            textBlockIsLoading || (!activeChapter && chaptersLoading);
 
         return (
             <>
@@ -153,38 +422,55 @@ const EpubReader = memo(
                             <Menu className="h-6 w-6" />
                         </button>
                     </div>
-                    <div className="mx-auto max-h-[calc(100%-72px)] max-w-[720px] overflow-y-auto overflow-x-hidden px-5 md:px-10">
+                    {isMobile && (
+                        <ChapterPullAffordance
+                            pullState={pullState}
+                            label={
+                                pullLabel ??
+                                (chapterLoadError
+                                    ? "Couldn't load chapter. Pull again to retry."
+                                    : null)
+                            }
+                        />
+                    )}
+                    <div
+                        ref={scrollContainerRef}
+                        className="mx-auto max-h-[calc(100%-72px)] max-w-[720px] overflow-y-auto overflow-x-hidden px-5 md:px-10"
+                        style={
+                            isMobile
+                                ? { overscrollBehaviorY: "contain" }
+                                : undefined
+                        }
+                    >
                         <div className="pb-32" ref={contentRef}>
-                            {isLoading ||
-                            textBlockIsLoading ||
-                            !activeChapter ? (
+                            {showInitialSpinner || !activeChapter ? (
                                 <LoadingSpinner />
                             ) : (
                                 <Chapter
                                     activeTextblockId={activeTextBlockId}
                                     chapter={activeChapter}
-                                    isLastChapter={isLastChapter(
-                                        chapters,
-                                        activeChapter
-                                    )}
+                                    isLastChapter={!canGoNext}
+                                    showNextChapterButton={!isMobile}
                                     onAddHighlightContext={
                                         onAddHighlightContext
                                     }
                                     onNextChapter={() => {
-                                        const nextChapter = getNextChapter(
-                                            chapters,
-                                            activeChapter
-                                        );
-                                        if (!nextChapter) return;
-
-                                        setActiveChapter(nextChapter);
-                                        setActiveHref(nextChapter.hrefId);
-                                        setTimeout(() => {
-                                            contentRef.current?.scrollIntoView({
-                                                behavior: "smooth",
-                                            });
-                                        }, 100);
+                                        void navigateAdjacentChapter("next");
                                     }}
+                                    onRetryChapterLoad={
+                                        chapterLoadError && failedSpineId
+                                            ? () => {
+                                                  clearError();
+                                                  resetPull();
+                                                  void loadAndActivateChapter(
+                                                      failedSpineId,
+                                                      null,
+                                                      "top"
+                                                  );
+                                              }
+                                            : undefined
+                                    }
+                                    chapterLoadError={chapterLoadError}
                                 />
                             )}
                         </div>

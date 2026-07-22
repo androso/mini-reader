@@ -1,5 +1,4 @@
 import crypto from "crypto";
-import { JSDOM } from "jsdom";
 import {
     extractEpubTextBlocks,
     processEpubBuffer,
@@ -27,9 +26,7 @@ export const extractEpubChunks = async (
 
     for (const chapter of chapters) {
         for (const block of chapter.textBlocks) {
-            const text =
-                new JSDOM(block.content).window.document.body.textContent || "";
-            chunks.push(...chunker.chunkText(text));
+            chunks.push(...chunker.chunkText(block.text));
         }
     }
 

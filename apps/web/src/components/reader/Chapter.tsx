@@ -11,13 +11,19 @@ const Chapter = memo(
         activeTextblockId,
         onNextChapter,
         isLastChapter,
+        showNextChapterButton = true,
         onAddHighlightContext,
+        chapterLoadError,
+        onRetryChapterLoad,
     }: {
         chapter: ChapterBlock;
         activeTextblockId: string | null;
         onNextChapter: () => void;
         isLastChapter: boolean;
+        showNextChapterButton?: boolean;
         onAddHighlightContext?: (text: string) => void;
+        chapterLoadError?: string | null;
+        onRetryChapterLoad?: () => void;
     }) => (
         <div id={chapter.hrefId}>
             {chapter.textBlocks.map((textBlock: TextBlockType) => (
@@ -29,7 +35,21 @@ const Chapter = memo(
                     onAddHighlightContext={onAddHighlightContext}
                 />
             ))}
-            {!isLastChapter && (
+            {chapterLoadError && onRetryChapterLoad && (
+                <div className="flex flex-col items-center gap-3 py-8">
+                    <p className="text-sm text-[var(--color-accent-3)]">
+                        {chapterLoadError}
+                    </p>
+                    <button
+                        type="button"
+                        onClick={onRetryChapterLoad}
+                        className="rounded-[var(--radius-pill)] bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-ink)]"
+                    >
+                        Retry
+                    </button>
+                </div>
+            )}
+            {showNextChapterButton && !isLastChapter && (
                 <div className="flex justify-center py-8">
                     <button
                         onClick={onNextChapter}

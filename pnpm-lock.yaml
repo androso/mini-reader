@@ -263,16 +263,10 @@ importers:
       '@reader/providers':
         specifier: workspace:*
         version: link:../providers
-      jsdom:
-        specifier: ^25.0.1
-        version: 25.0.1
       pdf2json:
         specifier: ^3.1.5
         version: 3.1.5
     devDependencies:
-      '@types/jsdom':
-        specifier: ^21.1.7
-        version: 21.1.7
       '@types/node':
         specifier: ^22.10.2
         version: 22.10.2

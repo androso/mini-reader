@@ -44,16 +44,27 @@ export const extractEpubTextBlocks = async (buffer: Buffer) => {
         const file = zip.file(`${content.basePath}${manifestItem.href}`);
         if (!file) continue;
 
-        const doc = new JSDOM(await file.async("text")).window.document;
-        const hrefId = manifestItem.href.includes(".")
-            ? manifestItem.href.substring(0, manifestItem.href.lastIndexOf("."))
-            : manifestItem.href;
+        const chapterHtml = await file.async("text");
+        const chapterDom = new JSDOM(chapterHtml);
+        try {
+            const hrefId = manifestItem.href.includes(".")
+                ? manifestItem.href.substring(
+                      0,
+                      manifestItem.href.lastIndexOf(".")
+                  )
+                : manifestItem.href;
 
-        chapters.push({
-            id,
-            hrefId,
-            textBlocks: buildTextBlocksFromDocument(doc, id),
-        });
+            chapters.push({
+                id,
+                hrefId,
+                textBlocks: buildTextBlocksFromDocument(
+                    chapterDom.window.document,
+                    id
+                ),
+            });
+        } finally {
+            chapterDom.window.close();
+        }
     }
 
     return { content, chapters };

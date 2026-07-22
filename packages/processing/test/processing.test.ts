@@ -1,3 +1,5 @@
+import { spawnSync } from "node:child_process";
+import path from "node:path";
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { StorageProvider, VectorStoreProvider } from "@reader/providers";
@@ -412,4 +414,25 @@ test("PDF text extraction decodes every run in source order", () => {
         ]),
         "Preserve every run."
     );
+});
+test("extracts EPUB chunks within constrained heap limit", () => {
+    const childScript = path.resolve(__dirname, "epub-memory-child.js");
+    const result = spawnSync(
+        process.execPath,
+        ["--max-old-space-size=128", childScript],
+        {
+            encoding: "utf8",
+            env: {
+                ...process.env,
+                NODE_PATH: process.env.NODE_PATH,
+            },
+        }
+    );
+
+    assert.equal(
+        result.status,
+        0,
+        `Child process failed with stderr: ${result.stderr}`
+    );
+    assert.match(result.stdout, /EPUB_EXTRACTION_OK:\d+/);
 });

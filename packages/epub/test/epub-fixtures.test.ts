@@ -168,9 +168,7 @@ test("nested chapter containers split into readable text blocks", async () => {
     const textBlocks = buildTextBlocksFromDocument(doc, chapterId);
     const longestBlockLength = Math.max(
         ...textBlocks.map(
-            (block) =>
-                block.element.textContent?.replace(/\s+/g, " ").trim().length ??
-                0
+            (block) => block.text.replace(/\s+/g, " ").trim().length
         )
     );
 
@@ -178,6 +176,11 @@ test("nested chapter containers split into readable text blocks", async () => {
     assert.ok(textBlocks.length >= 100);
     assert.ok(textBlocks.length > directBodyChildren * 20);
     assert.ok(longestBlockLength < 1500);
+    assert.ok(
+        textBlocks.every(
+            (block) => typeof block.text === "string" && !("element" in block)
+        )
+    );
 });
 
 test("EPUB HTML sanitizer strips event handlers and executable URLs", () => {
@@ -275,4 +278,18 @@ test("text block sanitization drops empty blocks without shifting later IDs", ()
         ["chapter-1-block-0", "chapter-1-block-2"]
     );
     assert.equal(textBlocks[1].content, '<p id="last">Last</p>');
+});
+test("text block sanitization strips forbidden tags from text and content", () => {
+    const doc = new JSDOM(`
+        <body>
+            <p>Safe <script>console.log("bad")</script>text <style>body{color:red}</style></p>
+        </body>
+    `).window.document;
+
+    const textBlocks = buildTextBlocksFromDocument(doc, "chapter-1");
+    assert.equal(textBlocks.length, 1);
+    assert.equal(textBlocks[0].content, "<p>Safe text </p>");
+    assert.equal(textBlocks[0].text, "Safe text ");
+    assert.doesNotMatch(textBlocks[0].content, /script|style|console|color/i);
+    assert.doesNotMatch(textBlocks[0].text, /script|style|console|color/i);
 });

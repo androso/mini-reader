@@ -6,20 +6,41 @@ import {
 } from "@/lib/readerNavigationBounds";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 
+export type ReadingProgress = {
+    progressPosition: string | null;
+    progressChapter: string | null;
+};
+
+export type TextBlockNavigationOptions = {
+    /** Spine/manifest chapter ID used when saving progress. */
+    activeChapterId?: string | null;
+    /**
+     * When provided, seeds or re-seeds the active block after a chapter swap
+     * (e.g. progress restore, top/bottom landing).
+     */
+    restoreBlockId?: string | null;
+};
+
 export const useTextBlockNavigation = (
     flatTextBlocks: TextBlock[],
     contentRef: React.RefObject<HTMLDivElement | null>,
-    bookId: string
+    bookId: string,
+    options: TextBlockNavigationOptions = {}
 ) => {
+    const { activeChapterId = null, restoreBlockId = null } = options;
     const [isLoading, setIsLoading] = useState(true);
     const [activeTextBlockId, setActiveTextBlockId] = useState<string | null>(
         null
     );
+    const [initialProgress, setInitialProgress] =
+        useState<ReadingProgress | null>(null);
     // manual scroll == navigation using arrow up and down
     const [isManualScroll, setIsManualScroll] = useState(false);
     const scrollTimeout = useRef<NodeJS.Timeout | null>(null);
+    const hasFetchedProgress = useRef(false);
+    const lastRestoreBlockId = useRef<string | null>(null);
 
-    const fetchProgress = useCallback(async () => {
+    const fetchProgress = useCallback(async (): Promise<ReadingProgress> => {
         try {
             const response = await fetch(apiUrl(`/api/${bookId}/progress`), {
                 method: "GET",
@@ -34,24 +55,32 @@ export const useTextBlockNavigation = (
 
             const data = await response.json();
 
-            // Handle null progressPosition
-            if (!data.progressPosition) {
-                return null;
-            }
-
-            return data.progressPosition;
+            return {
+                progressPosition: data.progressPosition ?? null,
+                progressChapter: data.progressChapter ?? null,
+            };
         } catch (error) {
             console.error("An error ocurred while progress was fetched", error);
-            return null;
+            return {
+                progressPosition: null,
+                progressChapter: null,
+            };
         }
     }, [bookId]);
 
-    //save progress
     const saveProgress = useCallback(
-        async (textBlockId: string) => {
+        async (textBlockId: string, chapterId?: string | null) => {
             if (!textBlockId) {
                 return;
             }
+
+            const progressChapter =
+                chapterId ||
+                activeChapterId ||
+                // Legacy fallback for callers that have not yet wired chapter IDs.
+                textBlockId.replace(/-block-\d+$/, "") ||
+                textBlockId;
+
             try {
                 const response = await fetch(
                     apiUrl(`/api/${bookId}/progress`),
@@ -63,7 +92,7 @@ export const useTextBlockNavigation = (
                         credentials: "include",
                         body: JSON.stringify({
                             progress_block: textBlockId,
-                            progress_chapter: textBlockId.split("-")[0], // assuming format like "c01-block-16"
+                            progress_chapter: progressChapter,
                         }),
                     }
                 );
@@ -74,38 +103,74 @@ export const useTextBlockNavigation = (
                 console.error("Progress cant be saved", error);
             }
         },
-        [bookId]
+        [activeChapterId, bookId]
     );
 
+    // Re-fetch when the book changes so mobile can pick the right chapter first.
+    useEffect(() => {
+        hasFetchedProgress.current = false;
+        lastRestoreBlockId.current = null;
+        setInitialProgress(null);
+        setActiveTextBlockId(null);
+        setIsLoading(true);
+    }, [bookId]);
+
+    useEffect(() => {
+        if (hasFetchedProgress.current) return;
+        hasFetchedProgress.current = true;
+
+        let cancelled = false;
+        (async () => {
+            const progress = await fetchProgress();
+            if (!cancelled) {
+                setInitialProgress(progress);
+                setIsLoading(false);
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [bookId, fetchProgress]);
+
+    // Apply explicit restore targets from chapter navigation.
+    useEffect(() => {
+        if (!restoreBlockId || restoreBlockId === lastRestoreBlockId.current) {
+            return;
+        }
+        if (flatTextBlocks.some((block) => block.id === restoreBlockId)) {
+            lastRestoreBlockId.current = restoreBlockId;
+            setActiveTextBlockId(restoreBlockId);
+        }
+    }, [flatTextBlocks, restoreBlockId]);
+
+    // Seed active block once text blocks are available.
     useEffect(() => {
         if (flatTextBlocks.length === 0) {
-            setActiveTextBlockId(null);
-            setIsLoading(false);
             return;
         }
 
-        if (!activeTextBlockId) {
-            const initializeProgress = async () => {
-                try {
-                    const storedId = await fetchProgress();
-                    setActiveTextBlockId(storedId || flatTextBlocks[0].id);
-                    const element = document.getElementById(
-                        storedId || flatTextBlocks[0].id
-                    );
-                    if (element) {
-                        element.scrollIntoView({
-                            behavior: "smooth",
-                            block: "center",
-                        });
-                    }
-                } finally {
-                    setIsLoading(false);
-                }
-            };
-            //this retrieves the progress from the server
-            initializeProgress();
+        if (
+            activeTextBlockId &&
+            flatTextBlocks.some((block) => block.id === activeTextBlockId)
+        ) {
+            return;
         }
-    }, [activeTextBlockId, fetchProgress, flatTextBlocks]);
+
+        const storedId = initialProgress?.progressPosition;
+        const preferred =
+            (storedId &&
+                flatTextBlocks.find((block) => block.id === storedId)?.id) ||
+            (restoreBlockId &&
+                flatTextBlocks.find((block) => block.id === restoreBlockId)
+                    ?.id) ||
+            flatTextBlocks[0]?.id ||
+            null;
+
+        if (preferred) {
+            setActiveTextBlockId(preferred);
+        }
+    }, [activeTextBlockId, flatTextBlocks, initialProgress, restoreBlockId]);
 
     const getVisibilityRatio = useCallback(
         (element: HTMLElement) => {
@@ -173,11 +238,17 @@ export const useTextBlockNavigation = (
                     )
                 ) {
                     setActiveTextBlockId(mostVisibleId);
-                    saveProgress(mostVisibleId);
+                    saveProgress(mostVisibleId, activeChapterId);
                 }
             }, 300);
         }
-    }, [activeTextBlockId, findMostVisibleBlock, isManualScroll, saveProgress]);
+    }, [
+        activeChapterId,
+        activeTextBlockId,
+        findMostVisibleBlock,
+        isManualScroll,
+        saveProgress,
+    ]);
 
     // scroll listener
     useEffect(() => {
@@ -206,7 +277,7 @@ export const useTextBlockNavigation = (
                 if (targetBlock) {
                     setIsManualScroll(true);
                     setActiveTextBlockId(targetBlock.id);
-                    saveProgress(targetBlock.id);
+                    saveProgress(targetBlock.id, activeChapterId);
                     document.getElementById(targetBlock.id)?.scrollIntoView({
                         behavior: "smooth",
                         block: "center",
@@ -221,10 +292,14 @@ export const useTextBlockNavigation = (
 
         document.addEventListener("keydown", handleKeyDown);
         return () => document.removeEventListener("keydown", handleKeyDown);
-    }, [activeTextBlockId, flatTextBlocks, saveProgress]);
+    }, [activeChapterId, activeTextBlockId, flatTextBlocks, saveProgress]);
 
     return {
         activeTextBlockId,
+        setActiveTextBlockId,
         isLoading,
+        initialProgress,
+        fetchProgress,
+        saveProgress,
     };
 };

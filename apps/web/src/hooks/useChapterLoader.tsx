@@ -25,7 +25,8 @@ type ChapterAction =
           type: "LOAD_SUCCESS";
           payload: { chapters: Chapter[]; flatTextBlocks: TextBlock[] };
       }
-    | { type: "LOAD_ERROR"; payload: string };
+    | { type: "LOAD_ERROR"; payload: string }
+    | { type: "CLEAR_ERROR" };
 
 function chapterReducer(
     state: ChapterLoaderState,
@@ -52,13 +53,25 @@ function chapterReducer(
                 error: action.payload,
                 isLoading: false,
             };
+        case "CLEAR_ERROR":
+            return {
+                ...state,
+                error: null,
+            };
     }
 }
 
+export type ChapterLoaderOptions = {
+    /** When true, only one processed chapter is retained at a time. */
+    singleChapterMode?: boolean;
+};
+
 export const useChapterLoader = (
     epubContent: EpubContent | null,
-    zipData: JSZip | null
+    zipData: JSZip | null,
+    options: ChapterLoaderOptions = {}
 ) => {
+    const singleChapterMode = Boolean(options.singleChapterMode);
     const { loadImage } = useImageLoader(zipData, epubContent?.basePath ?? "");
     const [state, dispatch] = useReducer(chapterReducer, {
         chapters: [],
@@ -276,6 +289,10 @@ export const useChapterLoader = (
     );
 
     const loadAllChapters = useCallback(async () => {
+        if (singleChapterMode) {
+            return;
+        }
+
         if (!epubContent) {
             dispatch({
                 type: "LOAD_ERROR",
@@ -316,13 +333,79 @@ export const useChapterLoader = (
                 });
             }
         }
-    }, [epubContent, loadChapter, state.chapters.length]);
+    }, [
+        epubContent,
+        loadChapter,
+        singleChapterMode,
+        state.chapters.length,
+        state.isLoading,
+    ]);
+
+    /**
+     * Process and retain only the requested spine document.
+     * Keeps the current chapter visible until the new one is ready, then
+     * atomically replaces chapter state. Does not prefetch neighbors.
+     */
+    const loadSingleChapter = useCallback(
+        async (id: string): Promise<Chapter | null> => {
+            if (!epubContent) {
+                dispatch({
+                    type: "LOAD_ERROR",
+                    payload: "No EPUB content available",
+                });
+                return null;
+            }
+
+            if (state.chapters.length === 1 && state.chapters[0]?.id === id) {
+                dispatch({ type: "CLEAR_ERROR" });
+                return state.chapters[0];
+            }
+
+            dispatch({ type: "START_LOADING" });
+            try {
+                const chapter = await loadChapter(id);
+                if (!chapter) {
+                    dispatch({
+                        type: "LOAD_ERROR",
+                        payload: `Failed to load chapter: ${id}`,
+                    });
+                    return null;
+                }
+
+                dispatch({
+                    type: "LOAD_SUCCESS",
+                    payload: {
+                        chapters: [chapter],
+                        flatTextBlocks: chapter.textBlocks,
+                    },
+                });
+                return chapter;
+            } catch (err) {
+                dispatch({
+                    type: "LOAD_ERROR",
+                    payload:
+                        err instanceof Error
+                            ? err.message
+                            : "Failed to load chapter",
+                });
+                return null;
+            }
+        },
+        [epubContent, loadChapter, state.chapters]
+    );
+
+    const clearError = useCallback(() => {
+        dispatch({ type: "CLEAR_ERROR" });
+    }, []);
 
     return {
         chapters: state.chapters,
         isLoading: state.isLoading,
         error: state.error,
         loadAllChapters,
+        loadSingleChapter,
+        clearError,
         flatTextBlocks: state.flatTextBlocks,
+        singleChapterMode,
     };
 };
