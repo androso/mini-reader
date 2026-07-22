@@ -1,0 +1,25 @@
+{
+    "date": "2026-07-21",
+    "scope": "apps/web",
+    "framework": "Next.js 15 app router with React 19 and Tailwind CSS 3",
+    "routes": [
+        "apps/web/src/app/page.tsx",
+        "apps/web/src/app/login/page.tsx",
+        "apps/web/src/app/read/[id]/page.tsx"
+    ],
+    "fontStack": {
+        "displayAndUi": "Plus Jakarta Sans",
+        "reading": "Literata",
+        "conflict": "Source Sans Pro is referenced in globals.css but is not loaded"
+    },
+    "palette": "Mentarie neutral palette plus shadcn HSL compatibility variables",
+    "motion": "motion/react is installed and used by LoadingSpinner",
+    "spacing": "Tailwind utility spacing with no project-level named spacing tokens",
+    "preserve": [
+        "Mentarie product identity",
+        "Plus Jakarta Sans and Literata roles",
+        "book cover presentation",
+        "reader pane mount stability and persisted sidebar position/width",
+        "existing routes, component ownership, auth, upload, deletion, and reading behavior"
+    ]
+}

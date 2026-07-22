@@ -1,0 +1,20 @@
+[
+    {
+        "date": "2026-07-21",
+        "scope": "app",
+        "macrostructure": "Catalogue / Split Studio",
+        "theme": "custom",
+        "theme_axes": "light / geometric-sans / chromatic-teal ~195°",
+        "vibe": "night sea, calm, literary",
+        "enrichment": "none",
+        "brief": "Mentarie Night Sea palette"
+    },
+    {
+        "date": "2026-07-21",
+        "scope": "app",
+        "macrostructure": "Catalogue / Split Studio",
+        "theme": "Hum",
+        "enrichment": "none",
+        "brief": "Mentarie reading library, contextual AI questions, and authentication"
+    }
+]
