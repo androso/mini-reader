@@ -10,6 +10,10 @@ const messageListSource = readFileSync(
     "src/components/reader/MessageList.tsx",
     "utf8"
 );
+const chatHistorySource = readFileSync(
+    "src/components/reader/ChatHistory.tsx",
+    "utf8"
+);
 const useChatSource = readFileSync("src/hooks/chat/useChat.ts", "utf8");
 
 test("mobile chat uses a full opaque panel only when expanded", () => {
@@ -24,18 +28,34 @@ test("mobile chat uses a full opaque panel only when expanded", () => {
 
 test("mobile model selector tracks live composer focus and clears on blur", () => {
     assert.match(chatSource, /isComposerFocused/);
-    assert.match(
-        chatSource,
-        /showModelSelector=\{!isMobile \|\| isComposerFocused\}/
-    );
+    assert.match(chatSource, /isComposerFocused && !chatState\.isHistoryOpen/);
     assert.match(chatSource, /onComposerFocusChange/);
     assert.match(
         chatSource,
         /onFocus=\{\(\) => onComposerFocusChange\(true\)\}/
     );
+    assert.match(
+        chatSource,
+        /onPointerDown=\{\(\) => onComposerFocusChange\(true\)\}/
+    );
     assert.match(chatSource, /onComposerFocusChange\(false\)/);
     assert.doesNotMatch(chatSource, /hasComposerBeenFocused/);
     assert.match(chatSource, /aria-label="Send message"/);
+});
+
+test("mobile chat history uses one bounded vertical scroll region", () => {
+    assert.match(chatSource, /min-h-0 min-w-0 flex-1 overflow-hidden/);
+    assert.doesNotMatch(chatSource, /overflow-scroll h-full/);
+    assert.match(chatSource, /"Previous chats"/);
+    assert.match(
+        chatHistorySource,
+        /flex h-full min-h-0 min-w-0 flex-col overflow-hidden/
+    );
+    assert.match(
+        chatHistorySource,
+        /min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto/
+    );
+    assert.doesNotMatch(chatHistorySource, /<ScrollArea/);
 });
 
 test("sending a message opens the full mobile chat instead of a compact view", () => {

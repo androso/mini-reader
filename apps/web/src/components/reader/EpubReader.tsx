@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, memo } from "react";
-import { Menu, MessageCirclePlus } from "lucide-react";
+import { ArrowLeft, Menu, MessageCirclePlus } from "lucide-react";
 import Sidebar from "./Sidebar";
 import { useEpubProcessor } from "@/hooks/useEpubProcessor";
 import { useChapterLoader } from "@/hooks/useChapterLoader";
@@ -14,11 +14,12 @@ import { getNextChapter, isLastChapter } from "@/lib/readerNavigationBounds";
 interface EpubReaderProps {
     url: string;
     bookId: string;
+    onBack?: () => void;
     onAddHighlightContext?: (text: string) => void;
 }
 
 const EpubReader = memo(
-    ({ url, bookId, onAddHighlightContext }: EpubReaderProps) => {
+    ({ url, bookId, onBack, onAddHighlightContext }: EpubReaderProps) => {
         const { processEpub, isLoading, error, epubContent, zipData } =
             useEpubProcessor();
         const contentRef = useRef<HTMLDivElement>(null);
@@ -132,8 +133,19 @@ const EpubReader = memo(
                 />
 
                 <div className="relative h-full overflow-x-hidden bg-[var(--color-paper)]">
-                    <div className="sticky left-0 right-0 top-0 z-[var(--z-raised)] flex h-[72px] items-center bg-[var(--color-paper)] px-6 md:px-10">
+                    <div className="sticky left-0 right-0 top-0 z-[var(--z-raised)] flex h-[72px] items-center gap-2 bg-[var(--color-paper)] px-6 md:px-10">
+                        {onBack && (
+                            <button
+                                type="button"
+                                className="z-[var(--z-raised)] grid h-11 w-11 cursor-pointer place-items-center rounded-[var(--radius-pill)] border-none bg-transparent text-[var(--color-ink-2)] transition-[background-color,color] duration-short hover:bg-[var(--color-paper-2)] hover:text-[var(--color-ink)]"
+                                onClick={onBack}
+                                aria-label="Back to library"
+                            >
+                                <ArrowLeft className="h-6 w-6" />
+                            </button>
+                        )}
                         <button
+                            type="button"
                             className="z-[var(--z-raised)] grid h-11 w-11 cursor-pointer place-items-center rounded-[var(--radius-pill)] border-none bg-transparent text-[var(--color-ink-2)] transition-[background-color,color] duration-short hover:bg-[var(--color-paper-2)] hover:text-[var(--color-ink)]"
                             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
                             aria-label="Open table of contents"

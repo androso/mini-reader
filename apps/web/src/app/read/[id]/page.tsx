@@ -318,18 +318,24 @@ export default function Reader() {
             >
                 {isMobile ? (
                     <div className="reader-viewer-pane relative h-full w-full overflow-hidden">
-                        <button
-                            type="button"
-                            onClick={handleBack}
-                            className="absolute left-4 top-4 z-[var(--z-dropdown)] flex h-11 w-11 items-center justify-center rounded-[var(--radius-pill)] bg-[var(--color-chat)] text-[var(--color-chat-text)] transition-[background-color,transform] duration-short hover:bg-[var(--color-chat-raised)] active:translate-y-px"
-                            aria-label="Back to library"
-                        >
-                            <ArrowLeft className="h-5 w-5" />
-                        </button>
+                        {isPdf && (
+                            <button
+                                type="button"
+                                onClick={handleBack}
+                                className="absolute left-4 top-4 z-[var(--z-dropdown)] flex h-11 w-11 items-center justify-center rounded-[var(--radius-pill)] bg-[var(--color-chat)] text-[var(--color-chat-text)] transition-[background-color,transform] duration-short hover:bg-[var(--color-chat-raised)] active:translate-y-px"
+                                aria-label="Back to library"
+                            >
+                                <ArrowLeft className="h-5 w-5" />
+                            </button>
+                        )}
                         {isPdf ? (
                             <PdfReader url={bookUrl} />
                         ) : (
-                            <EpubReader url={bookUrl} bookId={bookId ?? ""} />
+                            <EpubReader
+                                url={bookUrl}
+                                bookId={bookId ?? ""}
+                                onBack={handleBack}
+                            />
                         )}
                         <ChatInterface isMobile={true} bookId={bookId ?? ""} />
                     </div>

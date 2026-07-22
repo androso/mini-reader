@@ -126,8 +126,8 @@ const TextBlock = memo(
                     <div
                         className={`reader-text-block relative z-10 mb-6 rounded-lg px-4 py-1 ${
                             isActive
-                                ? "border-l-4 border-[var(--color-accent-2)] bg-[var(--color-accent-2-soft)]"
-                                : "border-l-4 border-transparent"
+                                ? "border-l-2 border-[color-mix(in_oklch,var(--color-accent-2)_45%,transparent)] bg-[color-mix(in_oklch,var(--color-accent-2)_12%,transparent)]"
+                                : "border-l-2 border-transparent"
                         } ${isDragging || isLocked ? "shadow-lg" : ""} ${
                             isLocked ? "cursor-pointer" : ""
                         } ${isLocked ? "pointer-events-auto" : "pointer-events-none lg:pointer-events-auto"}`}

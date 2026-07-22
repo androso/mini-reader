@@ -1,4 +1,3 @@
-import { ScrollArea } from "@radix-ui/react-scroll-area";
 import { Message } from "./MessageList";
 import { Button } from "../ui/button";
 import { MessageSquareText, PanelLeftClose, Plus } from "lucide-react";
@@ -44,8 +43,8 @@ function ChatHistory({
     onSelectConversation: (conversation: Conversation) => void;
 }) {
     return (
-        <div className="h-full border-r border-[var(--color-chat-rule)] bg-[var(--color-chat-raised)] text-[var(--color-chat-text)]">
-            <div className="border-b border-[var(--color-chat-rule)] p-4 md:px-6 md:pb-4 md:pt-6">
+        <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden border-r border-[var(--color-chat-rule)] bg-[var(--color-chat-raised)] text-[var(--color-chat-text)]">
+            <div className="shrink-0 border-b border-[var(--color-chat-rule)] p-4 md:px-6 md:pb-4 md:pt-6">
                 <div className="flex items-center gap-2">
                     {onHideHistory && (
                         <button
@@ -62,15 +61,15 @@ function ChatHistory({
                         onClick={onNewConversation}
                         size="sm"
                         variant="outline"
-                        className="min-w-0 flex-1 justify-start gap-2 border-[var(--color-chat-rule)] bg-transparent text-[var(--color-chat-text)] hover:bg-[var(--color-chat)] hover:text-[var(--color-chat-text)]"
+                        className="min-w-0 flex-1 justify-start gap-2 border-[var(--color-chat-rule)] bg-transparent text-[var(--color-chat-text)] hover:bg-[var(--color-chat)] hover:text-[var(--color-chat-text)] active:translate-y-px focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-[var(--color-accent-2)]"
                     >
                         <Plus className="h-4 w-4 shrink-0" />
                         <span className="truncate">New chat</span>
                     </Button>
                 </div>
             </div>
-            <ScrollArea className="h-full">
-                <div className="pb-16">
+            <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain">
+                <div className="min-w-0 pb-4">
                     {isLoading && (
                         <div className="px-4 py-5 text-sm text-[var(--color-chat-muted)]">
                             Loading chats…
@@ -97,15 +96,15 @@ function ChatHistory({
                                     onClick={() =>
                                         onSelectConversation(conversation)
                                     }
-                                    className={`min-h-16 w-full border-b border-[var(--color-chat-rule)] p-4 text-left transition-colors hover:bg-[var(--color-chat)] ${
+                                    className={`min-h-16 w-full min-w-0 overflow-hidden border-b border-[var(--color-chat-rule)] p-4 text-left transition-colors hover:bg-[var(--color-chat)] active:bg-[var(--color-chat)] focus-visible:outline focus-visible:outline-[3px] focus-visible:-outline-offset-[3px] focus-visible:outline-[var(--color-accent-2)] ${
                                         isSelected
                                             ? "bg-[var(--color-chat)]"
                                             : ""
                                     }`}
                                 >
-                                    <div className="mb-1 flex items-center gap-2">
+                                    <div className="mb-1 flex min-w-0 items-center gap-2">
                                         <MessageSquareText className="h-4 w-4 shrink-0 text-[var(--color-accent-2)]" />
-                                        <span className="truncate text-sm font-medium text-[var(--color-chat-text)]">
+                                        <span className="min-w-0 flex-1 truncate text-sm font-medium text-[var(--color-chat-text)]">
                                             {conversation.title}
                                         </span>
                                     </div>
@@ -119,7 +118,7 @@ function ChatHistory({
                             );
                         })}
                 </div>
-            </ScrollArea>
+            </div>
         </div>
     );
 }

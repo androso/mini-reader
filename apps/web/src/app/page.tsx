@@ -19,6 +19,14 @@ import {
     Upload,
 } from "lucide-react";
 
+type LibraryFilter = "all" | "epub" | "pdf";
+
+const LIBRARY_FILTERS = [
+    { value: "all", label: "All" },
+    { value: "epub", label: "EPUB" },
+    { value: "pdf", label: "PDF" },
+] as const satisfies ReadonlyArray<{ value: LibraryFilter; label: string }>;
+
 function formatRelativeDate(date: Date | string): string {
     const d = new Date(date);
     const now = new Date();
@@ -52,7 +60,29 @@ function Home() {
     const router = useRouter();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [isUploading, setIsUploading] = useState(false);
-    const [filter, setFilter] = useState<"all" | "epub" | "pdf">("all");
+    const [filter, setFilter] = useState<LibraryFilter>("all");
+
+    const renderLibraryFilterSwitch = () => (
+        <div
+            className="library-filter-switch"
+            role="radiogroup"
+            aria-label="Filter library"
+        >
+            {LIBRARY_FILTERS.map(({ value, label }) => (
+                <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={filter === value}
+                    onClick={() => setFilter(value)}
+                    className="library-filter-switch__option"
+                    data-active={filter === value}
+                >
+                    {label}
+                </button>
+            ))}
+        </div>
+    );
 
     const { data: booksData } = useQuery({
         queryKey: [apiUrl("/api/books")],
@@ -145,19 +175,7 @@ function Home() {
                     <span className="mentarie-mark" aria-hidden="true" />
                     Mentarie
                 </div>
-                <div className="flex gap-1" aria-label="Filter library">
-                    {(["all", "epub", "pdf"] as const).map((type) => (
-                        <button
-                            key={type}
-                            type="button"
-                            onClick={() => setFilter(type)}
-                            className="min-h-11 whitespace-nowrap rounded-[var(--radius-pill)] px-2 text-xs font-bold uppercase"
-                            aria-pressed={filter === type}
-                        >
-                            {type}
-                        </button>
-                    ))}
-                </div>
+                {renderLibraryFilterSwitch()}
             </nav>
 
             <aside className="library-rail fixed inset-y-0 left-0 z-[var(--z-sticky)] hidden w-64 flex-col p-6 md:flex lg:w-72 lg:p-8">

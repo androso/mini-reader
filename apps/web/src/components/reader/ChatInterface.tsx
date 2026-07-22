@@ -167,12 +167,17 @@ export function ChatInterface({
                     </div>
                 )}
                 {isMobileChatOpen && (
-                    <MobileChatToolbar onClose={handleMobileChatClose} />
+                    <MobileChatToolbar
+                        title={
+                            chatState.isHistoryOpen ? "Previous chats" : "Chat"
+                        }
+                        onClose={handleMobileChatClose}
+                    />
                 )}
                 {isMobile &&
                     chatState.isChatOpen &&
                     chatState.isHistoryOpen && (
-                        <div className="overflow-scroll h-full">
+                        <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
                             <ChatHistory
                                 conversations={conversations}
                                 currentConversationId={
@@ -213,7 +218,10 @@ export function ChatInterface({
                     selectedModel={selectedModel}
                     setSelectedModel={setSelectedModel}
                     inputRef={inputRef}
-                    showModelSelector={!isMobile || isComposerFocused}
+                    showModelSelector={
+                        !isMobile ||
+                        (isComposerFocused && !chatState.isHistoryOpen)
+                    }
                     onComposerFocusChange={handleComposerFocusChange}
                     onHistoryClick={() => {
                         if (isMobile) {
@@ -260,11 +268,17 @@ const ChatMessages = ({ messages }: { messages: Message[] }) => (
     </div>
 );
 
-const MobileChatToolbar = ({ onClose }: { onClose: () => void }) => {
+const MobileChatToolbar = ({
+    title,
+    onClose,
+}: {
+    title: string;
+    onClose: () => void;
+}) => {
     return (
         <div className="flex min-h-14 shrink-0 items-center gap-2 border-b border-[var(--color-chat-rule)] px-3 py-2">
             <span className="font-label text-xs font-semibold text-[var(--color-chat-muted)]">
-                Chat
+                {title}
             </span>
             <Button
                 type="button"
@@ -328,7 +342,6 @@ const ChatInput = ({
 }) => (
     <form
         onSubmit={handleSubmit}
-        onFocus={() => onComposerFocusChange(true)}
         onBlur={(event) => {
             const nextFocused = event.relatedTarget as Node | null;
             if (!event.currentTarget.contains(nextFocused)) {
@@ -424,6 +437,8 @@ const ChatInput = ({
                 ref={inputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
+                onFocus={() => onComposerFocusChange(true)}
+                onPointerDown={() => onComposerFocusChange(true)}
                 placeholder={
                     isDocumentReady
                         ? "Ask about this document..."
