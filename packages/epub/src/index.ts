@@ -3,4 +3,6 @@ export * from "./chapterProcessing";
 export * from "./navigation";
 export * from "./processing";
 export * from "./progressChapterId";
+export * from "./resourcePath";
+export * from "./svgSanitizer";
 export * from "./types";

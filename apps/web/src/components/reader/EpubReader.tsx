@@ -6,6 +6,7 @@ import { useEpubProcessor } from "@/hooks/useEpubProcessor";
 import { useChapterLoader } from "@/hooks/useChapterLoader";
 import { useTextBlockNavigation } from "@/hooks/useTextBlockNavigation";
 import { useChapterPullNavigation } from "@/hooks/useChapterPullNavigation";
+import { useEpubImageHydration } from "@/hooks/useEpubImageHydration";
 import { useTextSelection } from "@/hooks/useTextSelection";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import Chapter from "./Chapter";
@@ -41,6 +42,8 @@ const EpubReader = memo(
             useEpubProcessor();
         const contentRef = useRef<HTMLDivElement>(null);
         const scrollContainerRef = useRef<HTMLDivElement>(null);
+        const [chapterContainer, setChapterContainer] =
+            React.useState<HTMLElement | null>(null);
         const hasInitializedChapter = useRef(false);
         const pendingScrollRef = useRef<{
             mode: ScrollLanding;
@@ -65,6 +68,9 @@ const EpubReader = memo(
             error: chapterLoadError,
             clearError,
             chapters,
+            resolveChapterImage,
+            commitChapter,
+            releaseAll,
         } = useChapterLoader(epubContent, zipData, {
             singleChapterMode: true,
         });
@@ -283,6 +289,22 @@ const EpubReader = memo(
             onCommit: navigateAdjacentChapter,
         });
 
+        const handleChapterContainer = useCallback(
+            (element: HTMLElement | null) => {
+                setChapterContainer(element);
+            },
+            []
+        );
+
+        useEpubImageHydration({
+            enabled: Boolean(activeChapter),
+            chapterId: activeChapter?.id ?? null,
+            container: chapterContainer,
+            scrollRootRef: scrollContainerRef,
+            resolveChapterImage,
+            onChapterImagesReady: commitChapter,
+        });
+
         useEffect(() => {
             processEpub(url);
         }, [url, processEpub]);
@@ -290,10 +312,12 @@ const EpubReader = memo(
         useEffect(() => {
             hasInitializedChapter.current = false;
             setActiveChapter(null);
+            setChapterContainer(null);
             setActiveHref(null);
             setRestoreBlockId(null);
             setFailedSpineId(null);
-        }, [bookId, url]);
+            releaseAll();
+        }, [bookId, releaseAll, url]);
 
         // Restore progress into a single chapter (mobile and desktop).
         useEffect(() => {
@@ -451,6 +475,7 @@ const EpubReader = memo(
                                     chapter={activeChapter}
                                     isLastChapter={!canGoNext}
                                     showNextChapterButton={!isMobile}
+                                    onContainerElement={handleChapterContainer}
                                     onAddHighlightContext={
                                         onAddHighlightContext
                                     }

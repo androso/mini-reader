@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useEffect, useRef } from "react";
 import TextBlock from "./TextBlock";
 import {
     type ChapterBlock,
@@ -15,6 +15,7 @@ const Chapter = memo(
         onAddHighlightContext,
         chapterLoadError,
         onRetryChapterLoad,
+        onContainerElement,
     }: {
         chapter: ChapterBlock;
         activeTextblockId: string | null;
@@ -24,57 +25,72 @@ const Chapter = memo(
         onAddHighlightContext?: (text: string) => void;
         chapterLoadError?: string | null;
         onRetryChapterLoad?: () => void;
-    }) => (
-        <div id={chapter.hrefId}>
-            {chapter.textBlocks.map((textBlock: TextBlockType) => (
-                <TextBlock
-                    key={textBlock.id}
-                    id={textBlock.id}
-                    content={textBlock.content}
-                    isActive={activeTextblockId === textBlock.id}
-                    onAddHighlightContext={onAddHighlightContext}
-                />
-            ))}
-            {chapterLoadError && onRetryChapterLoad && (
-                <div className="flex flex-col items-center gap-3 py-8">
-                    <p className="text-sm text-[var(--color-accent-3)]">
-                        {chapterLoadError}
-                    </p>
-                    <button
-                        type="button"
-                        onClick={onRetryChapterLoad}
-                        className="rounded-[var(--radius-pill)] bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-ink)]"
-                    >
-                        Retry
-                    </button>
-                </div>
-            )}
-            {showNextChapterButton && !isLastChapter && (
-                <div className="flex justify-center py-8">
-                    <button
-                        onClick={onNextChapter}
-                        className="grid h-12 w-12 place-items-center rounded-[var(--radius-pill)] bg-[var(--color-accent)] text-[var(--color-accent-ink)] transition-[background-color,transform] duration-short hover:bg-[var(--color-accent-deep)] active:translate-y-px"
-                        aria-label="Next chapter"
-                    >
-                        <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="24"
-                            height="24"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
+        onContainerElement?: (element: HTMLElement | null) => void;
+    }) => {
+        const containerRef = useRef<HTMLDivElement>(null);
+
+        useEffect(() => {
+            onContainerElement?.(containerRef.current);
+            return () => onContainerElement?.(null);
+        }, [chapter.id, onContainerElement]);
+
+        return (
+            <div
+                id={chapter.hrefId}
+                ref={containerRef}
+                className="epub-chapter"
+                data-chapter-id={chapter.id}
+            >
+                {chapter.textBlocks.map((textBlock: TextBlockType) => (
+                    <TextBlock
+                        key={textBlock.id}
+                        id={textBlock.id}
+                        content={textBlock.content}
+                        isActive={activeTextblockId === textBlock.id}
+                        onAddHighlightContext={onAddHighlightContext}
+                    />
+                ))}
+                {chapterLoadError && onRetryChapterLoad && (
+                    <div className="flex flex-col items-center gap-3 py-8">
+                        <p className="text-sm text-[var(--color-accent-3)]">
+                            {chapterLoadError}
+                        </p>
+                        <button
+                            type="button"
+                            onClick={onRetryChapterLoad}
+                            className="rounded-[var(--radius-pill)] bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-ink)]"
                         >
-                            <path d="M7 13l5 5 5-5" />
-                            <path d="M7 6l5 5 5-5" />
-                        </svg>
-                    </button>
-                </div>
-            )}
-        </div>
-    )
+                            Retry
+                        </button>
+                    </div>
+                )}
+                {showNextChapterButton && !isLastChapter && (
+                    <div className="flex justify-center py-8">
+                        <button
+                            onClick={onNextChapter}
+                            className="grid h-12 w-12 place-items-center rounded-[var(--radius-pill)] bg-[var(--color-accent)] text-[var(--color-accent-ink)] transition-[background-color,transform] duration-short hover:bg-[var(--color-accent-deep)] active:translate-y-px"
+                            aria-label="Next chapter"
+                        >
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                width="24"
+                                height="24"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                            >
+                                <path d="M7 13l5 5 5-5" />
+                                <path d="M7 6l5 5 5-5" />
+                            </svg>
+                        </button>
+                    </div>
+                )}
+            </div>
+        );
+    }
 );
 
 Chapter.displayName = "Chapter";

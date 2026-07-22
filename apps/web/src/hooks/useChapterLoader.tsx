@@ -1,9 +1,13 @@
 import { useCallback, useReducer, useEffect } from "react";
 import JSZip from "jszip";
+import {
+    buildTextBlocksFromDocument,
+    markChapterImagesForLazyLoad,
+    resolveEpubImageResource,
+} from "@reader/epub";
 import { TextBlock, type EpubContent } from "@/types/EpubReader";
 import { useImageLoader } from "@/hooks/useImageLoader";
 import { resolveRelativePath } from "@/lib/utils";
-import { buildTextBlocksFromDocument } from "@/lib/epubChapterProcessing";
 
 export interface Chapter {
     id: string;
@@ -72,17 +76,14 @@ export const useChapterLoader = (
     options: ChapterLoaderOptions = {}
 ) => {
     const singleChapterMode = Boolean(options.singleChapterMode);
-    const { loadImage } = useImageLoader(zipData, epubContent?.basePath ?? "");
+    const { resolveChapterImage, beginChapter, commitChapter, releaseAll } =
+        useImageLoader(zipData, epubContent);
     const [state, dispatch] = useReducer(chapterReducer, {
         chapters: [],
         isLoading: false,
         error: null,
         flatTextBlocks: [],
     });
-
-    useEffect(() => {
-        // console.log({ epubContent });
-    }, [epubContent]);
 
     const loadCssContent = useCallback(
         async (href: string, currentPath?: string): Promise<string | null> => {
@@ -151,8 +152,8 @@ export const useChapterLoader = (
     const processHtml = useCallback(
         async (
             html: string,
-            baseUrl: string,
-            chapterId: string
+            chapterId: string,
+            chapterHref: string
         ): Promise<TextBlock[]> => {
             if (!epubContent) throw new Error("No EPUB content available");
             const parser = new DOMParser();
@@ -191,55 +192,16 @@ export const useChapterLoader = (
 
             await Promise.all(stylePromises);
 
-            // Temporarily disabled image loading
-            const imagePromises = Array.from(doc.querySelectorAll("img")).map(
-                async (img) => {
-                    const src = img.getAttribute("src");
-
-                    if (
-                        src &&
-                        !src.startsWith("blob:") &&
-                        !src.startsWith("data:")
-                    ) {
-                        try {
-                            const resolvedPath = resolveRelativePath(
-                                src,
-                                epubContent.basePath
-                            );
-
-                            const manifestItem = Object.values(
-                                epubContent.manifest
-                            ).find((item) => item.href.includes(resolvedPath));
-
-                            img.setAttribute(
-                                "data-original-src",
-                                manifestItem?.href as string
-                            );
-                            const dataUrl = await loadImage(
-                                manifestItem?.href as string
-                            );
-                            img.src = dataUrl;
-                        } catch (_error) {
-                            img.src =
-                                'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"%3E%3Cpath fill="%23eee" d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/%3E%3C/svg%3E';
-                            img.alt = "Failed to load image";
-                        }
-                    }
-                }
+            // Mark archive images for lazy hydration; do not unzip image bytes yet.
+            markChapterImagesForLazyLoad(doc, (src) =>
+                resolveEpubImageResource(epubContent, chapterHref, src)
             );
 
-            // const start = performance.now();
-            await Promise.all(imagePromises);
-            // const end = performance.now();
-            // const durationInSeconds = ((end - start) / 1000).toFixed(2);
-            // console.log(`Image promises took ${durationInSeconds} seconds to complete.`);
-
-            // Remove images instead of loading them
             doc.querySelectorAll("script").forEach((script) => script.remove());
 
             return buildTextBlocksFromDocument(doc, chapterId);
         },
-        [epubContent, loadImage, loadCssContent]
+        [epubContent, loadCssContent]
     );
 
     const loadChapter = useCallback(
@@ -259,8 +221,11 @@ export const useChapterLoader = (
                 }
 
                 const content = await file.async("text");
-                const baseUrl = `${window.location.origin}/${epubContent.basePath}`;
-                const textBlocks = await processHtml(content, baseUrl, id);
+                const textBlocks = await processHtml(
+                    content,
+                    id,
+                    manifestItem.href
+                );
 
                 const newHref = manifestItem.href.includes(".")
                     ? manifestItem.href.substring(
@@ -275,11 +240,6 @@ export const useChapterLoader = (
                     hrefId: newHref,
                     textBlocks,
                 };
-                // const newHref = manifestItem.href.includes(".")
-                // 	? manifestItem.href.substring(0, manifestItem.href.lastIndexOf("."))
-                // 	: manifestItem.href;
-
-                // return { id, content, element, hrefId: newHref };
             } catch (err) {
                 console.warn(`Failed to load chapter ${id}:`, err);
                 return null;
@@ -363,6 +323,7 @@ export const useChapterLoader = (
 
             dispatch({ type: "START_LOADING" });
             try {
+                beginChapter(id);
                 const chapter = await loadChapter(id);
                 if (!chapter) {
                     dispatch({
@@ -391,12 +352,19 @@ export const useChapterLoader = (
                 return null;
             }
         },
-        [epubContent, loadChapter, state.chapters]
+        [beginChapter, epubContent, loadChapter, state.chapters]
     );
 
     const clearError = useCallback(() => {
         dispatch({ type: "CLEAR_ERROR" });
     }, []);
+
+    useEffect(() => {
+        // Release image URLs when the book archive changes/unmounts via loader.
+        return () => {
+            releaseAll();
+        };
+    }, [releaseAll]);
 
     return {
         chapters: state.chapters,
@@ -407,5 +375,9 @@ export const useChapterLoader = (
         clearError,
         flatTextBlocks: state.flatTextBlocks,
         singleChapterMode,
+        resolveChapterImage,
+        beginChapter,
+        commitChapter,
+        releaseAll,
     };
 };
