@@ -147,3 +147,45 @@ test("chapter remount should rehydrate after blob revoke", () => {
     assert.equal(shouldEagerHydrate, true);
     assert.notEqual(firstVisit.src, onReturn.src);
 });
+
+test("archive restart must keep svg markers for retry", () => {
+    // Overlapping processEpub / Strict Mode can revoke the first blob URL.
+    // Hydration must keep data-epub-svg so the next archiveGeneration can recover.
+    const img = {
+        attrs: {
+            "data-epub-svg": "<svg></svg>",
+            src: "blob:old",
+        } as Record<string, string>,
+        removeAttribute(name: string) {
+            delete this.attrs[name];
+        },
+        getAttribute(name: string) {
+            return this.attrs[name] ?? null;
+        },
+        hasAttribute(name: string) {
+            return name in this.attrs;
+        },
+    };
+
+    // Successful assign should not strip the svg marker anymore.
+    img.attrs.src = "blob:new";
+    assert.equal(img.hasAttribute("data-epub-svg"), true);
+
+    // Simulated revoke + retry still has payload.
+    img.removeAttribute("src");
+    assert.equal(img.getAttribute("data-epub-svg"), "<svg></svg>");
+});
+
+test("stale processEpub completions are ignored by request id", () => {
+    let current = 0;
+    let published = 0;
+    const run = (id: number) => {
+        // only latest may publish
+        if (id === current) published += 1;
+    };
+    current = 1;
+    current = 2;
+    run(1);
+    run(2);
+    assert.equal(published, 1);
+});

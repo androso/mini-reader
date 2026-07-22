@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import JSZip from "jszip";
 import {
     normalizeImageMediaType,
@@ -36,6 +36,7 @@ export const useImageLoader = (
     } | null>(null);
     const activeChapterRef = useRef<string | null>(null);
     const previousChapterRef = useRef<string | null>(null);
+    const [archiveGeneration, setArchiveGeneration] = useState(0);
 
     if (!registryRef.current) {
         registryRef.current = new ImageObjectUrlRegistry((url) =>
@@ -47,12 +48,18 @@ export const useImageLoader = (
         const registry = registryRef.current!;
         const pendingLoads = pendingLoadsRef.current;
         const chapterCache = chapterCacheRef.current;
+        // Keep the in-flight chapter identity across archive restarts so a
+        // Strict Mode / overlapping processEpub refresh does not make
+        // resolveChapterImage treat the active cover as stale.
+        const preservedActive = activeChapterRef.current;
+        const preservedPrevious = previousChapterRef.current;
         const generation = registry.startArchive();
         archiveRef.current = { zipData, epubContent, generation };
         pendingLoads.clear();
         chapterCache.clear();
-        activeChapterRef.current = null;
-        previousChapterRef.current = null;
+        activeChapterRef.current = preservedActive;
+        previousChapterRef.current = preservedPrevious;
+        setArchiveGeneration(generation);
 
         return () => {
             registry.dispose(generation);
@@ -101,6 +108,7 @@ export const useImageLoader = (
         chapterCacheRef.current.clear();
         activeChapterRef.current = null;
         previousChapterRef.current = null;
+        setArchiveGeneration(generation);
     }, []);
 
     const resolveChapterImage = useCallback(
@@ -233,5 +241,6 @@ export const useImageLoader = (
         beginChapter,
         commitChapter,
         releaseAll,
+        archiveGeneration,
     };
 };

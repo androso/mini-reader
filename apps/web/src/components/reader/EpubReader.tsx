@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, memo } from "react";
-import { ArrowLeft, Menu, MessageCirclePlus } from "lucide-react";
+import { ArrowLeft, Menu, MessageCirclePlus, X } from "lucide-react";
 import Sidebar from "./Sidebar";
 import ChapterPullAffordance from "./ChapterPullAffordance";
 import { useEpubProcessor } from "@/hooks/useEpubProcessor";
@@ -71,6 +71,7 @@ const EpubReader = memo(
             resolveChapterImage,
             commitChapter,
             releaseAll,
+            archiveGeneration,
         } = useChapterLoader(epubContent, zipData, {
             singleChapterMode: true,
         });
@@ -303,6 +304,7 @@ const EpubReader = memo(
             scrollRootRef: scrollContainerRef,
             resolveChapterImage,
             onChapterImagesReady: commitChapter,
+            archiveGeneration,
         });
 
         useEffect(() => {
@@ -426,7 +428,7 @@ const EpubReader = memo(
                 />
 
                 <div className="relative h-full overflow-x-hidden bg-[var(--color-paper)]">
-                    <div className="sticky left-0 right-0 top-0 z-[var(--z-raised)] flex h-[72px] items-center gap-2 bg-[var(--color-paper)] px-6 md:px-10">
+                    <div className="sticky left-0 right-0 top-0 z-[calc(var(--z-dropdown)+1)] flex h-[72px] items-center gap-2 bg-[var(--color-paper)] px-6 md:px-10">
                         {onBack && (
                             <button
                                 type="button"
@@ -439,11 +441,20 @@ const EpubReader = memo(
                         )}
                         <button
                             type="button"
-                            className="z-[var(--z-raised)] grid h-11 w-11 cursor-pointer place-items-center rounded-[var(--radius-pill)] border-none bg-transparent text-[var(--color-ink-2)] transition-[background-color,color] duration-short hover:bg-[var(--color-paper-2)] hover:text-[var(--color-ink)]"
-                            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                            aria-label="Open table of contents"
+                            className="grid h-11 w-11 cursor-pointer place-items-center rounded-[var(--radius-pill)] border-none bg-transparent text-[var(--color-ink-2)] transition-[background-color,color] duration-short hover:bg-[var(--color-paper-2)] hover:text-[var(--color-ink)]"
+                            onClick={() => setIsSidebarOpen((open) => !open)}
+                            aria-label={
+                                isSidebarOpen
+                                    ? "Close table of contents"
+                                    : "Open table of contents"
+                            }
+                            aria-expanded={isSidebarOpen}
                         >
-                            <Menu className="h-6 w-6" />
+                            {isSidebarOpen ? (
+                                <X className="h-6 w-6" />
+                            ) : (
+                                <Menu className="h-6 w-6" />
+                            )}
                         </button>
                     </div>
                     {isMobile && (

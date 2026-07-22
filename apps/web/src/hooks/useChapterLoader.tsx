@@ -76,8 +76,13 @@ export const useChapterLoader = (
     options: ChapterLoaderOptions = {}
 ) => {
     const singleChapterMode = Boolean(options.singleChapterMode);
-    const { resolveChapterImage, beginChapter, commitChapter, releaseAll } =
-        useImageLoader(zipData, epubContent);
+    const {
+        resolveChapterImage,
+        beginChapter,
+        commitChapter,
+        releaseAll,
+        archiveGeneration,
+    } = useImageLoader(zipData, epubContent);
     const [state, dispatch] = useReducer(chapterReducer, {
         chapters: [],
         isLoading: false,
@@ -379,5 +384,6 @@ export const useChapterLoader = (
         beginChapter,
         commitChapter,
         releaseAll,
+        archiveGeneration,
     };
 };

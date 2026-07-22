@@ -66,9 +66,9 @@ const Sidebar: React.FC<SidebarProps> = memo(
             return (
                 <div key={`${entry.id}-${index}`}>
                     <div
-                        className={`toc-item level-${entry.level} flex min-h-11 cursor-pointer items-center rounded-[var(--radius-input)] px-3 py-2 transition-colors hover:bg-[var(--color-paper-2)] ${entry.href === activeHref ? "bg-[var(--color-accent-2-soft)] text-[var(--color-ink)]" : "text-[var(--color-ink-2)]"}`}
+                        className={`toc-item level-${entry.level} flex min-h-11 cursor-pointer items-center rounded-[var(--radius-input)] py-2 pr-3 transition-colors hover:bg-[var(--color-paper-2)] ${entry.href === activeHref ? "bg-[var(--color-accent-2-soft)] text-[var(--color-ink)]" : "text-[var(--color-ink-2)]"}`}
                         style={{
-                            paddingInlineStart: `calc(${entry.level} * var(--space-lg))`,
+                            paddingInlineStart: `calc(var(--space-lg) * ${entry.level + 1})`,
                         }}
                         onClick={() => {
                             onTocItemClick(entry.href!);

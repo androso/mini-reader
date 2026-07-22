@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { processEpubFile } from "@/lib/epubProcessing";
 import { type EpubContent } from "@/types/EpubReader";
 import JSZip from "jszip";
@@ -10,8 +10,10 @@ export const useEpubProcessor = () => {
     const [error, setError] = useState<string | null>(null);
     const [epubContent, setEpubContent] = useState<EpubContent | null>(null);
     const [zipData, setZipData] = useState<JSZip | null>(null);
+    const requestIdRef = useRef(0);
 
     const processEpub = useCallback(async (url: string) => {
+        const requestId = ++requestIdRef.current;
         try {
             setIsLoading(true);
             setError(null);
@@ -25,15 +27,27 @@ export const useEpubProcessor = () => {
             const arrayBuffer = await response.arrayBuffer();
             const [content, zip] = await processEpubFile(arrayBuffer);
 
+            // React Strict Mode (and fast remounts) can overlap fetches. Only the
+            // latest request may publish zip/content, or image archives restart
+            // mid-hydrate and covers get marked unavailable.
+            if (requestId !== requestIdRef.current) {
+                return;
+            }
+
             setZipData(zip);
             setEpubContent(content);
         } catch (err) {
+            if (requestId !== requestIdRef.current) {
+                return;
+            }
             const errorMessage =
                 err instanceof Error ? err.message : "Unknown error occurred";
             setError("Failed to process EPUB file: " + errorMessage);
             console.error(err);
         } finally {
-            setIsLoading(false);
+            if (requestId === requestIdRef.current) {
+                setIsLoading(false);
+            }
         }
     }, []);
 

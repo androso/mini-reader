@@ -24,6 +24,14 @@ const markUnavailable = (img: HTMLImageElement) => {
     img.classList.add("epub-image-unavailable");
 };
 
+const clearFailed = (img: HTMLImageElement) => {
+    img.removeAttribute("data-epub-failed");
+    img.classList.remove("epub-image-unavailable");
+    if (img.getAttribute("alt") === UNAVAILABLE_LABEL) {
+        img.setAttribute("alt", "");
+    }
+};
+
 /**
  * Lazily hydrate marked EPUB images inside a chapter container.
  * Rooted at the reader scroll container with a 600px margin.
@@ -31,6 +39,9 @@ const markUnavailable = (img: HTMLImageElement) => {
  * `container` must be the live mounted element (React state), not only a
  * ref. Chapter mount happens after the active chapter is set, so a
  * ref-only read races and never hydrates cover/standalone images.
+ *
+ * `archiveGeneration` must change whenever the image blob archive restarts
+ * so covers can retry after a Strict Mode / overlapping EPUB parse race.
  */
 export const useEpubImageHydration = ({
     enabled,
@@ -39,6 +50,7 @@ export const useEpubImageHydration = ({
     scrollRootRef,
     resolveChapterImage,
     onChapterImagesReady,
+    archiveGeneration = 0,
 }: {
     enabled: boolean;
     chapterId: string | null;
@@ -47,6 +59,8 @@ export const useEpubImageHydration = ({
     resolveChapterImage: ResolveChapterImage;
     /** Called after the chapter commits and observers are attached. */
     onChapterImagesReady?: (chapterId: string) => void;
+    /** Bumps when zip/content archive identity restarts. */
+    archiveGeneration?: number;
 }) => {
     const resolveRef = useRef(resolveChapterImage);
     resolveRef.current = resolveChapterImage;
@@ -65,6 +79,7 @@ export const useEpubImageHydration = ({
                 return;
             }
             inFlightRef.current.add(img);
+            clearFailed(img);
 
             const manifestHref = img.getAttribute(MARKER_SRC);
             const inlineSvg = img.getAttribute(MARKER_SVG);
@@ -91,7 +106,8 @@ export const useEpubImageHydration = ({
                 }
 
                 if (!url) {
-                    markUnavailable(img);
+                    // Transient archive races should retry on the next
+                    // archiveGeneration; keep markers intact.
                     return;
                 }
 
@@ -102,7 +118,8 @@ export const useEpubImageHydration = ({
                     };
                     const handleError = () => {
                         cleanup();
-                        markUnavailable(img);
+                        // Keep markers so archiveGeneration retries can recover.
+                        img.removeAttribute("src");
                         resolve();
                     };
                     const cleanup = () => {
@@ -115,13 +132,19 @@ export const useEpubImageHydration = ({
                     img.src = url;
                     img.setAttribute("loading", "lazy");
                     img.setAttribute("decoding", "async");
-                    // Clear inline payload after hydration to free DOM attribute memory.
-                    img.removeAttribute(MARKER_SVG);
+                    // Keep data-epub-svg so an archive restart can rehydrate
+                    // after blob URLs are revoked (Strict Mode / remount races).
                 });
 
-                hydratedRef.current.add(img);
+                if (
+                    !cancelled &&
+                    container.contains(img) &&
+                    img.getAttribute("src")
+                ) {
+                    hydratedRef.current.add(img);
+                }
             } catch {
-                if (!cancelled && container.contains(img)) markUnavailable(img);
+                // Leave markers for a later archiveGeneration retry.
             } finally {
                 inFlightRef.current.delete(img);
             }
@@ -144,6 +167,13 @@ export const useEpubImageHydration = ({
         if (images.length === 0) {
             readyRef.current?.(chapterId);
             return;
+        }
+
+        // New archive generation: allow previously attempted nodes to retry.
+        for (const img of images) {
+            hydratedRef.current.delete(img);
+            inFlightRef.current.delete(img);
+            clearFailed(img);
         }
 
         const scrollRoot = scrollRootRef.current;
@@ -186,5 +216,5 @@ export const useEpubImageHydration = ({
             cancelled = true;
             observer?.disconnect();
         };
-    }, [chapterId, container, enabled, scrollRootRef]);
+    }, [archiveGeneration, chapterId, container, enabled, scrollRootRef]);
 };
