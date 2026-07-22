@@ -89,5 +89,7 @@ test("mobile chat displays a compact '1 context added' badge instead of full par
 test("swiping right and clicking ask about paragraph passes context on mobile", () => {
     assert.match(textBlockSource, /extractPlainText\(content\)/);
     assert.match(textBlockSource, /onAddHighlightContext\(text\)/);
+    assert.match(textBlockSource, /z-20/);
+    assert.match(textBlockSource, /cursor-pointer/);
     assert.match(pageSource, /onAddHighlightContext=\{\(text\) =>/);
 });

@@ -73,7 +73,7 @@ const TextBlock = memo(
             const scale = 0.6 + opacity * 0.4;
 
             return (
-                <div className="absolute left-0 top-0 h-full flex flex-col items-center justify-center gap-2 pl-4">
+                <div className="absolute left-0 top-0 z-20 flex h-full flex-col items-center justify-center gap-2 pl-4 pointer-events-auto">
                     <button
                         type="button"
                         onClick={(e) => {
@@ -84,7 +84,7 @@ const TextBlock = memo(
                             }
                             handleUnlock();
                         }}
-                        className="grid h-11 w-11 place-items-center rounded-[var(--radius-pill)] bg-[var(--color-accent-2-soft)] transition-[background-color,transform,opacity] duration-short hover:bg-[var(--color-paper-3)] active:translate-y-px"
+                        className="grid h-11 w-11 cursor-pointer pointer-events-auto place-items-center rounded-[var(--radius-pill)] bg-[var(--color-accent-2-soft)] transition-[background-color,transform,opacity] duration-short hover:bg-[var(--color-paper-3)] active:translate-y-px"
                         style={{ opacity, transform: `scale(${scale})` }}
                         aria-label="Ask about paragraph"
                     >
@@ -92,7 +92,7 @@ const TextBlock = memo(
                     </button>
                     <button
                         type="button"
-                        className="grid h-11 w-11 place-items-center rounded-[var(--radius-pill)] bg-[var(--color-accent-2-soft)] transition-[background-color,transform,opacity] duration-short hover:bg-[var(--color-paper-3)]"
+                        className="grid h-11 w-11 cursor-pointer pointer-events-auto place-items-center rounded-[var(--radius-pill)] bg-[var(--color-accent-2-soft)] transition-[background-color,transform,opacity] duration-short hover:bg-[var(--color-paper-3)]"
                         style={{ opacity, transform: `scale(${scale})` }}
                         aria-label="Bookmark paragraph"
                     >
@@ -100,7 +100,7 @@ const TextBlock = memo(
                     </button>
                     <button
                         type="button"
-                        className="grid h-11 w-11 place-items-center rounded-[var(--radius-pill)] bg-[var(--color-accent-2-soft)] transition-[background-color,transform,opacity] duration-short hover:bg-[var(--color-paper-3)]"
+                        className="grid h-11 w-11 cursor-pointer pointer-events-auto place-items-center rounded-[var(--radius-pill)] bg-[var(--color-accent-2-soft)] transition-[background-color,transform,opacity] duration-short hover:bg-[var(--color-paper-3)]"
                         style={{ opacity, transform: `scale(${scale})` }}
                         aria-label="Share paragraph"
                     >
