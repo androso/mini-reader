@@ -79,10 +79,10 @@ test("sending a message opens the full mobile chat instead of a compact view", (
     assert.match(chatSource, /isHistoryOpen: false/);
 });
 
-test("mobile chat displays a compact '1 context added' badge instead of full paragraph text", () => {
+test("mobile chat displays a compact '1 context added' badge instead of full paragraph text without auto-expanding", () => {
     assert.match(chatSource, /1 context added/);
-    assert.match(chatSource, /isChatOpen: true/);
-    assert.match(chatSource, /isExpanded: true/);
+    assert.match(chatSource, /hasHighlightContext/);
+    assert.doesNotMatch(chatSource, /if \(isMobile\) \{\s*setChatState/);
     assert.doesNotMatch(chatSource, /max-h-20 overflow-y-auto/);
 });
 

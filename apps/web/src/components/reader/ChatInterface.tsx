@@ -36,23 +36,27 @@ interface ChatInterfaceProps {
 const ChatLayout = ({
     isMobile,
     isExpanded,
+    hasHighlightContext,
     children,
 }: {
     isMobile: boolean;
     isExpanded: boolean;
+    hasHighlightContext: boolean;
     children: React.ReactNode;
 }) => {
     const layoutClasses = useMemo(() => {
         const baseClasses = `flex flex-col ${!isMobile && "h-full flex-1"} overflow-hidden`;
         const mobileClasses = isMobile
-            ? `absolute bottom-4 w-[calc(100%-2rem)] left-1/2 -translate-x-1/2 rounded-[var(--radius-panel)] ${
+            ? `absolute bottom-4 w-[calc(100%-2rem)] left-1/2 -translate-x-1/2 rounded-[var(--radius-panel)] transition-all duration-short ${
                   isExpanded
                       ? "h-[80dvh] border border-[var(--color-chat-rule)] bg-[var(--color-chat)] text-[var(--color-chat-text)]"
-                      : "border border-transparent bg-transparent"
+                      : hasHighlightContext
+                        ? "border border-[var(--color-chat-rule)] bg-[var(--color-chat)] text-[var(--color-chat-text)] shadow-xl p-3"
+                        : "border border-transparent bg-transparent"
               }`
             : "";
         return `${baseClasses} ${mobileClasses} ${!isMobile ? "bg-[var(--color-chat)]" : ""}`;
-    }, [isMobile, isExpanded]);
+    }, [isMobile, isExpanded, hasHighlightContext]);
 
     return <div className={layoutClasses}>{children}</div>;
 };
@@ -118,13 +122,7 @@ export function ChatInterface({
     useEffect(() => {
         if (!highlightContext || !isDocumentReady) return;
 
-        if (isMobile) {
-            setChatState((prev) => ({
-                ...prev,
-                isChatOpen: true,
-                isExpanded: true,
-            }));
-        } else {
+        if (!isMobile) {
             inputRef.current?.focus();
         }
     }, [highlightContext, isDocumentReady, isMobile]);
@@ -146,7 +144,11 @@ export function ChatInterface({
                     />
                 </div>
             )}
-            <ChatLayout isMobile={isMobile} isExpanded={chatState.isExpanded}>
+            <ChatLayout
+                isMobile={isMobile}
+                isExpanded={chatState.isExpanded}
+                hasHighlightContext={Boolean(highlightContext)}
+            >
                 {!isMobile && onBack && (
                     <div className="flex shrink-0 items-center gap-1 px-6 pt-6 md:px-8 md:pt-8">
                         {!isDesktopHistoryVisible && (
@@ -204,6 +206,8 @@ export function ChatInterface({
                         <ChatMessages messages={chatState.messages} />
                     )}
                 <ChatInput
+                    isMobile={isMobile}
+                    isExpanded={chatState.isExpanded}
                     input={input}
                     setInput={setInput}
                     handleSubmit={(event) =>
@@ -304,6 +308,8 @@ const MobileChatToolbar = ({
 };
 
 const ChatInput = ({
+    isMobile = false,
+    isExpanded = false,
     input,
     setInput,
     handleSubmit,
@@ -326,6 +332,8 @@ const ChatInput = ({
     historyButtonLabel,
     isHistoryButtonActive,
 }: {
+    isMobile?: boolean;
+    isExpanded?: boolean;
     input: string;
     setInput: (value: string) => void;
     handleSubmit: (e: React.FormEvent) => void;
@@ -356,7 +364,9 @@ const ChatInput = ({
                 onComposerFocusChange(false);
             }
         }}
-        className="mt-auto shrink-0 p-6 md:p-8"
+        className={`mt-auto shrink-0 ${
+            isMobile && !isExpanded && highlightContext ? "p-0" : "p-6 md:p-8"
+        }`}
     >
         {!isDocumentReady && (
             <div
