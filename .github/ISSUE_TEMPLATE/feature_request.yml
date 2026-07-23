@@ -1,0 +1,30 @@
+name: Feature request
+description: Propose a focused improvement to Reader Platform
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+    - type: textarea
+      id: problem
+      attributes:
+          label: Problem
+          description: What user problem should this solve?
+      validations:
+          required: true
+    - type: textarea
+      id: proposal
+      attributes:
+          label: Proposed behavior
+          description: Describe the smallest useful outcome without introducing mandatory services.
+      validations:
+          required: true
+    - type: textarea
+      id: alternatives
+      attributes:
+          label: Alternatives considered
+    - type: checkboxes
+      id: architecture
+      attributes:
+          label: Compact runtime
+          options:
+              - label: This proposal keeps PostgreSQL/pgvector as the only required data service.
+                required: true

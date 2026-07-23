@@ -115,7 +115,7 @@ The bootstrap process:
 
 Check the app locally on the instance:
 
-```bash
+````bash
 cd /opt/reader
 docker compose --env-file .env.prod -f docker-compose.prod.yml ps
 docker compose --env-file .env.prod -f docker-compose.prod.yml exec app node -e "fetch('http://127.0.0.1:3000/health').then(r=>console.log(r.status))"
@@ -140,7 +140,7 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml build app
 docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm app pnpm db:migrate
 docker compose --env-file .env.prod -f docker-compose.prod.yml up -d
 docker compose --env-file .env.prod -f docker-compose.prod.yml logs -f app
-```
+````
 
 Downtime during rebuilds is acceptable for this single-user deployment.
 

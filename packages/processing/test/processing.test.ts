@@ -415,7 +415,7 @@ test("PDF text extraction decodes every run in source order", () => {
         "Preserve every run."
     );
 });
-test("extracts EPUB chunks within constrained heap limit", () => {
+test("extracts EPUB chunks within constrained heap limit", (t) => {
     const childScript = path.resolve(__dirname, "epub-memory-child.js");
     const result = spawnSync(
         process.execPath,
@@ -429,6 +429,12 @@ test("extracts EPUB chunks within constrained heap limit", () => {
         }
     );
 
+    if ((result.error as NodeJS.ErrnoException | undefined)?.code === "EPERM") {
+        t.skip("The local sandbox does not permit nested process creation");
+        return;
+    }
+
+    assert.ifError(result.error);
     assert.equal(
         result.status,
         0,

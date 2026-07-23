@@ -1,0 +1,95 @@
+name: CI
+
+on:
+    push:
+        branches: [main]
+    pull_request:
+        branches: [main]
+
+permissions:
+    contents: read
+
+concurrency:
+    group: ci-${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    test-build:
+        runs-on: ubuntu-latest
+        services:
+            postgres:
+                image: pgvector/pgvector:pg16
+                env:
+                    POSTGRES_USER: postgres
+                    POSTGRES_PASSWORD: postgres
+                    POSTGRES_DB: reader_test
+                ports:
+                    - 5432:5432
+                options: >-
+                    --health-cmd "pg_isready -U postgres -d reader_test"
+                    --health-interval 5s
+                    --health-timeout 5s
+                    --health-retries 10
+        env:
+            NODE_ENV: test
+            DATABASE_URL: postgresql://postgres:postgres@localhost:5432/reader_test
+            BOOK_DELETION_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/reader_deletion_test
+            PROGRESS_MIGRATION_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/reader_progress_test
+            MESSAGE_COMPLETION_MIGRATION_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/reader_completion_test
+            MESSAGE_EXECUTION_METADATA_MIGRATION_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/reader_metadata_test
+            JWT_SECRET: ci-only-jwt-secret
+            GOOGLE_CLIENT_ID: reader-ci.apps.googleusercontent.com
+            FRONTEND_URL: http://localhost:3001
+            OPENAI_API_KEY: ci-placeholder-openai-key
+            STORAGE_DRIVER: local
+            LOCAL_STORAGE_DIR: .tmp/ci-storage
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+            - uses: pnpm/action-setup@v4
+              with:
+                  version: 10.11.1
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+                  cache: pnpm
+            - run: pnpm install --frozen-lockfile
+            - name: Create isolated integration databases
+              env:
+                  PGPASSWORD: postgres
+              run: |
+                  for database in reader_deletion_test reader_progress_test reader_completion_test reader_metadata_test; do
+                    psql -h localhost -U postgres -d reader_test -c "CREATE DATABASE ${database}"
+                  done
+            - run: pnpm format:check
+            - run: pnpm test
+            - run: pnpm build
+            - run: git diff --check
+
+    dependency-audit:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: pnpm/action-setup@v4
+              with:
+                  version: 10.11.1
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+                  cache: pnpm
+            - run: pnpm install --frozen-lockfile
+            - run: pnpm audit --prod --audit-level high
+
+    gitleaks:
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            pull-requests: read
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+            - uses: gitleaks/gitleaks-action@v2
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

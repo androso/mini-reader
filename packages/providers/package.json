@@ -2,15 +2,21 @@
     "name": "@reader/providers",
     "version": "0.1.0",
     "private": true,
+    "license": "Apache-2.0",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/androso/reader-monorepo.git",
+        "directory": "packages/providers"
+    },
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
     "scripts": {
         "build": "tsc -p tsconfig.json"
     },
     "dependencies": {
-        "@aws-sdk/client-s3": "^3.723.0",
-        "openai": "^4.77.0",
-        "pg": "^8.21.0"
+        "@aws-sdk/client-s3": "^3.1093.0",
+        "openai": "^4.104.0",
+        "pg": "^8.22.0"
     },
     "devDependencies": {
         "@types/node": "^22.10.2",

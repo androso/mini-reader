@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
-import { readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import {
@@ -14,6 +13,7 @@ import {
     splitEpubHref,
 } from "../src/navigation";
 import type { EpubContent, ManifestItem } from "../src/types";
+import { createSyntheticEpub } from "./helpers/syntheticEpub";
 
 const requireFromApi = createRequire(
     path.resolve(process.cwd(), "../../apps/api/package.json")
@@ -41,26 +41,31 @@ class TestDOMParser {
 
 const fixtures = [
     {
-        name: "google-docs-upskilling",
-        fileName: "epub-3fe748bb63c9",
-        expectedTitle: "Advice on Upskilling",
+        name: "anchored-navigation",
+        options: {
+            title: "Synthetic Anchored Reader",
+            chapterCount: 4,
+            tocEntries: 160,
+            anchors: true,
+        },
+        expectedTitle: "Synthetic Anchored Reader",
         minSpineItems: 1,
         minTocEntries: 150,
         requiresAnchors: true,
     },
     {
-        name: "dopamine-nation",
-        fileName: "epub-bacadba17183",
-        expectedTitle:
-            "Dopamine Nation: Finding Balance in the Age of Indulgence",
+        name: "multi-chapter-nested-content",
+        options: {
+            title: "Synthetic Nested Reader",
+            chapterCount: 24,
+            nestedParagraphs: 120,
+        },
+        expectedTitle: "Synthetic Nested Reader",
         minSpineItems: 20,
         minTocEntries: 20,
         requiresAnchors: false,
     },
 ];
-
-const fixturePath = (fileName: string) =>
-    path.resolve(process.cwd(), "../../.local-storage", fileName);
 
 const toArrayBuffer = (buffer: Buffer): ArrayBuffer =>
     buffer.buffer.slice(
@@ -68,8 +73,10 @@ const toArrayBuffer = (buffer: Buffer): ArrayBuffer =>
         buffer.byteOffset + buffer.byteLength
     ) as ArrayBuffer;
 
-const loadFixture = async (fileName: string) => {
-    const fileBuffer = await readFile(fixturePath(fileName));
+const loadFixture = async (
+    options: Parameters<typeof createSyntheticEpub>[0]
+) => {
+    const fileBuffer = await createSyntheticEpub(options);
     return processEpubFile(toArrayBuffer(fileBuffer));
 };
 
@@ -79,7 +86,7 @@ const zipPathForManifestItem = (epubContent: EpubContent, item: ManifestItem) =>
 test("EPUB fixtures process into metadata, spine, manifest, and ToC", async (t) => {
     for (const fixture of fixtures) {
         await t.test(fixture.name, async () => {
-            const [epubContent, zipData] = await loadFixture(fixture.fileName);
+            const [epubContent, zipData] = await loadFixture(fixture.options);
 
             assert.equal(epubContent.metadata.title, fixture.expectedTitle);
             assert.ok(epubContent.spine.length >= fixture.minSpineItems);
@@ -106,7 +113,7 @@ test("EPUB fixtures process into metadata, spine, manifest, and ToC", async (t) 
 test("ToC entries resolve to spine items and existing anchors", async (t) => {
     for (const fixture of fixtures) {
         await t.test(fixture.name, async () => {
-            const [epubContent, zipData] = await loadFixture(fixture.fileName);
+            const [epubContent, zipData] = await loadFixture(fixture.options);
             const documentCache = new Map<string, Document>();
             let anchoredEntries = 0;
 
@@ -153,8 +160,12 @@ test("ToC entries resolve to spine items and existing anchors", async (t) => {
 });
 
 test("nested chapter containers split into readable text blocks", async () => {
-    const [epubContent, zipData] = await loadFixture("epub-bacadba17183");
-    const chapterId = "x08_Chapter_1_Our_Masturb";
+    const [epubContent, zipData] = await loadFixture({
+        title: "Synthetic Nested Reader",
+        chapterCount: 2,
+        nestedParagraphs: 120,
+    });
+    const chapterId = "chapter-1";
     const manifestItem = epubContent.manifest[chapterId];
     assert.ok(manifestItem);
 

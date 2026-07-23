@@ -1,0 +1,15 @@
+.agents/
+.chroma/
+.local-storage/
+.next/
+.private-backup/
+.tmp/
+coverage/
+dist/
+node_modules/
+pnpm-lock.yaml
+apps/api/src/db/migrations/
+apps/api/build/
+apps/api/migrations/meta/
+apps/web/src/db/migrations/meta/
+infra/cloudformation/

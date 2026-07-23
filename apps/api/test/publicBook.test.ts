@@ -1,10 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { SelectBook } from "../src/db/schema";
-import {
-    publicBookSelection,
-    toPublicBook,
-} from "../src/services/PublicBook";
+import { publicBookSelection, toPublicBook } from "../src/services/PublicBook";
 
 const privateBook: SelectBook = {
     id: "book-1",
@@ -29,7 +26,10 @@ test("public list and upload projection contains only browser book metadata", ()
     ];
 
     assert.deepEqual(Object.keys(publicBookSelection).sort(), expectedKeys);
-    assert.deepEqual(Object.keys(toPublicBook(privateBook)).sort(), expectedKeys);
+    assert.deepEqual(
+        Object.keys(toPublicBook(privateBook)).sort(),
+        expectedKeys
+    );
     assert.equal("fileKey" in toPublicBook(privateBook), false);
     assert.equal("collectionName" in toPublicBook(privateBook), false);
     assert.equal("userId" in toPublicBook(privateBook), false);

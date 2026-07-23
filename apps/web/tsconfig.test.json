@@ -7,9 +7,7 @@
         "noEmit": false,
         "outDir": "../../.tmp/apps-web-test",
         "rootDir": ".",
-        "types": [
-            "node"
-        ]
+        "types": ["node"]
     },
     "include": [
         "src/components/bookCoverLoading.ts",

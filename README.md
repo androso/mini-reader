@@ -1,63 +1,85 @@
 # Reader Platform
 
-Reader Platform is a compact fork of
-[`androso/reader-backend`](https://github.com/androso/reader-backend). It keeps
-the Reader API, web app, book ingestion, and shared packages in a pnpm
-workspace, but is designed to run in a simple environment with fewer services
-and less deployment machinery than the upstream repository.
+[![CI](https://github.com/androso/reader-monorepo/actions/workflows/ci.yml/badge.svg)](https://github.com/androso/reader-monorepo/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/androso/reader-monorepo/actions/workflows/codeql.yml/badge.svg)](https://github.com/androso/reader-monorepo/actions/workflows/codeql.yml)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-## Fork scope
+Reader Platform is a self-hosted web application for reading EPUB and PDF
+books, tracking reading progress, and chatting against private book context.
+It combines a Next.js frontend, an Express API, and PostgreSQL with pgvector in
+one pnpm workspace.
 
-This fork favors one small deployment over upstream's production-oriented
-service split. The normal runtime starts the API and web app, runs book
-processing inside the API through a Postgres-backed queue, and can use local
-Postgres with pgvector.
-
-This fork does not track every upstream feature. It includes the upstream
-authentication, authorization, storage, validation, data-integrity, and reader
-safety work selected for the compact parity milestone, while leaving out RAG
-evaluation, reranking and shadow tooling, ECS-oriented automation, and new
-CI/CD machinery. The vector store is exclusively pgvector.
-
-Selected upstream product, security, storage, and data-integrity improvements
-are tracked in the
-[`Compact upstream parity` milestone](https://github.com/androso/reader-monorepo/milestone/1).
-That milestone adapts behavior to this repository; it does not bring over the
-upstream RAG evaluation system, reranking and shadow infrastructure, or ECS
-deployment stack.
+The default deployment intentionally stays small: the API processes books in
+process through a PostgreSQL-backed queue, and PostgreSQL is the only required
+data service. Redis, BullMQ, Chroma, a separate worker, RAG evaluation,
+reranking, and shadow infrastructure are outside the project's runtime scope.
 
 ## Layout
 
 - `apps/api`: Express API for auth, books, chat, progress, storage, and current ingestion flow.
 - `apps/web`: Next.js frontend for the library, reader, auth, and chat UI.
 - `packages/epub`: shared EPUB parsing utilities.
-- `packages/jobs`: shared book-processing job helpers.
 - `packages/processing`: shared PDF/EPUB ingestion pipeline.
 - `packages/providers`: shared storage, vector store, and provider integrations.
 - `drizzle.config.ts`: root Drizzle config pointing at the API schema and migrations.
 
-## Setup
+## Quick start
 
-Install dependencies from the repository root:
+Prerequisites:
+
+- Node.js 22
+- pnpm 10.11.1 through Corepack
+- Docker with Compose, or an existing PostgreSQL 16 server with pgvector
+
+Install dependencies and start PostgreSQL:
 
 ```bash
-pnpm install
+corepack enable
+corepack prepare pnpm@10.11.1 --activate
+pnpm install --frozen-lockfile
+docker compose -f compose.dev.yml up -d
 ```
 
-Create local environment files:
+Create local environment files and set a development JWT secret:
 
 ```bash
 cp .env.template .env
 cp apps/web/.env.template apps/web/.env
 ```
 
-Local development expects these services to be available:
+The template's PostgreSQL URL matches `compose.dev.yml`. Set `JWT_SECRET` to a
+random local value; `OPENAI_API_KEY` is only required for ingestion and
+book-grounded chat. Never commit either generated environment file.
 
-- PostgreSQL with pgvector enabled, matching `DATABASE_URL`.
-- OpenAI credentials, via `OPENAI_API_KEY`, when ingesting books or chatting with document context.
+Apply migrations and start both applications:
 
-For local auth, the API supports `/api/auth/dev` through `DEV_USER_EMAIL` and
-`DEV_USER_NAME`, alongside email/password signup and login. Google OAuth values remain supported in production.
+```bash
+pnpm db:migrate
+pnpm dev
+```
+
+Open <http://localhost:3001>. The API health endpoint is
+<http://localhost:3000/health>, and interactive API documentation is available
+at <http://localhost:3000/api-docs>.
+
+For local auth, use the development sign-in shown on the login page. It calls
+`/api/auth/dev` with `DEV_USER_EMAIL` and `DEV_USER_NAME`. Email/password signup
+and login are also available; Google OAuth values are optional in development.
+
+To stop the development database without deleting its data:
+
+```bash
+docker compose -f compose.dev.yml down
+```
+
+## Project status and support
+
+Reader Platform is community-maintained software without a hosted service or
+support SLA. Use [Discussions](https://github.com/androso/reader-monorepo/discussions)
+for questions, [Issues](https://github.com/androso/reader-monorepo/issues) for
+reproducible bugs, and the private process in [SECURITY.md](SECURITY.md) for
+vulnerabilities. Contributions are welcome under [CONTRIBUTING.md](CONTRIBUTING.md)
+and the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Commands
 
@@ -67,7 +89,7 @@ For local auth, the API supports `/api/auth/dev` through `DEV_USER_EMAIL` and
 - `pnpm api:dev`: run only the API app on port `3000`.
 - `pnpm web:dev`: run the Next.js web app on port `3001`.
 - `pnpm web:build`: build the Next.js web app.
-- `pnpm web:lint`: run the web lint script.
+- `pnpm format:check`: verify repository formatting.
 - `pnpm db:generate`: generate Drizzle migrations from the API schema.
 - `pnpm db:migrate`: apply Drizzle migrations using `.env`.
 - `pnpm --filter @reader/api <script>`: run an API-specific script directly.
@@ -180,3 +202,8 @@ instance, static IP, S3 bucket or bucket access, and first-boot bootstrap.
 Follow `docs/aws-lightsail-cloudformation-deploy.md`. The manual setup guide in
 `docs/aws-lightsail-deploy.md` is retained as an operational fallback for SSH
 updates and recovery.
+
+## License
+
+Reader Platform is licensed under Apache-2.0. See [LICENSE](LICENSE),
+[NOTICE](NOTICE), and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
