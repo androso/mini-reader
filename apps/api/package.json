@@ -27,7 +27,7 @@
         "@opentelemetry/sdk-trace-base": "^2.10.0",
         "@reader/processing": "workspace:*",
         "@reader/providers": "workspace:*",
-        "cors": "^2.8.5",
+        "cors": "^2.8.6",
         "dotenv": "^16.4.7",
         "drizzle-orm": "^0.45.2",
         "express": "^4.22.2",
