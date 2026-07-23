@@ -7,8 +7,9 @@ invent per-page themes.
 ## Genre
 
 Playful, with a soft atmospheric palette for long reading sessions. The app
-chrome feels like a calm night sea, while the book remains the warmest and
-quietest surface in the product.
+chrome feels like a calm night sea. The library and book-reading surface use a
+quieter dark-paper scale so long sessions remain visually continuous with the
+surrounding chrome; authentication retains the warm light-paper scale.
 
 ## Macrostructure family
 
@@ -35,6 +36,10 @@ quietest surface in the product.
 - `--color-accent-3` oklch(56% 0.18 25)
 - `--color-focus` oklch(58% 0.18 195)
 - `--color-chat` oklch(20% 0.025 245)
+- `--color-dark-paper` oklch(17% 0.026 245)
+- `--color-dark-paper-raised` oklch(23% 0.032 240)
+- `--color-dark-ink` oklch(94% 0.014 95)
+- `--color-dark-ink-2` oklch(77% 0.035 210)
 
 Deep teal marks primary actions, sea blue marks links, sea glass marks selected
 context, and coral is reserved for destructive or failed states. Accents never
@@ -80,6 +85,10 @@ one-off spacing values.
 ## Per-page allowances
 
 - App pages use no decorative hero enrichment.
+- The library and book reader activate the dark-paper token set; authentication
+  continues to use the warm light-paper set. Readers can switch those two
+  surfaces back to the original light-paper theme, and the preference persists
+  across both routes.
 - The library may use real EPUB covers; fallback art uses flat token surfaces.
 - The reader may use Literata inside book content, overriding Hum’s sans-only
   rule because the book is content rather than application chrome.

@@ -17,6 +17,8 @@ import {
 import type { HighlightContext } from "@/types/highlightContext";
 import { apiUrl } from "@/lib/api";
 import { isPdfFileType } from "@/lib/bookReaderRouting";
+import { ReadingThemeToggle } from "@/components/ReadingThemeToggle";
+import { useReadingTheme } from "@/hooks/useReadingTheme";
 
 type ChatSidebarSide = "left" | "right";
 
@@ -33,6 +35,7 @@ const isChatSidebarSide = (value: string | null): value is ChatSidebarSide =>
 
 export default function Reader() {
     const router = useRouter();
+    const { theme, toggleTheme } = useReadingTheme();
     const params = useParams();
     const bookId = params.id as string | null;
     const { width } = useWindowSize();
@@ -290,7 +293,14 @@ export default function Reader() {
         <div
             key="desktop-viewer-pane"
             className="reader-viewer-pane relative order-2 min-w-[420px] flex-1 overflow-hidden rounded-[var(--radius-panel)]"
+            data-reading-theme={theme}
         >
+            <ReadingThemeToggle
+                theme={theme}
+                onToggle={toggleTheme}
+                compact
+                className="reader-theme-toggle"
+            />
             {isPdf ? (
                 <PdfReader url={bookUrl} />
             ) : (
@@ -318,7 +328,16 @@ export default function Reader() {
                 } ${isResizingChatPane ? "select-none" : ""}`}
             >
                 {isMobile ? (
-                    <div className="reader-viewer-pane relative h-full w-full overflow-hidden">
+                    <div
+                        className="reader-viewer-pane relative h-full w-full overflow-hidden"
+                        data-reading-theme={theme}
+                    >
+                        <ReadingThemeToggle
+                            theme={theme}
+                            onToggle={toggleTheme}
+                            compact
+                            className="reader-theme-toggle"
+                        />
                         {isPdf && (
                             <button
                                 type="button"

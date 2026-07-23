@@ -1,5 +1,5 @@
 /* Hallmark · macrostructure: Catalogue / Split Studio · theme: custom
- * vibe: "night sea, calm, literary" · paper: oklch(97% 0.012 95) · accent: oklch(70% 0.13 195)
+ * vibe: "night sea, calm, literary" · paper: light + dark reading surfaces · accent: oklch(70% 0.13 195)
  * display: Plus Jakarta Sans · body: Plus Jakarta Sans · axes: light / geometric-sans / chromatic-teal ~195°
  * studied: no · context: user-provided · design-system: design.md · v0.8.0
  */
@@ -28,6 +28,19 @@
     --color-chat-rule: oklch(39% 0.04 225);
     --color-chat-text: oklch(94% 0.014 95);
     --color-chat-muted: oklch(77% 0.035 210);
+
+    --color-dark-paper: oklch(17% 0.026 245);
+    --color-dark-paper-2: oklch(21% 0.03 242);
+    --color-dark-paper-3: oklch(25% 0.034 238);
+    --color-dark-paper-raised: oklch(23% 0.032 240);
+    --color-dark-ink: oklch(94% 0.014 95);
+    --color-dark-ink-2: oklch(77% 0.035 210);
+    --color-dark-ink-soft: oklch(66% 0.03 215);
+    --color-dark-rule: oklch(34% 0.038 228);
+    --color-dark-rule-strong: oklch(44% 0.045 220);
+    --color-dark-accent-2-soft: oklch(33% 0.06 210);
+    --color-dark-accent-3-soft: oklch(30% 0.075 25);
+    --color-dark-success-soft: oklch(30% 0.06 150);
 
     --font-display: "Plus Jakarta Sans", ui-rounded, sans-serif;
     --font-body: "Plus Jakarta Sans", ui-rounded, sans-serif;

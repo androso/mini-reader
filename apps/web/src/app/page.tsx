@@ -6,6 +6,8 @@ import toast from "react-hot-toast";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AuthProtection } from "@/components/AuthProtection";
 import BookCover from "@/components/BookCover";
+import { ReadingThemeToggle } from "@/components/ReadingThemeToggle";
+import { useReadingTheme } from "@/hooks/useReadingTheme";
 import type { Book } from "@/types/bookTypes";
 import { apiUrl } from "@/lib/api";
 import { createReaderPath } from "@/lib/bookReaderRouting";
@@ -58,6 +60,7 @@ function formatRelativeDate(date: Date | string): string {
 
 function Home() {
     const router = useRouter();
+    const { theme, toggleTheme } = useReadingTheme();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [isUploading, setIsUploading] = useState(false);
     const [filter, setFilter] = useState<LibraryFilter>("all");
@@ -169,7 +172,10 @@ function Home() {
     };
 
     return (
-        <div className="mentarie-shell flex flex-col md:flex-row">
+        <div
+            className="mentarie-shell flex flex-col md:flex-row"
+            data-reading-theme={theme}
+        >
             <nav className="library-rail sticky top-0 z-[var(--z-sticky)] flex items-center justify-between gap-4 px-4 py-3 md:hidden">
                 <div className="library-mobile-wordmark mentarie-wordmark flex shrink-0 items-center gap-2">
                     <span className="mentarie-mark" aria-hidden="true" />
@@ -229,6 +235,10 @@ function Home() {
                         </p>
                     </div>
                     <div className="flex flex-wrap gap-3">
+                        <ReadingThemeToggle
+                            theme={theme}
+                            onToggle={toggleTheme}
+                        />
                         <input
                             ref={fileInputRef}
                             type="file"

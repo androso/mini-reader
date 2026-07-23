@@ -343,6 +343,10 @@
     color: var(--color-ink);
 }
 
+.mentarie-shell[data-reading-theme="dark"] {
+    background: var(--color-dark-paper);
+}
+
 .mentarie-wordmark {
     font-family: var(--font-display);
     font-size: var(--text-xl);
@@ -496,6 +500,24 @@
     cursor: not-allowed;
     opacity: 0.55;
     transform: none;
+}
+
+.mentarie-shell[data-reading-theme="dark"] .library-main,
+.reader-viewer-pane[data-reading-theme="dark"] {
+    --color-paper: var(--color-dark-paper);
+    --color-paper-2: var(--color-dark-paper-2);
+    --color-paper-3: var(--color-dark-paper-3);
+    --color-paper-raised: var(--color-dark-paper-raised);
+    --color-ink: var(--color-dark-ink);
+    --color-ink-2: var(--color-dark-ink-2);
+    --color-ink-soft: var(--color-dark-ink-soft);
+    --color-rule: var(--color-dark-rule);
+    --color-rule-strong: var(--color-dark-rule-strong);
+    --color-accent-2-soft: var(--color-dark-accent-2-soft);
+    --color-accent-3-soft: var(--color-dark-accent-3-soft);
+    --color-success-soft: var(--color-dark-success-soft);
+
+    color: var(--color-ink);
 }
 
 .library-main {
@@ -719,6 +741,49 @@
 
 .reader-viewer-pane {
     background: var(--color-paper);
+    color: var(--color-ink);
+}
+
+.reading-theme-toggle {
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-xs);
+    border: var(--rule-hair) solid var(--color-rule-strong);
+    border-radius: var(--radius-pill);
+    background: var(--color-paper-raised);
+    color: var(--color-ink);
+    padding-inline: var(--space-md);
+    font-size: var(--text-sm);
+    font-weight: 700;
+    white-space: nowrap;
+    transition:
+        transform var(--dur-micro) var(--ease-out),
+        background-color var(--dur-short) var(--ease-out),
+        border-color var(--dur-short) var(--ease-out),
+        color var(--dur-short) var(--ease-out);
+}
+
+.reading-theme-toggle:hover {
+    background: var(--color-paper-2);
+}
+
+.reading-theme-toggle:active {
+    transform: translateY(1px);
+}
+
+.reading-theme-toggle--compact {
+    height: 44px;
+    width: 44px;
+    padding: 0;
+}
+
+.reader-theme-toggle {
+    position: absolute;
+    right: var(--space-md);
+    top: 0.875rem;
+    z-index: calc(var(--z-dropdown) + 2);
 }
 
 .reader-pane-tools {
