@@ -8,6 +8,9 @@ updates:
           time: "08:00"
           timezone: America/El_Salvador
       open-pull-requests-limit: 10
+      ignore:
+          - dependency-name: "*"
+            update-types: [version-update:semver-major]
       groups:
           production-minor-patch:
               dependency-type: production
@@ -18,5 +21,11 @@ updates:
     - package-ecosystem: github-actions
       directory: /
       schedule:
-          interval: monthly
+          interval: weekly
+          day: monday
+          time: "08:00"
+          timezone: America/El_Salvador
       open-pull-requests-limit: 5
+      ignore:
+          - dependency-name: "*"
+            update-types: [version-update:semver-major]
