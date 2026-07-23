@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+    __resetSharedBookCoverLoadsForTests,
     fetchProtectedEpubCover,
+    getSharedBookCoverLoadCountForTests,
     startLazyBookCoverLoad,
     type VisibilityObserverFactory,
 } from "../src/components/bookCoverLoading";
@@ -45,19 +47,25 @@ const deferred = <T>() => {
     return { promise, reject, resolve };
 };
 
+test.beforeEach(() => {
+    __resetSharedBookCoverLoadsForTests();
+});
+
 test("offscreen EPUB covers wait for the 200px visibility boundary", () => {
     const visibility = createVisibilityHarness();
     const target = {};
     let loads = 0;
     const stop = startLazyBookCoverLoad({
+        bookId: "book-a",
         fileType: "epub",
         target,
         createObserver: visibility.createObserver,
         createAbortController: () => new AbortController(),
         loadCover: async () => {
             loads++;
-            return null;
+            return { status: "missing" };
         },
+        createObjectUrl: () => "blob:unused",
         onCoverUrl: () => undefined,
         revokeObjectUrl: () => undefined,
     });
@@ -78,14 +86,16 @@ test("an EPUB cover starts once and stops observing on first visibility", () => 
     const visibility = createVisibilityHarness();
     let loads = 0;
     const stop = startLazyBookCoverLoad({
+        bookId: "book-b",
         fileType: "epub",
         target: {},
         createObserver: visibility.createObserver,
         createAbortController: () => new AbortController(),
         loadCover: async () => {
             loads++;
-            return null;
+            return { status: "missing" };
         },
+        createObjectUrl: () => "blob:unused",
         onCoverUrl: () => undefined,
         revokeObjectUrl: () => undefined,
     });
@@ -102,13 +112,36 @@ test("an EPUB cover starts once and stops observing on first visibility", () => 
 test("missing IntersectionObserver safely loads an EPUB cover immediately", () => {
     let loads = 0;
     const stop = startLazyBookCoverLoad({
+        bookId: "book-c",
         fileType: "epub",
         target: {},
         createAbortController: () => new AbortController(),
         loadCover: async () => {
             loads++;
-            return null;
+            return { status: "missing" };
         },
+        createObjectUrl: () => "blob:unused",
+        onCoverUrl: () => undefined,
+        revokeObjectUrl: () => undefined,
+    });
+
+    assert.equal(loads, 1);
+    stop();
+});
+
+test("legacy titles ending in .epub load when fileType is missing", () => {
+    let loads = 0;
+    const stop = startLazyBookCoverLoad({
+        bookId: "legacy-1",
+        fileType: null,
+        title: "Confessions.epub",
+        target: {},
+        createAbortController: () => new AbortController(),
+        loadCover: async () => {
+            loads++;
+            return { status: "missing" };
+        },
+        createObjectUrl: () => "blob:unused",
         onCoverUrl: () => undefined,
         revokeObjectUrl: () => undefined,
     });
@@ -135,14 +168,19 @@ test("protected cover fetches use only the book-ID URL and session cookie", asyn
                 calls.push({ url, options });
                 return { ok: true, blob: async () => file };
             },
-            extractCoverUrl: async (received) => {
+            extractCover: async (received) => {
                 extracted = received;
-                return "blob:cover";
+                return {
+                    status: "cover",
+                    blob: new Blob(["cover"]),
+                    mediaType: "image/jpeg",
+                    path: "cover.jpg",
+                };
             },
         }
     );
 
-    assert.equal(result, "blob:cover");
+    assert.equal(result.status, "cover");
     assert.equal(extracted, file);
     assert.deepEqual(calls, [
         {
@@ -166,14 +204,19 @@ test("failed protected fetches do not unzip a response body", async () => {
                 ok: false,
                 blob: async () => new Blob(),
             }),
-            extractCoverUrl: async () => {
+            extractCover: async () => {
                 extractions++;
-                return "blob:unexpected";
+                return {
+                    status: "cover",
+                    blob: new Blob(["x"]),
+                    mediaType: "image/jpeg",
+                    path: "x.jpg",
+                };
             },
         }
     );
 
-    assert.equal(result, null);
+    assert.equal(result.status, "unauthorized");
     assert.equal(extractions, 0);
 });
 
@@ -183,6 +226,7 @@ test("PDF cards remain placeholders without observers, fetches, or controllers",
     let loads = 0;
     const coverUrls: Array<string | null> = [];
     const stop = startLazyBookCoverLoad({
+        bookId: "pdf-1",
         fileType: "pdf",
         target: {},
         createObserver: () => {
@@ -195,8 +239,9 @@ test("PDF cards remain placeholders without observers, fetches, or controllers",
         },
         loadCover: async () => {
             loads++;
-            return "blob:unexpected";
+            return { status: "cover", blob: new Blob(["x"]) };
         },
+        createObjectUrl: () => "blob:unexpected",
         onCoverUrl: (url) => coverUrls.push(url),
         revokeObjectUrl: () => undefined,
     });
@@ -208,18 +253,83 @@ test("PDF cards remain placeholders without observers, fetches, or controllers",
     stop();
 });
 
+test("duplicate visible covers share one fetch and one object URL", async () => {
+    const visibilityA = createVisibilityHarness();
+    const visibilityB = createVisibilityHarness();
+    let loads = 0;
+    let objectUrls = 0;
+    const revoked: string[] = [];
+    const urlsA: Array<string | null> = [];
+    const urlsB: Array<string | null> = [];
+    const blob = new Blob(["cover-bytes"]);
+
+    const stopA = startLazyBookCoverLoad({
+        bookId: "shared-1",
+        fileType: "epub",
+        target: {},
+        createObserver: visibilityA.createObserver,
+        createAbortController: () => new AbortController(),
+        loadCover: async () => {
+            loads++;
+            return { status: "cover", blob };
+        },
+        createObjectUrl: () => {
+            objectUrls++;
+            return "blob:shared";
+        },
+        onCoverUrl: (url) => urlsA.push(url),
+        revokeObjectUrl: (url) => revoked.push(url),
+    });
+    const stopB = startLazyBookCoverLoad({
+        bookId: "shared-1",
+        fileType: "epub",
+        target: {},
+        createObserver: visibilityB.createObserver,
+        createAbortController: () => new AbortController(),
+        loadCover: async () => {
+            loads++;
+            return { status: "cover", blob };
+        },
+        createObjectUrl: () => {
+            objectUrls++;
+            return "blob:shared-other";
+        },
+        onCoverUrl: (url) => urlsB.push(url),
+        revokeObjectUrl: (url) => revoked.push(url),
+    });
+
+    visibilityA.emit(true);
+    visibilityB.emit(true);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    assert.equal(loads, 1);
+    assert.equal(objectUrls, 1);
+    assert.deepEqual(urlsA, [null, "blob:shared"]);
+    assert.deepEqual(urlsB, [null, "blob:shared"]);
+    assert.equal(getSharedBookCoverLoadCountForTests(), 1);
+
+    stopA();
+    assert.deepEqual(revoked, []);
+    stopB();
+    assert.deepEqual(revoked, ["blob:shared"]);
+    assert.equal(getSharedBookCoverLoadCountForTests(), 0);
+});
+
 test("cleanup disconnects, aborts, and revokes stale async completions", async () => {
     const visibility = createVisibilityHarness();
-    const completion = deferred<string | null>();
+    const completion = deferred<{ status: "cover"; blob: Blob }>();
     const controller = new AbortController();
     const coverUrls: Array<string | null> = [];
     const revoked: string[] = [];
     const stop = startLazyBookCoverLoad({
+        bookId: "stale-1",
         fileType: "epub",
         target: {},
         createObserver: visibility.createObserver,
         createAbortController: () => controller,
         loadCover: () => completion.promise,
+        createObjectUrl: () => "blob:stale",
         onCoverUrl: (url) => coverUrls.push(url),
         revokeObjectUrl: (url) => revoked.push(url),
     });
@@ -229,11 +339,12 @@ test("cleanup disconnects, aborts, and revokes stale async completions", async (
     assert.equal(controller.signal.aborted, true);
     assert.equal(visibility.disconnects, 1);
 
-    completion.resolve("blob:stale");
+    completion.resolve({ status: "cover", blob: new Blob(["x"]) });
     await completion.promise;
     await Promise.resolve();
+    await Promise.resolve();
     assert.deepEqual(coverUrls, [null]);
-    assert.deepEqual(revoked, ["blob:stale"]);
+    assert.deepEqual(revoked, []);
 });
 
 test("cleanup revokes an active URL exactly once", async () => {
@@ -241,16 +352,22 @@ test("cleanup revokes an active URL exactly once", async () => {
     const coverUrls: Array<string | null> = [];
     const revoked: string[] = [];
     const stop = startLazyBookCoverLoad({
+        bookId: "active-1",
         fileType: "epub",
         target: {},
         createObserver: visibility.createObserver,
         createAbortController: () => new AbortController(),
-        loadCover: async () => "blob:active",
+        loadCover: async () => ({
+            status: "cover",
+            blob: new Blob(["active"]),
+        }),
+        createObjectUrl: () => "blob:active",
         onCoverUrl: (url) => coverUrls.push(url),
         revokeObjectUrl: (url) => revoked.push(url),
     });
 
     visibility.emit(true);
+    await Promise.resolve();
     await Promise.resolve();
     assert.deepEqual(coverUrls, [null, "blob:active"]);
 

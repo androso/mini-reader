@@ -13,6 +13,8 @@
     },
     "include": [
         "src/components/bookCoverLoading.ts",
+        "src/lib/bookFileKind.ts",
+        "src/lib/epubCoverExtraction.ts",
         "src/hooks/chat/chatInput.ts",
         "src/hooks/imageObjectUrlRegistry.ts",
         "src/lib/chapterPullGesture.ts",

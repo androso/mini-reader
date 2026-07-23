@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import JSZip from "jszip";
 import type { Book } from "@/types/bookTypes";
 import { apiUrl } from "@/lib/api";
-import { resolveRelativePath } from "@/lib/utils";
+import { extractEpubCover } from "@/lib/epubCoverExtraction";
+import { resolveBookFileKind } from "@/lib/bookFileKind";
 import {
     fetchProtectedEpubCover,
     startLazyBookCoverLoad,
@@ -18,91 +18,6 @@ interface BookCoverProps {
     iconClassName?: string;
 }
 
-const imageMimeTypes: Record<string, string> = {
-    avif: "image/avif",
-    gif: "image/gif",
-    jpeg: "image/jpeg",
-    jpg: "image/jpeg",
-    png: "image/png",
-    svg: "image/svg+xml",
-    webp: "image/webp",
-};
-
-const getMimeType = (path: string) => {
-    const extension = path.split(".").pop()?.toLowerCase();
-    return extension
-        ? (imageMimeTypes[extension] ?? "image/jpeg")
-        : "image/jpeg";
-};
-
-const getOpfPath = async (zip: JSZip) => {
-    const containerXml = await zip
-        .file("META-INF/container.xml")
-        ?.async("text");
-    if (!containerXml) return null;
-
-    const container = new DOMParser().parseFromString(
-        containerXml,
-        "application/xml"
-    );
-    return (
-        container
-            .querySelector("rootfile")
-            ?.getAttribute("full-path")
-            ?.trim() || null
-    );
-};
-
-const getCoverPathFromOpf = (opfContent: string) => {
-    const opf = new DOMParser().parseFromString(opfContent, "application/xml");
-    const coverImageItem = opf.querySelector(
-        "manifest > item[properties~='cover-image']"
-    );
-    if (coverImageItem?.getAttribute("href")) {
-        return coverImageItem.getAttribute("href");
-    }
-
-    const coverId = opf
-        .querySelector("metadata > meta[name='cover']")
-        ?.getAttribute("content");
-    if (coverId) {
-        const coverItem = opf.querySelector(
-            `manifest > item[id="${CSS.escape(coverId)}"]`
-        );
-        if (coverItem?.getAttribute("href")) {
-            return coverItem.getAttribute("href");
-        }
-    }
-
-    return opf
-        .querySelector("manifest > item[media-type^='image/']")
-        ?.getAttribute("href");
-};
-
-const extractEpubCoverUrl = async (file: Blob) => {
-    const zip = await JSZip.loadAsync(await file.arrayBuffer());
-    const opfPath = await getOpfPath(zip);
-    if (!opfPath) return null;
-
-    const opfContent = await zip.file(opfPath)?.async("text");
-    if (!opfContent) return null;
-
-    const coverPath = getCoverPathFromOpf(opfContent);
-    if (!coverPath) return null;
-
-    const opfBasePath = opfPath.includes("/")
-        ? opfPath.slice(0, opfPath.lastIndexOf("/") + 1)
-        : "";
-    const resolvedCoverPath = resolveRelativePath(coverPath, opfBasePath);
-    const coverFile = zip.file(resolvedCoverPath) ?? zip.file(coverPath);
-    if (!coverFile) return null;
-
-    const coverBlob = new Blob([await coverFile.async("arraybuffer")], {
-        type: getMimeType(resolvedCoverPath),
-    });
-    return URL.createObjectURL(coverBlob);
-};
-
 export default function BookCover({
     book,
     className = "",
@@ -110,6 +25,7 @@ export default function BookCover({
 }: BookCoverProps) {
     const [coverUrl, setCoverUrl] = useState<string | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
+    const fileKind = resolveBookFileKind(book);
 
     useEffect(() => {
         const target = containerRef.current;
@@ -131,16 +47,21 @@ export default function BookCover({
                   };
 
         return startLazyBookCoverLoad({
+            bookId: book.id,
             fileType: book.fileType,
+            title: book.title,
             target,
             createObserver,
             createAbortController: () => new AbortController(),
             loadCover: (signal) =>
                 fetchProtectedEpubCover(book.id, signal, {
                     buildApiUrl: apiUrl,
-                    extractCoverUrl: extractEpubCoverUrl,
-                    fetch,
+                    extractCover: extractEpubCover,
+                    // window.fetch must keep its receiver; passing the bare
+                    // function through dependency injection throws Illegal invocation.
+                    fetch: globalThis.fetch.bind(globalThis),
                 }),
+            createObjectUrl: (blob) => URL.createObjectURL(blob),
             onCoverUrl: setCoverUrl,
             onError: (error) => {
                 console.warn("Failed to load EPUB cover", {
@@ -148,9 +69,9 @@ export default function BookCover({
                     error,
                 });
             },
-            revokeObjectUrl: URL.revokeObjectURL,
+            revokeObjectUrl: (url) => URL.revokeObjectURL(url),
         });
-    }, [book.fileType, book.id]);
+    }, [book.fileType, book.id, book.title]);
 
     return (
         <div
@@ -162,17 +83,17 @@ export default function BookCover({
                 <img
                     src={coverUrl}
                     alt={`${book.title} cover`}
-                    className="h-full w-full object-cover"
+                    className="h-full w-full object-contain"
                 />
             ) : (
                 <div
                     className={`absolute inset-0 grid place-items-center ${
-                        book.fileType === "pdf"
+                        fileKind === "pdf"
                             ? "bg-[var(--color-accent-3-soft)]"
                             : "bg-[var(--color-accent-2-soft)]"
                     }`}
                 >
-                    {book.fileType === "pdf" ? (
+                    {fileKind === "pdf" ? (
                         <FileText
                             className={`text-[var(--color-ink-2)] ${iconClassName}`}
                             aria-hidden="true"

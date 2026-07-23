@@ -288,18 +288,19 @@ function Home() {
                             <button
                                 type="button"
                                 onClick={() => handleBookClick(recentBook)}
-                                className="recent-book w-full text-left"
+                                className="recent-book text-left"
                             >
                                 <BookCover
                                     book={recentBook}
-                                    className="aspect-[3/4] h-full max-h-64 w-full rounded-[var(--radius-card)]"
+                                    className="recent-book__cover"
+                                    iconClassName="h-6 w-6"
                                 />
-                                <span className="flex min-w-0 flex-col justify-between gap-6 py-2">
+                                <span className="recent-book__details">
                                     <span>
                                         <span className="file-chip">
                                             {recentBook.fileType ?? "epub"}
                                         </span>
-                                        <span className="recent-book__title mt-4 block text-2xl font-bold leading-tight tracking-[-0.035em] sm:text-3xl">
+                                        <span className="recent-book__title">
                                             {recentBook.title}
                                         </span>
                                     </span>

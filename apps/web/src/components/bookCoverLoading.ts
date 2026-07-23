@@ -1,3 +1,6 @@
+import type { EpubCoverExtractionResult } from "../lib/epubCoverExtraction";
+import { isEpubBook, type BookFileKindInput } from "../lib/bookFileKind";
+
 export interface VisibilityObserver {
     observe(target: object): void;
     disconnect(): void;
@@ -54,35 +57,177 @@ interface CoverResponse {
     blob(): Promise<Blob>;
 }
 
+export type ProtectedCoverLoadResult =
+    | { status: "cover"; blob: Blob }
+    | { status: "missing" }
+    | { status: "invalid" }
+    | { status: "unauthorized" };
+
 export interface ProtectedCoverDependencies {
     buildApiUrl(path: string): string;
-    extractCoverUrl(file: Blob): Promise<string | null>;
+    extractCover(file: Blob): Promise<EpubCoverExtractionResult | Blob | null>;
     fetch(
         url: string,
         options: { credentials: "include"; signal: AbortSignal }
     ): Promise<CoverResponse>;
 }
 
+const toProtectedCoverResult = async (
+    extracted: EpubCoverExtractionResult | Blob | null
+): Promise<ProtectedCoverLoadResult> => {
+    if (!extracted) return { status: "missing" };
+    if (extracted instanceof Blob) {
+        return extracted.size > 0
+            ? { status: "cover", blob: extracted }
+            : { status: "missing" };
+    }
+    if (extracted.status === "cover") {
+        return { status: "cover", blob: extracted.blob };
+    }
+    return { status: extracted.status };
+};
+
 export const fetchProtectedEpubCover = async (
     bookId: string,
     signal: AbortSignal,
     dependencies: ProtectedCoverDependencies
-): Promise<string | null> => {
+): Promise<ProtectedCoverLoadResult> => {
     const response = await dependencies.fetch(
         dependencies.buildApiUrl(`/api/books/${bookId}`),
         { credentials: "include", signal }
     );
-    if (!response.ok) return null;
+    if (!response.ok) return { status: "unauthorized" };
 
-    return dependencies.extractCoverUrl(await response.blob());
+    return toProtectedCoverResult(
+        await dependencies.extractCover(await response.blob())
+    );
+};
+
+interface SharedCoverEntry {
+    bookId: string;
+    promise: Promise<string | null>;
+    abortController: AbortController;
+    objectUrl: string | null;
+    refs: number;
+    settled: boolean;
+}
+
+const sharedCoverLoads = new Map<string, SharedCoverEntry>();
+
+export const __resetSharedBookCoverLoadsForTests = () => {
+    sharedCoverLoads.clear();
+};
+
+export const getSharedBookCoverLoadCountForTests = () => sharedCoverLoads.size;
+
+const releaseSharedCover = (
+    bookId: string,
+    revokeObjectUrl: (url: string) => void
+) => {
+    const entry = sharedCoverLoads.get(bookId);
+    if (!entry) return;
+
+    entry.refs -= 1;
+    if (entry.refs > 0) return;
+
+    sharedCoverLoads.delete(bookId);
+    if (!entry.settled) {
+        entry.abortController.abort();
+    }
+    if (entry.objectUrl) {
+        revokeObjectUrl(entry.objectUrl);
+        entry.objectUrl = null;
+    }
+};
+
+const acquireSharedCover = (
+    bookId: string,
+    options: {
+        createAbortController(): AbortController;
+        loadCover(signal: AbortSignal): Promise<ProtectedCoverLoadResult>;
+        createObjectUrl(blob: Blob): string;
+        revokeObjectUrl(url: string): void;
+        onError?(error: unknown): void;
+    }
+): { promise: Promise<string | null>; release(): void } => {
+    let entry = sharedCoverLoads.get(bookId);
+    if (!entry) {
+        const abortController = options.createAbortController();
+        const created: SharedCoverEntry = {
+            bookId,
+            abortController,
+            objectUrl: null,
+            refs: 0,
+            settled: false,
+            promise: Promise.resolve(null),
+        };
+
+        let loading: Promise<ProtectedCoverLoadResult>;
+        try {
+            loading = options.loadCover(abortController.signal);
+        } catch (error) {
+            created.settled = true;
+            created.promise = Promise.resolve(null);
+            if (!abortController.signal.aborted) {
+                options.onError?.(error);
+            }
+            entry = created;
+            sharedCoverLoads.set(bookId, created);
+            entry.refs += 1;
+            return {
+                promise: created.promise,
+                release: () =>
+                    releaseSharedCover(bookId, options.revokeObjectUrl),
+            };
+        }
+
+        created.promise = loading.then(
+            (result) => {
+                created.settled = true;
+                if (result.status !== "cover" || created.refs <= 0) {
+                    if (created.refs <= 0) {
+                        sharedCoverLoads.delete(bookId);
+                    }
+                    return null;
+                }
+
+                const objectUrl = options.createObjectUrl(result.blob);
+                created.objectUrl = objectUrl;
+                return objectUrl;
+            },
+            (error) => {
+                created.settled = true;
+                if (created.refs <= 0) {
+                    sharedCoverLoads.delete(bookId);
+                }
+                if (!abortController.signal.aborted) {
+                    options.onError?.(error);
+                }
+                return null;
+            }
+        );
+
+        entry = created;
+        sharedCoverLoads.set(bookId, entry);
+    }
+
+    entry.refs += 1;
+
+    return {
+        promise: entry.promise,
+        release: () => releaseSharedCover(bookId, options.revokeObjectUrl),
+    };
 };
 
 export interface LazyBookCoverOptions {
-    fileType?: "epub" | "pdf" | null;
+    bookId: string;
+    fileType?: BookFileKindInput["fileType"];
+    title?: string | null;
     target: object;
     createObserver?: VisibilityObserverFactory;
     createAbortController(): AbortController;
-    loadCover(signal: AbortSignal): Promise<string | null>;
+    loadCover(signal: AbortSignal): Promise<ProtectedCoverLoadResult>;
+    createObjectUrl(blob: Blob): string;
     onCoverUrl(url: string | null): void;
     onError?(error: unknown): void;
     revokeObjectUrl(url: string): void;
@@ -92,45 +237,31 @@ export const startLazyBookCoverLoad = (
     options: LazyBookCoverOptions
 ): (() => void) => {
     options.onCoverUrl(null);
-    if (options.fileType !== "epub") return () => undefined;
+    if (!isEpubBook({ fileType: options.fileType, title: options.title })) {
+        return () => undefined;
+    }
 
-    let activeObjectUrl: string | null = null;
-    let abortController: AbortController | null = null;
     let disposed = false;
     let started = false;
+    let releaseShared: (() => void) | null = null;
 
     const start = () => {
         if (disposed || started) return;
         started = true;
-        abortController = options.createAbortController();
 
-        let loading: Promise<string | null>;
-        try {
-            loading = options.loadCover(abortController.signal);
-        } catch (error) {
-            if (!disposed && !abortController.signal.aborted) {
-                options.onError?.(error);
-            }
-            return;
-        }
+        const shared = acquireSharedCover(options.bookId, {
+            createAbortController: options.createAbortController,
+            loadCover: options.loadCover,
+            createObjectUrl: options.createObjectUrl,
+            revokeObjectUrl: options.revokeObjectUrl,
+            onError: options.onError,
+        });
+        releaseShared = shared.release;
 
-        void loading.then(
-            (objectUrl) => {
-                if (!objectUrl) return;
-                if (disposed) {
-                    options.revokeObjectUrl(objectUrl);
-                    return;
-                }
-
-                activeObjectUrl = objectUrl;
-                options.onCoverUrl(objectUrl);
-            },
-            (error) => {
-                if (!disposed && !abortController?.signal.aborted) {
-                    options.onError?.(error);
-                }
-            }
-        );
+        void shared.promise.then((objectUrl) => {
+            if (disposed) return;
+            options.onCoverUrl(objectUrl);
+        });
     };
 
     const stopObserving = observeOnceVisible(
@@ -143,10 +274,7 @@ export const startLazyBookCoverLoad = (
         if (disposed) return;
         disposed = true;
         stopObserving();
-        abortController?.abort();
-        if (activeObjectUrl) {
-            options.revokeObjectUrl(activeObjectUrl);
-            activeObjectUrl = null;
-        }
+        releaseShared?.();
+        releaseShared = null;
     };
 };
