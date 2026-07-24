@@ -375,3 +375,45 @@ test("cleanup revokes an active URL exactly once", async () => {
     stop();
     assert.deepEqual(revoked, ["blob:active"]);
 });
+
+test("local cover loading keeps abort and object-url cleanup guarantees", async () => {
+    const offlineBlob = deferred<Blob>();
+    const controller = new AbortController();
+    let networkFetches = 0;
+    let objectUrls = 0;
+    const stop = startLazyBookCoverLoad({
+        bookId: "offline-cover",
+        fileType: "epub",
+        target: {},
+        createAbortController: () => controller,
+        loadCover: (signal) =>
+            fetchProtectedEpubCover("offline-cover", signal, {
+                buildApiUrl: (path) => path,
+                getOfflineBookBlob: () => offlineBlob.promise,
+                extractCover: async () => new Blob(["cover"]),
+                fetch: async () => {
+                    networkFetches += 1;
+                    return {
+                        ok: true,
+                        blob: async () => new Blob(["network"]),
+                    };
+                },
+            }),
+        createObjectUrl: () => {
+            objectUrls += 1;
+            return "blob:offline-cover";
+        },
+        onCoverUrl: () => undefined,
+        revokeObjectUrl: () => undefined,
+    });
+
+    stop();
+    offlineBlob.resolve(new Blob(["epub"]));
+    await offlineBlob.promise;
+    await Promise.resolve();
+    await Promise.resolve();
+
+    assert.equal(controller.signal.aborted, true);
+    assert.equal(networkFetches, 0);
+    assert.equal(objectUrls, 0);
+});

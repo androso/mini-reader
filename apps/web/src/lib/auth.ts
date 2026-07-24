@@ -1,6 +1,11 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "./queryClient";
 import { apiUrl } from "./api";
+import {
+    cacheSession,
+    clearOfflineData,
+    getCachedSession,
+} from "./offlineStore";
 
 export interface User {
     id: string;
@@ -11,6 +16,7 @@ export interface User {
     createdAt?: string;
     updatedAt?: string;
 }
+export type AuthResponse = { user: User };
 
 export interface EmailLoginCredentials {
     email: string;
@@ -44,18 +50,39 @@ async function jsonAuthPost<T>(urlPath: string, payload?: unknown): Promise<T> {
     return data as T;
 }
 
+export async function fetchCurrentUser(): Promise<AuthResponse> {
+    let response: Response;
+    try {
+        response = await fetch(apiUrl("/api/user"), {
+            credentials: "include",
+        });
+    } catch {
+        const cached = await getCachedSession();
+        if (cached) return cached;
+        throw new Error("Network response was not ok");
+    }
+
+    if (response.status === 401 || response.status === 403) {
+        await clearOfflineData();
+        throw new Error("Network response was not ok");
+    }
+    if (response.status >= 500) {
+        const cached = await getCachedSession();
+        if (cached) return cached;
+    }
+    if (!response.ok) {
+        throw new Error("Network response was not ok");
+    }
+
+    const authResponse = (await response.json()) as AuthResponse;
+    await cacheSession(authResponse);
+    return authResponse;
+}
+
 export function useUser() {
     return useQuery({
         queryKey: [apiUrl("/api/user")],
-        queryFn: async () => {
-            const response = await fetch(apiUrl("/api/user"), {
-                credentials: "include",
-            });
-            if (!response.ok) {
-                throw new Error("Network response was not ok");
-            }
-            return response.json();
-        },
+        queryFn: fetchCurrentUser,
         enabled: true,
         retry: false,
     });
@@ -138,7 +165,7 @@ export function useDevSignIn() {
 export function useEmailLogin() {
     return useMutation({
         mutationFn: async (credentials: EmailLoginCredentials) => {
-            return jsonAuthPost<{ user: User }>("/api/auth/login", credentials);
+            return jsonAuthPost<AuthResponse>("/api/auth/login", credentials);
         },
         onSuccess: () => {
             queryClient.invalidateQueries({
@@ -151,10 +178,7 @@ export function useEmailLogin() {
 export function useEmailSignup() {
     return useMutation({
         mutationFn: async (credentials: EmailSignupCredentials) => {
-            return jsonAuthPost<{ user: User }>(
-                "/api/auth/signup",
-                credentials
-            );
+            return jsonAuthPost<AuthResponse>("/api/auth/signup", credentials);
         },
         onSuccess: () => {
             queryClient.invalidateQueries({
@@ -172,5 +196,6 @@ export async function signOut() {
         });
     } finally {
         queryClient.clear();
+        await clearOfflineData();
     }
 }

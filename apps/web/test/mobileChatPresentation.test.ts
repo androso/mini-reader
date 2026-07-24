@@ -18,7 +18,10 @@ const textBlockSource = readFileSync(
     "src/components/reader/TextBlock.tsx",
     "utf8"
 );
-const pageSource = readFileSync("src/app/read/[id]/page.tsx", "utf8");
+const pageSource = readFileSync(
+    "src/components/reader/ReaderWorkspace.tsx",
+    "utf8"
+);
 const useChatSource = readFileSync("src/hooks/chat/useChat.ts", "utf8");
 
 test("mobile chat uses a full opaque panel only when expanded", () => {

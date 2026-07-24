@@ -4,6 +4,7 @@ import { type EpubContent } from "@/types/EpubReader";
 import JSZip from "jszip";
 import ePub from "epubjs";
 import Section from "epubjs/types/section";
+import { loadBookBlob } from "@/lib/bookBinary";
 
 export const useEpubProcessor = () => {
     const [isLoading, setIsLoading] = useState(false);
@@ -12,44 +13,48 @@ export const useEpubProcessor = () => {
     const [zipData, setZipData] = useState<JSZip | null>(null);
     const requestIdRef = useRef(0);
 
-    const processEpub = useCallback(async (url: string) => {
-        const requestId = ++requestIdRef.current;
-        try {
-            setIsLoading(true);
-            setError(null);
-            const response = await fetch(url, {
-                credentials: "include",
-            });
-            if (!response.ok) {
-                throw new Error(`Failed to fetch EPUB: ${response.statusText}`);
-            }
+    const processEpub = useCallback(
+        async (input: {
+            bookId: string;
+            url: string;
+            requireLocal: boolean;
+        }) => {
+            const requestId = ++requestIdRef.current;
+            try {
+                setIsLoading(true);
+                setError(null);
+                const { blob } = await loadBookBlob(input);
+                const [content, zip] = await processEpubFile(
+                    await blob.arrayBuffer()
+                );
 
-            const arrayBuffer = await response.arrayBuffer();
-            const [content, zip] = await processEpubFile(arrayBuffer);
+                // React Strict Mode (and fast remounts) can overlap fetches. Only the
+                // latest request may publish zip/content, or image archives restart
+                // mid-hydrate and covers get marked unavailable.
+                if (requestId !== requestIdRef.current) {
+                    return;
+                }
 
-            // React Strict Mode (and fast remounts) can overlap fetches. Only the
-            // latest request may publish zip/content, or image archives restart
-            // mid-hydrate and covers get marked unavailable.
-            if (requestId !== requestIdRef.current) {
-                return;
+                setZipData(zip);
+                setEpubContent(content);
+            } catch (err) {
+                if (requestId !== requestIdRef.current) {
+                    return;
+                }
+                const errorMessage =
+                    err instanceof Error
+                        ? err.message
+                        : "Unknown error occurred";
+                setError("Failed to process EPUB file: " + errorMessage);
+                console.error(err);
+            } finally {
+                if (requestId === requestIdRef.current) {
+                    setIsLoading(false);
+                }
             }
-
-            setZipData(zip);
-            setEpubContent(content);
-        } catch (err) {
-            if (requestId !== requestIdRef.current) {
-                return;
-            }
-            const errorMessage =
-                err instanceof Error ? err.message : "Unknown error occurred";
-            setError("Failed to process EPUB file: " + errorMessage);
-            console.error(err);
-        } finally {
-            if (requestId === requestIdRef.current) {
-                setIsLoading(false);
-            }
-        }
-    }, []);
+        },
+        []
+    );
 
     return {
         processEpub,

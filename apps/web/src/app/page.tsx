@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { signOut } from "@/lib/auth";
 import toast from "react-hot-toast";
@@ -10,15 +10,31 @@ import { ReadingThemeToggle } from "@/components/ReadingThemeToggle";
 import { useReadingTheme } from "@/hooks/useReadingTheme";
 import type { Book } from "@/types/bookTypes";
 import { apiUrl } from "@/lib/api";
-import { createReaderPath } from "@/lib/bookReaderRouting";
+import {
+    createOfflineReaderPath,
+    createReaderPath,
+} from "@/lib/bookReaderRouting";
+import { fetchLibrary } from "@/lib/offlineLibrary";
+import {
+    getOfflineProgress,
+    listOfflineBooks,
+    removeOfflineBook,
+    removeOfflineProgress,
+    requestPersistentStorage,
+    storeOfflineBook,
+} from "@/lib/offlineStore";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import {
     BookOpenText,
+    Check,
     Clock3,
+    Download,
     FileText,
     LibraryBig,
     LogOut,
     Trash2,
     Upload,
+    X,
 } from "lucide-react";
 
 type LibraryFilter = "all" | "epub" | "pdf";
@@ -62,8 +78,12 @@ function Home() {
     const router = useRouter();
     const { theme, toggleTheme } = useReadingTheme();
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const isOnline = useOnlineStatus();
     const [isUploading, setIsUploading] = useState(false);
     const [filter, setFilter] = useState<LibraryFilter>("all");
+    const [offlineActionBookId, setOfflineActionBookId] = useState<
+        string | null
+    >(null);
 
     const renderLibraryFilterSwitch = () => (
         <div
@@ -87,16 +107,24 @@ function Home() {
         </div>
     );
 
-    const { data: booksData } = useQuery({
+    const { data: booksData, refetch: refetchBooks } = useQuery({
         queryKey: [apiUrl("/api/books")],
-        queryFn: async () => {
-            const response = await fetch(apiUrl("/api/books"), {
-                credentials: "include",
-            });
-            if (!response.ok) throw new Error("Network response was not ok");
-            return response.json();
-        },
+        queryFn: fetchLibrary,
     });
+
+    const { data: offlineBooks = [], refetch: refetchOfflineBooks } = useQuery({
+        queryKey: ["offline-books"],
+        queryFn: listOfflineBooks,
+    });
+
+    useEffect(() => {
+        if (isOnline) void refetchBooks();
+    }, [isOnline, refetchBooks]);
+
+    const offlineBookIds = useMemo(
+        () => new Set(offlineBooks.map((record) => record.bookId)),
+        [offlineBooks]
+    );
 
     const queryClient = useQueryClient();
 
@@ -130,14 +158,68 @@ function Home() {
             if (!response.ok) throw new Error("Failed deleting file");
             return response;
         },
-        onSuccess: () => {
-            queryClient.invalidateQueries({
-                queryKey: [apiUrl("/api/books")],
-            });
+        onSuccess: async (_response, itemId) => {
+            await Promise.all([
+                removeOfflineBook(itemId),
+                removeOfflineProgress(itemId),
+            ]);
+            await Promise.all([
+                queryClient.invalidateQueries({
+                    queryKey: [apiUrl("/api/books")],
+                }),
+                refetchOfflineBooks(),
+            ]);
             toast.success("Book deleted successfully");
         },
         onError: (err) => toast.error(err.message),
     });
+
+    const downloadBook = async (book: Book) => {
+        setOfflineActionBookId(book.id);
+        try {
+            const firstDownload = offlineBooks.length === 0;
+            const response = await fetch(apiUrl(`/api/books/${book.id}`), {
+                credentials: "include",
+            });
+            if (response.status === 401 || response.status === 403) {
+                throw new Error("You no longer have access to this book.");
+            }
+            if (!response.ok) throw new Error("Could not download this book.");
+            await storeOfflineBook(book, await response.blob());
+            if (firstDownload) await requestPersistentStorage();
+            await refetchOfflineBooks();
+            toast.success("Book saved for offline reading.");
+        } catch (error) {
+            const message =
+                error instanceof DOMException &&
+                error.name === "QuotaExceededError"
+                    ? "Not enough device storage to download this book."
+                    : error instanceof Error &&
+                        (error.message ===
+                            "You no longer have access to this book." ||
+                            error.message === "Could not download this book.")
+                      ? error.message
+                      : "Could not download this book.";
+            toast.error(message);
+        } finally {
+            setOfflineActionBookId(null);
+        }
+    };
+
+    const removeDownload = async (bookId: string) => {
+        setOfflineActionBookId(bookId);
+        try {
+            await removeOfflineBook(bookId);
+            const progress = await getOfflineProgress(bookId);
+            if (progress && !progress.dirty) {
+                await removeOfflineProgress(bookId);
+            }
+            await refetchOfflineBooks();
+            toast.success("Download removed.");
+        } finally {
+            setOfflineActionBookId(null);
+        }
+    };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -168,7 +250,11 @@ function Home() {
             : sortedBooks.filter((b) => b.fileType === filter);
 
     const handleBookClick = (book: Book) => {
-        router.push(createReaderPath(book));
+        router.push(
+            offlineBookIds.has(book.id)
+                ? createOfflineReaderPath(book)
+                : createReaderPath(book)
+        );
     };
 
     return (
@@ -271,6 +357,14 @@ function Home() {
                 </header>
 
                 <div className="px-4 py-8 sm:px-8 lg:px-12 lg:py-12">
+                    {booksData?.offlineFallback && (
+                        <div
+                            className="mb-8 border border-[var(--color-rule)] bg-[var(--color-paper-raised)] px-4 py-3 text-sm text-[var(--color-ink-2)]"
+                            role="status"
+                        >
+                            Offline — showing books saved on this device.
+                        </div>
+                    )}
                     {recentBook && filter === "all" && (
                         <section
                             className="mb-14"
@@ -344,22 +438,25 @@ function Home() {
                                     No books here yet
                                 </h3>
                                 <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-[var(--color-ink-2)]">
-                                    {filter === "all"
-                                        ? "Add an EPUB or PDF to start reading and asking questions."
-                                        : `Your library has no ${filter.toUpperCase()} books.`}
+                                    {booksData?.offlineFallback
+                                        ? "No downloaded books are available offline."
+                                        : filter === "all"
+                                          ? "Add an EPUB or PDF to start reading and asking questions."
+                                          : `Your library has no ${filter.toUpperCase()} books.`}
                                 </p>
-                                {filter === "all" && (
-                                    <button
-                                        type="button"
-                                        onClick={() =>
-                                            fileInputRef.current?.click()
-                                        }
-                                        className="primary-button mt-6"
-                                    >
-                                        <Upload className="h-4 w-4" />
-                                        Upload book
-                                    </button>
-                                )}
+                                {filter === "all" &&
+                                    !booksData?.offlineFallback && (
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                fileInputRef.current?.click()
+                                            }
+                                            className="primary-button mt-6"
+                                        >
+                                            <Upload className="h-4 w-4" />
+                                            Upload book
+                                        </button>
+                                    )}
                             </div>
                         ) : (
                             <div className="book-grid">
@@ -396,6 +493,53 @@ function Home() {
                                                 </span>
                                             </span>
                                         </button>
+                                        <div className="mt-3 flex flex-wrap items-center gap-2 px-4 pb-4">
+                                            {offlineBookIds.has(book.id) ? (
+                                                <>
+                                                    <span className="inline-flex items-center gap-1 text-xs font-medium text-[var(--color-accent-deep)]">
+                                                        <Check className="h-3.5 w-3.5" />
+                                                        Saved offline
+                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        className="secondary-button"
+                                                        disabled={
+                                                            offlineActionBookId ===
+                                                            book.id
+                                                        }
+                                                        onClick={() =>
+                                                            void removeDownload(
+                                                                book.id
+                                                            )
+                                                        }
+                                                    >
+                                                        <X className="h-4 w-4" />
+                                                        {offlineActionBookId ===
+                                                        book.id
+                                                            ? "Removing…"
+                                                            : "Remove download"}
+                                                    </button>
+                                                </>
+                                            ) : (
+                                                <button
+                                                    type="button"
+                                                    className="secondary-button"
+                                                    disabled={
+                                                        offlineActionBookId ===
+                                                        book.id
+                                                    }
+                                                    onClick={() =>
+                                                        void downloadBook(book)
+                                                    }
+                                                >
+                                                    <Download className="h-4 w-4" />
+                                                    {offlineActionBookId ===
+                                                    book.id
+                                                        ? "Downloading…"
+                                                        : "Download"}
+                                                </button>
+                                            )}
+                                        </div>
                                         <button
                                             type="button"
                                             className="book-delete absolute right-4 top-4 bg-[var(--color-paper-raised)]"

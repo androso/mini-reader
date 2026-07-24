@@ -5,6 +5,7 @@ import type { Book } from "@/types/bookTypes";
 import { apiUrl } from "@/lib/api";
 import { extractEpubCover } from "@/lib/epubCoverExtraction";
 import { resolveBookFileKind } from "@/lib/bookFileKind";
+import { getOfflineBook } from "@/lib/offlineStore";
 import {
     fetchProtectedEpubCover,
     startLazyBookCoverLoad,
@@ -57,6 +58,8 @@ export default function BookCover({
                 fetchProtectedEpubCover(book.id, signal, {
                     buildApiUrl: apiUrl,
                     extractCover: extractEpubCover,
+                    getOfflineBookBlob: async (bookId) =>
+                        (await getOfflineBook(bookId))?.blob,
                     // window.fetch must keep its receiver; passing the bare
                     // function through dependency injection throws Illegal invocation.
                     fetch: globalThis.fetch.bind(globalThis),

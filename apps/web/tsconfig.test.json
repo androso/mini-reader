@@ -17,6 +17,8 @@
         "src/hooks/imageObjectUrlRegistry.ts",
         "src/lib/chapterPullGesture.ts",
         "src/lib/readerNavigationBounds.ts",
+        "src/lib/offlineStore.ts",
+        "src/types/bookTypes.ts",
         "test/**/*.ts"
     ]
 }

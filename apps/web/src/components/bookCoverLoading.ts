@@ -66,6 +66,7 @@ export type ProtectedCoverLoadResult =
 export interface ProtectedCoverDependencies {
     buildApiUrl(path: string): string;
     extractCover(file: Blob): Promise<EpubCoverExtractionResult | Blob | null>;
+    getOfflineBookBlob?(bookId: string): Promise<Blob | undefined>;
     fetch(
         url: string,
         options: { credentials: "include"; signal: AbortSignal }
@@ -92,6 +93,14 @@ export const fetchProtectedEpubCover = async (
     signal: AbortSignal,
     dependencies: ProtectedCoverDependencies
 ): Promise<ProtectedCoverLoadResult> => {
+    const offlineBlob = await dependencies.getOfflineBookBlob?.(bookId);
+    if (offlineBlob) {
+        if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+        return toProtectedCoverResult(
+            await dependencies.extractCover(offlineBlob)
+        );
+    }
+
     const response = await dependencies.fetch(
         dependencies.buildApiUrl(`/api/books/${bookId}`),
         { credentials: "include", signal }

@@ -24,6 +24,7 @@ interface EpubReaderProps {
     url: string;
     bookId: string;
     isMobile?: boolean;
+    requireLocal?: boolean;
     onBack?: () => void;
     onAddHighlightContext?: (text: string) => void;
 }
@@ -35,6 +36,7 @@ const EpubReader = memo(
         url,
         bookId,
         isMobile = false,
+        requireLocal = false,
         onBack,
         onAddHighlightContext,
     }: EpubReaderProps) => {
@@ -308,8 +310,8 @@ const EpubReader = memo(
         });
 
         useEffect(() => {
-            processEpub(url);
-        }, [url, processEpub]);
+            void processEpub({ bookId, url, requireLocal });
+        }, [bookId, processEpub, requireLocal, url]);
 
         useEffect(() => {
             hasInitializedChapter.current = false;

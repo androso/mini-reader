@@ -4,7 +4,10 @@ import test from "node:test";
 
 const hookSource = readFileSync("src/hooks/useReadingTheme.ts", "utf8");
 const homeSource = readFileSync("src/app/page.tsx", "utf8");
-const readerSource = readFileSync("src/app/read/[id]/page.tsx", "utf8");
+const readerSource = readFileSync(
+    "src/components/reader/ReaderWorkspace.tsx",
+    "utf8"
+);
 const stylesSource = readFileSync("src/app/globals.css", "utf8");
 
 test("reading theme persists and is shared by home and reader surfaces", () => {

@@ -1,7 +1,7 @@
 {
     "compilerOptions": {
         "target": "ES2017",
-        "lib": ["dom", "dom.iterable", "esnext"],
+        "lib": ["dom", "dom.iterable", "webworker", "esnext"],
         "allowJs": true,
         "skipLibCheck": true,
         "strict": true,
@@ -22,6 +22,20 @@
             "@/*": ["./src/*"]
         }
     },
-    "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-    "exclude": ["node_modules"]
+    "include": [
+        "next-env.d.ts",
+        "**/*.ts",
+        "**/*.tsx",
+        ".next/types/**/*.ts",
+        "@serwist/next/typings"
+    ],
+    "exclude": [
+        "node_modules",
+        "public/sw.js",
+        "public/sw.js.map",
+        "public/workbox-*.js",
+        "public/workbox-*.js.map",
+        "public/serwist-*.js",
+        "public/serwist-*.js.map"
+    ]
 }
