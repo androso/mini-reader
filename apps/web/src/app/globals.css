@@ -609,7 +609,7 @@
 
 .book-card {
     display: grid;
-    grid-template-rows: auto 1fr;
+    grid-template-rows: minmax(0, 1fr) auto;
     min-width: 0;
     cursor: pointer;
     border: var(--rule-hair) solid var(--color-rule);
@@ -617,6 +617,37 @@
     background: var(--color-paper-raised);
     padding: var(--space-sm);
     text-align: left;
+}
+
+.book-card__open {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.book-card__actions {
+    display: grid;
+    gap: var(--space-sm);
+    min-width: 0;
+    padding: var(--space-sm) var(--space-xs) var(--space-xs);
+}
+
+.book-card__offline-status {
+    display: inline-flex;
+    min-width: 0;
+    align-items: center;
+    gap: var(--space-xs);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    color: var(--color-accent-deep);
+}
+
+.book-card__action {
+    width: 100%;
+    min-width: 0;
+    padding-inline: var(--space-sm);
 }
 
 .book-card:focus-within {

@@ -2,9 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
     OPENAI_CHAT_MAX_TOKENS,
+    OPENAI_CHAT_MODELS,
     OPENAI_CHAT_MODEL,
     OPENAI_CHAT_TEMPERATURE,
-    OpenAIService,
+    PlatformChatService,
     buildChatCompletionRequest,
     createOpenAIClientOptions,
     type ChatMessage,
@@ -41,10 +42,9 @@ test("chat stream request includes usage capture and model settings", () => {
 });
 
 test("newer chat models use compatible request parameters", () => {
-    for (const model of [
-        "gpt-5.5-2026-04-23",
-        "gpt-5.4-mini-2026-03-17",
-    ] as const) {
+    for (const model of OPENAI_CHAT_MODELS.filter(
+        (candidate) => candidate !== OPENAI_CHAT_MODEL
+    )) {
         const request = buildChatCompletionRequest(messages, undefined, model);
 
         assert.equal(request.model, model);
@@ -74,7 +74,15 @@ test("stream generation sends the usage-enabled request to the configured client
     delete process.env.LANGFUSE_SECRET_KEY;
 
     const calls: Array<{ request: unknown; options: unknown }> = [];
-    const fakeStream = {} as AsyncIterable<unknown>;
+    const fakeStream = (async function* () {
+        yield {
+            choices: [{ delta: { content: "answer" }, finish_reason: null }],
+        };
+        yield {
+            choices: [{ delta: {}, finish_reason: "stop" }],
+            usage: { prompt_tokens: 2, completion_tokens: 1, total_tokens: 3 },
+        };
+    })();
     const fakeClient = {
         chat: {
             completions: {
@@ -87,7 +95,7 @@ test("stream generation sends the usage-enabled request to the configured client
     } as unknown as OpenAI;
 
     try {
-        const service = new OpenAIService(fakeClient);
+        const service = new PlatformChatService(fakeClient);
         const abortController = new AbortController();
         const result = await service.generateStreamResponse(
             messages,
@@ -95,7 +103,20 @@ test("stream generation sends the usage-enabled request to the configured client
             { signal: abortController.signal }
         );
 
-        assert.equal(result, fakeStream);
+        const events = [];
+        for await (const event of result) events.push(event);
+        assert.deepEqual(events, [
+            { content: "answer" },
+            {
+                content: "",
+                finishReason: "stop",
+                usage: {
+                    prompt_tokens: 2,
+                    completion_tokens: 1,
+                    total_tokens: 3,
+                },
+            },
+        ]);
         assert.equal(calls.length, 1);
         assert.deepEqual(
             (calls[0].request as { stream_options?: unknown }).stream_options,

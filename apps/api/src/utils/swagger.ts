@@ -3,6 +3,11 @@ import doc from "swagger-jsdoc";
 import ui from "swagger-ui-express";
 import type { Express, Request, Response } from "express";
 import { DEV_AUTH_COOKIE, PROD_AUTH_COOKIE } from "./authCookie";
+import { CODEX_MODELS } from "../services/CodexOAuthService";
+import {
+    OPENAI_CHAT_MODEL,
+    OPENAI_CHAT_MODELS,
+} from "../services/OpenAIServices";
 
 export const resolveSwaggerRouteGlob = (utilsDirectory = __dirname) =>
     path.resolve(utilsDirectory, "../routes/*.{ts,js}");
@@ -186,13 +191,14 @@ const createDefinition = (
                         model: {
                             type: "string",
                             enum: [
-                                "gpt-4o-mini",
-                                "gpt-5.5-2026-04-23",
-                                "gpt-5.4-mini-2026-03-17",
+                                ...new Set([
+                                    ...OPENAI_CHAT_MODELS,
+                                    ...CODEX_MODELS,
+                                ]),
                             ],
-                            default: "gpt-4o-mini",
+                            default: OPENAI_CHAT_MODEL,
                             description:
-                                "Optional model override. Unsupported values return 400.",
+                                "Provider-specific model. Unsupported values for the authenticated user's selected provider return 400.",
                         },
                         highlightContext: {
                             type: "object",
@@ -284,6 +290,60 @@ const createDefinition = (
                         { $ref: "#/components/schemas/ChatFatalErrorEvent" },
                         { $ref: "#/components/schemas/ChatTerminalEvent" },
                     ],
+                },
+                ChatProviderStatus: {
+                    type: "object",
+                    required: [
+                        "codexAvailable",
+                        "provider",
+                        "connected",
+                        "reauthRequired",
+                        "account",
+                        "models",
+                        "defaultModel",
+                    ],
+                    properties: {
+                        codexAvailable: { type: "boolean" },
+                        provider: {
+                            type: "string",
+                            enum: ["openai", "codex"],
+                        },
+                        connected: { type: "boolean" },
+                        reauthRequired: { type: "boolean" },
+                        account: {
+                            type: "object",
+                            nullable: true,
+                            properties: {
+                                email: {
+                                    type: "string",
+                                    format: "email",
+                                    nullable: true,
+                                },
+                                planType: { type: "string", nullable: true },
+                            },
+                        },
+                        models: {
+                            type: "array",
+                            items: { type: "string" },
+                        },
+                        defaultModel: { type: "string" },
+                    },
+                },
+                CodexAuthorization: {
+                    type: "object",
+                    required: ["authorizationUrl", "expiresAt"],
+                    properties: {
+                        authorizationUrl: { type: "string", format: "uri" },
+                        expiresAt: { type: "string", format: "date-time" },
+                    },
+                },
+                CodexCompletionRequest: {
+                    type: "object",
+                    additionalProperties: false,
+                    required: ["redirectUrl"],
+                    properties: {
+                        redirectUrl: { type: "string", format: "uri" },
+                    },
                 },
                 Error: {
                     type: "object",

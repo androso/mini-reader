@@ -16,6 +16,10 @@ const expectedPaths = [
     "/api/auth/login",
     "/api/auth/logout",
     "/api/user",
+    "/api/chat-provider",
+    "/api/chat-provider/codex/authorize",
+    "/api/chat-provider/codex/complete",
+    "/api/chat-provider/codex",
     "/api/books",
     "/api/books/{bookId}/retry",
     "/api/books/{bookId}/status",
@@ -120,10 +124,33 @@ test("OpenAPI public schemas exclude private storage and execution fields", () =
     assert.deepEqual(spec.components.schemas.ChatRequest.required, ["message"]);
     assert.deepEqual(spec.components.schemas.ChatRequest.properties.model, {
         type: "string",
-        enum: ["gpt-4o-mini", "gpt-5.5-2026-04-23", "gpt-5.4-mini-2026-03-17"],
+        enum: [
+            "gpt-4o-mini",
+            "gpt-5.6-sol",
+            "gpt-5.6-terra",
+            "gpt-5.6-luna",
+            "gpt-5.5-2026-04-23",
+            "gpt-5.4-2026-03-05",
+            "gpt-5.4-mini-2026-03-17",
+            "gpt-5.4-nano-2026-03-17",
+            "gpt-5.6",
+            "gpt-5.5",
+            "gpt-5.4",
+            "gpt-5.4-mini",
+        ],
         default: "gpt-4o-mini",
-        description: "Optional model override. Unsupported values return 400.",
+        description:
+            "Provider-specific model. Unsupported values for the authenticated user's selected provider return 400.",
     });
+    assert.deepEqual(schemaProperties(spec, "ChatProviderStatus"), [
+        "account",
+        "codexAvailable",
+        "connected",
+        "defaultModel",
+        "models",
+        "provider",
+        "reauthRequired",
+    ]);
 
     for (const privateField of [
         "fileKey",

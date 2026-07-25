@@ -14,10 +14,20 @@ export type ChatMessage = {
     content: string;
 };
 
+export type ChatStreamEvent = {
+    content: string;
+    finishReason?: string | null;
+    usage?: unknown;
+};
 export const OPENAI_CHAT_MODELS = [
     "gpt-4o-mini",
+    "gpt-5.6-sol",
+    "gpt-5.6-terra",
+    "gpt-5.6-luna",
     "gpt-5.5-2026-04-23",
+    "gpt-5.4-2026-03-05",
     "gpt-5.4-mini-2026-03-17",
+    "gpt-5.4-nano-2026-03-17",
 ] as const;
 export type OpenAIChatModel = (typeof OPENAI_CHAT_MODELS)[number];
 export const OPENAI_CHAT_MODEL: OpenAIChatModel = OPENAI_CHAT_MODELS[0];
@@ -109,7 +119,7 @@ export const buildChatCompletionRequest = (
     },
 });
 
-export class OpenAIService {
+export class PlatformChatService {
     private client: OpenAI;
 
     constructor(client?: OpenAI) {
@@ -136,7 +146,7 @@ export class OpenAIService {
         userMessages: ChatMessage[],
         systemPrompt = "You are a helpful assistant.",
         options?: GenerateStreamResponseOptions
-    ): Promise<any> {
+    ): Promise<AsyncGenerator<ChatStreamEvent>> {
         const response = await this.getClient(options).chat.completions.create(
             buildChatCompletionRequest(
                 userMessages,
@@ -145,7 +155,20 @@ export class OpenAIService {
             ),
             options?.signal ? { signal: options.signal } : undefined
         );
-        return response;
+        return (async function* () {
+            for await (const chunk of response) {
+                const content = chunk.choices[0]?.delta?.content || "";
+                const finishReason = chunk.choices[0]?.finish_reason;
+                if (content) yield { content };
+                if (finishReason || chunk.usage) {
+                    yield {
+                        content: "",
+                        finishReason: finishReason ?? null,
+                        usage: chunk.usage,
+                    };
+                }
+            }
+        })();
     }
     async generateResponse(context: string, query: string): Promise<string> {
         const response = await this.client.chat.completions.create({

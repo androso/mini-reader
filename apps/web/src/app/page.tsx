@@ -32,6 +32,7 @@ import {
     FileText,
     LibraryBig,
     LogOut,
+    Settings,
     Trash2,
     Upload,
     X,
@@ -325,6 +326,14 @@ function Home() {
                             theme={theme}
                             onToggle={toggleTheme}
                         />
+                        <button
+                            type="button"
+                            onClick={() => router.push("/settings/ai")}
+                            className="secondary-button"
+                        >
+                            <Settings className="h-4 w-4" />
+                            Settings
+                        </button>
                         <input
                             ref={fileInputRef}
                             type="file"
@@ -470,7 +479,7 @@ function Home() {
                                             onClick={() =>
                                                 handleBookClick(book)
                                             }
-                                            className="min-w-0 text-left"
+                                            className="book-card__open text-left"
                                             aria-label={`Open ${book.title}`}
                                         >
                                             <BookCover
@@ -493,16 +502,16 @@ function Home() {
                                                 </span>
                                             </span>
                                         </button>
-                                        <div className="mt-3 flex flex-wrap items-center gap-2 px-4 pb-4">
+                                        <div className="book-card__actions">
                                             {offlineBookIds.has(book.id) ? (
                                                 <>
-                                                    <span className="inline-flex items-center gap-1 text-xs font-medium text-[var(--color-accent-deep)]">
+                                                    <span className="book-card__offline-status">
                                                         <Check className="h-3.5 w-3.5" />
                                                         Saved offline
                                                     </span>
                                                     <button
                                                         type="button"
-                                                        className="secondary-button"
+                                                        className="secondary-button book-card__action"
                                                         disabled={
                                                             offlineActionBookId ===
                                                             book.id
@@ -523,7 +532,7 @@ function Home() {
                                             ) : (
                                                 <button
                                                     type="button"
-                                                    className="secondary-button"
+                                                    className="secondary-button book-card__action"
                                                     disabled={
                                                         offlineActionBookId ===
                                                         book.id
