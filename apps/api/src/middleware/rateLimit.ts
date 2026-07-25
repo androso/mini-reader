@@ -165,3 +165,10 @@ export const chatRateLimit = createRateLimit({
     windowMs: 60 * 1000,
     identity: (req) => req.user.id,
 });
+
+export const codexAuthRateLimit = createRateLimit({
+    namespace: "codex-auth",
+    limit: 10,
+    windowMs: 15 * 60 * 1000,
+    identity: (req) => req.user.id,
+});

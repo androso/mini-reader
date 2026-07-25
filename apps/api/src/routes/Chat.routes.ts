@@ -13,13 +13,13 @@ import { chatRateLimit } from "../middleware/rateLimit";
 import { asyncHandler } from "../middleware/asyncHandler";
 import {
     OPENAI_CHAT_MAX_TOKENS,
-    OPENAI_CHAT_MODEL,
     OPENAI_CHAT_TEMPERATURE,
-    OpenAIService,
     type ChatMessage,
-    type OpenAIChatModel,
-    isOpenAIChatModel,
 } from "../services/OpenAIServices";
+import {
+    ChatCompletionService,
+    type ChatProviderSelection,
+} from "../services/ChatCompletionService";
 import {
     buildBookContextSystemPrompt,
     buildRetrievalQuery,
@@ -65,7 +65,7 @@ import {
 } from "../services/ChatExecutionMetadata";
 
 const router = Router();
-const oaiService = new OpenAIService();
+const chatCompletionService = new ChatCompletionService();
 const log = createLogger("chat");
 
 type StreamAssistantOutcome = ChatCompletionOutcome & {
@@ -207,10 +207,23 @@ const getErrorDetail = (error: unknown) => {
         code?: unknown;
         errno?: unknown;
         message?: unknown;
+        request_id?: unknown;
+        requestID?: unknown;
+        status?: unknown;
+        type?: unknown;
         name?: unknown;
     };
 
-    return [details.name, details.code, details.errno, details.message]
+    return [
+        details.name,
+        details.type,
+        details.status,
+        details.code,
+        details.errno,
+        details.request_id,
+        details.requestID,
+        details.message,
+    ]
         .filter(Boolean)
         .join(" ");
 };
@@ -218,14 +231,6 @@ const getErrorDetail = (error: unknown) => {
 const isPrematureCloseError = (error: unknown) =>
     getErrorDetail(error).includes("ERR_STREAM_PREMATURE_CLOSE") ||
     getErrorDetail(error).includes("Premature close");
-
-const resolveChatModel = (model: unknown): OpenAIChatModel | null => {
-    if (model === undefined || model === null || model === "") {
-        return OPENAI_CHAT_MODEL;
-    }
-
-    return isOpenAIChatModel(model) ? model : null;
-};
 
 const summarizeRetrievedChunks = (
     results: Awaited<ReturnType<typeof hybridBookSearchService.search>>
@@ -421,6 +426,12 @@ const buildRagMessages = async (
                     role: "system" as const,
                     content: buildBookContextSystemPrompt(
                         context,
+                        {
+                            bookId: book.id,
+                            title: book.title,
+                            fileType: book.fileType,
+                            libraryAddedAt: book.createdAt.toISOString(),
+                        },
                         highlightContext
                     ),
                 },
@@ -470,7 +481,7 @@ const streamAssistantResponse = async ({
     resourceType,
     resourceId,
     routeName,
-    model,
+    selection,
     traceOpenAI,
     responseAbort,
 }: {
@@ -482,14 +493,14 @@ const streamAssistantResponse = async ({
     resourceType: string;
     resourceId: string;
     routeName: string;
-    model: OpenAIChatModel;
+    selection: ChatProviderSelection;
     traceOpenAI: boolean;
     responseAbort: ReturnType<typeof createResponseAbortController>;
 }) => {
     const generationStartedAt = Date.now();
     const openAiSpan = trace.startObservation("openai_chat_stream", {
         input: {
-            model,
+            model: selection.model,
             temperature: OPENAI_CHAT_TEMPERATURE,
             maxTokens: OPENAI_CHAT_MAX_TOKENS,
             messageCount: messages.length,
@@ -503,13 +514,14 @@ const streamAssistantResponse = async ({
     let caughtAbortError = false;
 
     try {
-        const textStream = await oaiService.generateStreamResponse(
+        const textStream = chatCompletionService.generateStreamResponse(
+            userId,
+            selection,
             messages,
-            undefined,
+            "You are a helpful assistant.",
             {
-                model,
                 signal: responseAbort.controller.signal,
-                ...(traceOpenAI
+                ...(traceOpenAI && selection.provider === "openai"
                     ? {
                           langfuse: {
                               userId,
@@ -521,7 +533,7 @@ const streamAssistantResponse = async ({
                                   resourceType,
                                   resourceId,
                                   conversationId,
-                                  model,
+                                  model: selection.model,
                               },
                               parentSpanContext: openAiSpan.getSpanContext(),
                           },
@@ -530,19 +542,21 @@ const streamAssistantResponse = async ({
             }
         );
 
-        for await (const chunk of textStream) {
+        for await (const event of textStream) {
             if (responseAbort.wasClosed() || res.destroyed || res.writableEnded)
                 break;
-            const choice = chunk.choices[0];
-            if (choice?.finish_reason) {
-                finishReason = choice.finish_reason;
+            if (event.finishReason) {
+                finishReason = event.finishReason;
             }
-            if ("usage" in chunk && chunk.usage) {
-                usage = chunk.usage;
+            if (event.usage) {
+                usage = event.usage;
             }
-            const content = choice?.delta?.content || "";
-            accumulatedResponse += content;
-            res.write(`data: ${JSON.stringify({ content })}\n\n`);
+            accumulatedResponse += event.content;
+            if (event.content) {
+                res.write(
+                    `data: ${JSON.stringify({ content: event.content })}\n\n`
+                );
+            }
         }
 
         openAiSpan.update({
@@ -569,6 +583,18 @@ const streamAssistantResponse = async ({
                 streamError,
                 "OpenAI chat stream failed"
             );
+            log.error("Chat response stream failed", {
+                conversationId,
+                userId,
+                resourceType,
+                resourceId,
+                routeName,
+                provider: selection.provider,
+                model: selection.model,
+                finishReason,
+                outputLength: accumulatedResponse.length,
+                error: getErrorDetail(streamError),
+            });
         } else if (completedBeforeTransportWarning) {
             openAiSpan.update({
                 level: "WARNING",
@@ -662,7 +688,7 @@ const runChatCompletion = async ({
     query,
     res,
     routeName,
-    model,
+    selection,
     highlightContext,
     trace,
 }: {
@@ -674,7 +700,7 @@ const runChatCompletion = async ({
     query: string;
     res: Response;
     routeName: string;
-    model: OpenAIChatModel;
+    selection: ChatProviderSelection;
     highlightContext: HighlightContext | null;
     trace: TraceObservation;
 }) => {
@@ -777,12 +803,12 @@ const runChatCompletion = async ({
             resourceType,
             resourceId,
             routeName,
-            model,
+            selection,
             traceOpenAI: resourceType === "book",
             responseAbort,
         });
         const executionMetadata = buildMessageExecutionMetadata({
-            modelId: model,
+            modelId: selection.model,
             generationDurationMs: outcome.generationDurationMs,
             totalLatencyMs: Date.now() - startedAt,
             usage: outcome.usage,
@@ -917,13 +943,6 @@ router.post(
             const highlightContext = normalizeHighlightContext(
                 request.highlightContext
             );
-            const chatModel = resolveChatModel(model);
-            if (!chatModel) {
-                res.status(400).send({
-                    error: "Unsupported chat model",
-                });
-                return;
-            }
 
             await runAuthorizedRequestOperation({
                 resourceType: req.params.resourceType,
@@ -931,6 +950,17 @@ router.post(
                 userId: req.user.id,
                 res,
                 operation: async (resourceType) => {
+                    const selection =
+                        await chatCompletionService.resolveSelection(
+                            req.user.id,
+                            model
+                        );
+                    if (!selection) {
+                        res.status(400).send({
+                            error: "Unsupported chat model for the selected provider",
+                        });
+                        return;
+                    }
                     const [conversation] = await db
                         .insert(Conversations)
                         .values({
@@ -976,7 +1006,7 @@ router.post(
                                 query: message,
                                 res,
                                 routeName: "create_conversation",
-                                model: chatModel,
+                                selection,
                                 highlightContext,
                                 trace,
                             })
@@ -1130,13 +1160,6 @@ router.post(
             const highlightContext = normalizeHighlightContext(
                 request.highlightContext
             );
-            const chatModel = resolveChatModel(model);
-            if (!chatModel) {
-                res.status(400).send({
-                    error: "Unsupported chat model",
-                });
-                return;
-            }
 
             await runAuthorizedScopedRequestOperation({
                 resourceType,
@@ -1145,6 +1168,17 @@ router.post(
                 userId: req.user.id,
                 res,
                 operation: async (_conversation, authorizedResourceType) => {
+                    const selection =
+                        await chatCompletionService.resolveSelection(
+                            req.user.id,
+                            model
+                        );
+                    if (!selection) {
+                        res.status(400).send({
+                            error: "Unsupported chat model for the selected provider",
+                        });
+                        return;
+                    }
                     const messages = await persistUserMessageAndBuildHistory({
                         conversationId,
                         message,
@@ -1177,7 +1211,7 @@ router.post(
                                 query: message,
                                 res,
                                 routeName: "append_message",
-                                model: chatModel,
+                                selection,
                                 highlightContext,
                                 trace,
                             })

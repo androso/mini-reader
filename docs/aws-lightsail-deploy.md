@@ -98,6 +98,8 @@ Edit `.env.prod` and set:
   `GOOGLE_CLIENT_ID` API token audience
 - `OPENAI_API_KEY`
 - S3 bucket and access key values
+- `CODEX_OAUTH_ENABLED` and `CODEX_CREDENTIAL_ENCRYPTION_KEY` only when opting
+  into experimental per-user Codex subscription chat
 
 `POSTGRES_PASSWORD` is interpolated directly into Compose's `DATABASE_URL`.
 Use only URI-unreserved characters (`A-Z`, `a-z`, `0-9`, `.`, `_`, `~`, and
@@ -116,6 +118,13 @@ Set `FRONTEND_URL` to exactly `https://$READER_DOMAIN` and keep
 Caddy, which is required by the API's unsafe-request Origin check and secure
 `__Host-reader_session` cookie. Compose exposes port 3000 internally to Caddy;
 only Caddy publishes public ports 80/443.
+
+Codex auth is opt-in and experimental. Set `CODEX_OAUTH_ENABLED=true` and
+generate `CODEX_CREDENTIAL_ENCRYPTION_KEY` with `openssl rand -base64 32`; key
+rotation without re-encrypting rows disconnects existing accounts. Connection
+uses a manual localhost callback paste in Reader settings and changes generated
+chat responses only. Keep `OPENAI_API_KEY`: ingestion and semantic retrieval
+continue to use Platform `/v1/embeddings`.
 
 ## 4. Build, migrate, and start
 

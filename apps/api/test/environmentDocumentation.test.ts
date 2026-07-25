@@ -34,6 +34,8 @@ test("environment templates cover the compact local and production runtimes", ()
         "JWT_SECRET",
         "GOOGLE_CLIENT_ID",
         "OPENAI_API_KEY",
+        "CODEX_OAUTH_ENABLED",
+        "CODEX_CREDENTIAL_ENCRYPTION_KEY",
         "STORAGE_DRIVER",
         "BOOK_PROCESSING_RUNNER_ENABLED",
         "BOOK_PROCESSING_MAX_ATTEMPTS",
@@ -50,6 +52,8 @@ test("environment templates cover the compact local and production runtimes", ()
         "NEXT_PUBLIC_GOOGLE_CLIENT_ID",
         "GOOGLE_CLIENT_ID",
         "OPENAI_API_KEY",
+        "CODEX_OAUTH_ENABLED",
+        "CODEX_CREDENTIAL_ENCRYPTION_KEY",
         "STORAGE_DRIVER",
         "S3_BUCKET_NAME",
         "AWS_ACCESS_KEY_ID",
@@ -79,6 +83,21 @@ test("environment templates cover the compact local and production runtimes", ()
         ]) {
             assert.equal(values.has(forbidden), false, forbidden);
         }
+    }
+});
+
+test("Codex documentation retains the Platform embedding key", () => {
+    const documents = [
+        read(".env.template"),
+        read(".env.prod.example"),
+        read("README.md"),
+        read("docs/aws-lightsail-deploy.md"),
+        read("docs/aws-lightsail-cloudformation-deploy.md"),
+    ];
+    for (const document of documents) {
+        assert.match(document, /CODEX_OAUTH_ENABLED/);
+        assert.match(document, /CODEX_CREDENTIAL_ENCRYPTION_KEY/);
+        assert.match(document, /OPENAI_API_KEY/);
     }
 });
 

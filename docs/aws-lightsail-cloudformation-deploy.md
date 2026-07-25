@@ -33,6 +33,11 @@ Set these required values:
   `DATABASE_URL`, so do not use reserved characters such as `/`, `?`, `#`, `@`,
   or `:`.
 
+The generated `.env.prod` keeps experimental Codex auth disabled by default.
+To opt in after bootstrap, set `CODEX_OAUTH_ENABLED=true` and generate
+`CODEX_CREDENTIAL_ENCRYPTION_KEY` with `openssl rand -base64 32`. Rotating that
+key without re-encrypting rows disconnects existing Codex accounts.
+
 Existing local parameter files may still contain `GoogleClientSecretValue`.
 The template accepts that deprecated key for compatibility but ignores its
 value; new parameter files should omit it.
@@ -128,6 +133,11 @@ The bootstrap sets `FRONTEND_URL` to that exact HTTPS origin and leaves
 check and use the Secure, HttpOnly `__Host-reader_session` cookie through one
 same-origin Caddy entrypoint. Compose exposes port 3000 internally to Caddy;
 only Caddy publishes public ports 80/443.
+
+Codex connection uses a manual localhost callback paste in Reader settings and
+changes generated chat responses only. Keep the Platform `OPENAI_API_KEY`
+configured because ingestion and semantic retrieval continue to use
+`/v1/embeddings`.
 
 ## 4. Updates
 

@@ -6,6 +6,7 @@ import bookRoutes from "./routes/Book.routes";
 import chatRoutes from "./routes/Chat.routes";
 import healthRoutes from "./routes/Health.routes";
 import tracker from "./routes/Tracker.routes";
+import chatProviderRoutes from "./routes/ChatProvider.routes";
 import cors from "cors";
 import { logger } from "./middleware/logger";
 import {
@@ -15,7 +16,9 @@ import {
 } from "./middleware/csrf";
 import { terminalErrorHandler } from "./middleware/errorHandler";
 import { authRateLimit } from "./middleware/rateLimit";
+import { validateCodexEnvironment } from "./services/CodexCredentialService";
 dotenv.config();
+validateCodexEnvironment();
 
 const app = express();
 // Caddy is the only trusted hop; Docker may expose it as a bridge gateway.
@@ -41,6 +44,7 @@ app.use("/health", healthRoutes);
 app.use("/api/auth", authRateLimit, authRoutes);
 app.use("/api/user", userRoutes);
 app.use("/api/books", bookRoutes);
+app.use("/api/chat-provider", chatProviderRoutes);
 app.use("/api", chatRoutes);
 app.use("/api", tracker);
 app.use(terminalErrorHandler);

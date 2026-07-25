@@ -53,13 +53,18 @@ test("0016 adds one nullable private JSONB column", () => {
     assert.equal(columns.completion_status.type, "message_completion_status");
     assert.equal(columns.finish_reason.type, "text");
 
-    assert.deepEqual(journal.entries.at(-1), {
-        idx: 16,
-        version: "7",
-        when: journal.entries.at(-1)?.when,
-        tag: "0016_message_execution_metadata",
-        breakpoints: true,
-    });
+    assert.deepEqual(
+        journal.entries.find(
+            (entry) => entry.tag === "0016_message_execution_metadata"
+        ),
+        {
+            idx: 16,
+            version: "7",
+            when: journal.entries[16]?.when,
+            tag: "0016_message_execution_metadata",
+            breakpoints: true,
+        }
+    );
 });
 
 test(

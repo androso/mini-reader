@@ -48,8 +48,9 @@ cp apps/web/.env.template apps/web/.env
 ```
 
 The template's PostgreSQL URL matches `compose.dev.yml`. Set `JWT_SECRET` to a
-random local value; `OPENAI_API_KEY` is only required for ingestion and
-book-grounded chat. Never commit either generated environment file.
+random local value. `OPENAI_API_KEY` remains required for book ingestion,
+semantic retrieval through `/v1/embeddings`, and default book-grounded chat.
+Never commit either generated environment file.
 
 Apply migrations and start both applications:
 
@@ -138,6 +139,16 @@ when one is present. The API rejects every unsafe request whose `Origin` does
 not match it. Local development may use `NEXT_PUBLIC_API_URL` to call the API
 on a different port; production leaves that variable empty so Caddy serves the
 web app and `/api/*` from one HTTPS origin. Caddy is the only trusted proxy hop.
+
+Experimental per-user Codex subscription chat is disabled by default. To opt in,
+set `CODEX_OAUTH_ENABLED=true` and generate
+`CODEX_CREDENTIAL_ENCRYPTION_KEY` with `openssl rand -base64 32`. Users connect
+under **Settings → AI provider** with a manual flow: after authorization, they
+copy the unreachable `http://localhost:1455/auth/callback?...` URL from the
+browser bar and paste it into Reader. Codex then covers generated chat responses
+for that user only; ingestion and semantic search still use `OPENAI_API_KEY`.
+Rotating the encryption key without re-encrypting stored rows disconnects
+existing Codex accounts.
 
 ## Book and reader guarantees
 

@@ -17,7 +17,7 @@
         "build": "tsc -p tsconfig.json",
         "start": "DOTENV_CONFIG_PATH=../../.env node -r dotenv/config build/index.js",
         "start:production": "NODE_ENV=production node build/production.js",
-        "test": "tsc -p tsconfig.test.json && NODE_PATH=./node_modules:../../packages/processing/node_modules node --test ../../.tmp/apps-api-test/test/*.js"
+        "test": "tsc -p tsconfig.test.json && CODEX_OAUTH_ENABLED=false NODE_PATH=./node_modules:../../packages/processing/node_modules node --test ../../.tmp/apps-api-test/test/*.js"
     },
     "dependencies": {
         "@langfuse/openai": "^5.9.1",

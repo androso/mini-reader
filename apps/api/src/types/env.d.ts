@@ -25,6 +25,8 @@ declare global {
             LANGFUSE_SAMPLE_RATE?: string;
             LANGFUSE_CAPTURE_CONTENT?: "metadata" | "snippets";
             LANGFUSE_MAX_CAPTURE_CHARS?: string;
+            CODEX_OAUTH_ENABLED?: string;
+            CODEX_CREDENTIAL_ENCRYPTION_KEY?: string;
         }
     }
 

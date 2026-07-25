@@ -14,7 +14,10 @@ import {
     type BookContextStatus,
 } from "../src/services/BookContextState";
 import { hybridBookSearchService } from "../src/services/HybridBookSearchService";
-import { OpenAIService } from "../src/services/OpenAIServices";
+import {
+    PlatformChatService,
+    type ChatMessage,
+} from "../src/services/OpenAIServices";
 import { chatRateLimit } from "../src/middleware/rateLimit";
 
 process.env.JWT_SECRET ??= "book-context-route-test-secret";
@@ -156,7 +159,8 @@ test("book context states fail closed before model generation", async () => {
     const originalInsert = db.insert;
     const originalUpdate = db.update;
     const originalSearch = hybridBookSearchService.search;
-    const originalGenerate = OpenAIService.prototype.generateStreamResponse;
+    const originalGenerate =
+        PlatformChatService.prototype.generateStreamResponse;
     const scenarios: Array<{
         name: string;
         expectedStatus: FailureContextStatus;
@@ -280,7 +284,7 @@ test("book context states fail closed before model generation", async () => {
                 }
                 return [];
             };
-            OpenAIService.prototype.generateStreamResponse = async () => {
+            PlatformChatService.prototype.generateStreamResponse = async () => {
                 modelCalls++;
                 return (async function* () {})();
             };
@@ -321,7 +325,7 @@ test("book context states fail closed before model generation", async () => {
         db.insert = originalInsert;
         db.update = originalUpdate;
         hybridBookSearchService.search = originalSearch;
-        OpenAIService.prototype.generateStreamResponse = originalGenerate;
+        PlatformChatService.prototype.generateStreamResponse = originalGenerate;
     }
 });
 
@@ -331,12 +335,14 @@ test("no-match is persisted refusal while ready passages alone reach OpenAI", as
     const originalInsert = db.insert;
     const originalUpdate = db.update;
     const originalSearch = hybridBookSearchService.search;
-    const originalGenerate = OpenAIService.prototype.generateStreamResponse;
+    const originalGenerate =
+        PlatformChatService.prototype.generateStreamResponse;
 
     try {
         for (const hasPassages of [false, true]) {
             let modelCalls = 0;
             const insertedMessages: unknown[] = [];
+            const generatedMessageBatches: ChatMessage[][] = [];
             db.select = (() => ({
                 from: (table: unknown) => ({
                     where: () => {
@@ -352,6 +358,10 @@ test("no-match is persisted refusal while ready passages alone reach OpenAI", as
                                 id: "book-1",
                                 userId: "user-1",
                                 processingStatus: "ready",
+                                title: "A Wizard of Earthsea",
+                                fileType: "epub",
+                                fileKey: "users/user-1/private.epub",
+                                createdAt: new Date("2026-07-25T00:00:00.000Z"),
                                 processingError: null,
                                 collectionName: "book_ready",
                             },
@@ -380,22 +390,22 @@ test("no-match is persisted refusal while ready passages alone reach OpenAI", as
                           },
                       ]
                     : [];
-            OpenAIService.prototype.generateStreamResponse = async () => {
+            PlatformChatService.prototype.generateStreamResponse = async (
+                messages
+            ) => {
+                generatedMessageBatches.push(messages);
                 modelCalls++;
                 return (async function* () {
+                    yield { content: "model answer" };
                     yield {
-                        choices: [
-                            {
-                                delta: { content: "model answer" },
-                                finish_reason: "stop",
-                            },
-                        ],
+                        content: "",
+                        finishReason: "stop",
                         usage: {
                             prompt_tokens: 8,
                             completion_tokens: 2,
                             total_tokens: 10,
                         },
-                    } as never;
+                    };
                 })();
             };
 
@@ -440,6 +450,17 @@ test("no-match is persisted refusal while ready passages alone reach OpenAI", as
                 });
                 continue;
             }
+
+            const systemPrompt = generatedMessageBatches[0]?.[0]?.content;
+            assert.match(systemPrompt ?? "", /Book metadata:/);
+            assert.match(systemPrompt ?? "", /A Wizard of Earthsea/);
+            assert.match(systemPrompt ?? "", /\"fileType\":\"epub\"/);
+            assert.match(
+                systemPrompt ?? "",
+                /\"libraryAddedAt\":\"2026-07-25T00:00:00.000Z\"/
+            );
+            assert.doesNotMatch(systemPrompt ?? "", /private\.epub/);
+            assert.doesNotMatch(systemPrompt ?? "", /book_ready/);
 
             assert.deepEqual(result.writes, [
                 `data: ${JSON.stringify({ content: "model answer" })}\n\n`,
@@ -487,6 +508,6 @@ test("no-match is persisted refusal while ready passages alone reach OpenAI", as
         db.insert = originalInsert;
         db.update = originalUpdate;
         hybridBookSearchService.search = originalSearch;
-        OpenAIService.prototype.generateStreamResponse = originalGenerate;
+        PlatformChatService.prototype.generateStreamResponse = originalGenerate;
     }
 });

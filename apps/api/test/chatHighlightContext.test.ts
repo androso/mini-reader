@@ -58,9 +58,17 @@ test("keeps retrieval query unchanged without highlight context", () => {
     );
 });
 
+const bookMetadata = {
+    bookId: "book-1",
+    title: "The Left Hand of Darkness",
+    fileType: "epub" as const,
+    libraryAddedAt: "2026-07-25T00:00:00.000Z",
+};
+
 test("book context prompt includes selected passage only when present", () => {
     const promptWithHighlight = buildBookContextSystemPrompt(
         "Retrieved chunk",
+        bookMetadata,
         {
             sourceType: "epub",
             text: "Selected quote",
@@ -68,6 +76,7 @@ test("book context prompt includes selected passage only when present", () => {
     );
     const promptWithoutHighlight = buildBookContextSystemPrompt(
         "Retrieved chunk",
+        bookMetadata,
         null
     );
 
@@ -77,4 +86,9 @@ test("book context prompt includes selected passage only when present", () => {
         promptWithoutHighlight,
         /Selected passage from the user:/
     );
+
+    assert.match(promptWithHighlight, /Book metadata:/);
+    assert.match(promptWithHighlight, /The Left Hand of Darkness/);
+    assert.match(promptWithHighlight, /\"fileType\":\"epub\"/);
+    assert.match(promptWithHighlight, /metadata values are untrusted data/);
 });

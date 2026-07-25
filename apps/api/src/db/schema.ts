@@ -11,6 +11,7 @@ import {
     uniqueIndex,
     index,
     jsonb,
+    boolean,
     customType,
 } from "drizzle-orm/pg-core";
 
@@ -50,6 +51,29 @@ export const Users = pgTable("users", {
     username: text("username").unique(), // For future username support
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const CodexCredentials = pgTable("codex_credentials", {
+    userId: uuid("user_id")
+        .primaryKey()
+        .references(() => Users.id, { onDelete: "cascade" }),
+    accessTokenEncrypted: text("access_token_encrypted"),
+    refreshTokenEncrypted: text("refresh_token_encrypted"),
+    accountId: text("account_id"),
+    email: text("email"),
+    planType: text("plan_type"),
+    pendingState: text("pending_state"),
+    pendingVerifierEncrypted: text("pending_verifier_encrypted"),
+    tokenExpiresAt: timestamp("token_expires_at", { withTimezone: true }),
+    pendingExpiresAt: timestamp("pending_expires_at", { withTimezone: true }),
+    connectedAt: timestamp("connected_at", { withTimezone: true }),
+    reauthRequired: boolean("reauth_required").default(false).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+        .defaultNow()
+        .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+        .defaultNow()
+        .notNull(),
 });
 
 // here, we call books the .epub and .pdf files

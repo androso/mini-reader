@@ -16,7 +16,7 @@ import {
 } from "../src/db/schema";
 import { hybridBookSearchService } from "../src/services/HybridBookSearchService";
 import {
-    OpenAIService,
+    PlatformChatService,
     type ChatMessage,
 } from "../src/services/OpenAIServices";
 
@@ -307,7 +307,8 @@ test("mounted create route authorizes before every downstream side effect", asyn
     const originalInsert = db.insert;
     const originalUpdate = db.update;
     const originalSearch = hybridBookSearchService.search;
-    const originalGenerate = OpenAIService.prototype.generateStreamResponse;
+    const originalGenerate =
+        PlatformChatService.prototype.generateStreamResponse;
 
     try {
         for (const scenario of [
@@ -335,6 +336,9 @@ test("mounted create route authorizes before every downstream side effect", asyn
                 book: {
                     id: "book-1",
                     userId: "user-1",
+                    title: "Test Book",
+                    fileType: "epub",
+                    createdAt: new Date("2026-07-25T00:00:00.000Z"),
                     processingStatus: "ready",
                     processingError: null,
                     collectionName: "book_collection",
@@ -398,18 +402,12 @@ test("mounted create route authorizes before every downstream side effect", asyn
                     },
                 ];
             };
-            OpenAIService.prototype.generateStreamResponse = async () => {
+            PlatformChatService.prototype.generateStreamResponse = async () => {
                 events.push("model");
                 modelCalls++;
                 return (async function* () {
-                    yield {
-                        choices: [
-                            {
-                                delta: { content: "answer" },
-                                finish_reason: "stop",
-                            },
-                        ],
-                    } as never;
+                    yield { content: "answer" };
+                    yield { content: "", finishReason: "stop" };
                 })();
             };
 
@@ -466,7 +464,7 @@ test("mounted create route authorizes before every downstream side effect", asyn
         db.insert = originalInsert;
         db.update = originalUpdate;
         hybridBookSearchService.search = originalSearch;
-        OpenAIService.prototype.generateStreamResponse = originalGenerate;
+        PlatformChatService.prototype.generateStreamResponse = originalGenerate;
     }
 });
 
@@ -478,7 +476,8 @@ test("mounted append route rejects unauthorized and mismatched scopes before sid
     const originalSelect = db.select;
     const originalInsert = db.insert;
     const originalSearch = hybridBookSearchService.search;
-    const originalGenerate = OpenAIService.prototype.generateStreamResponse;
+    const originalGenerate =
+        PlatformChatService.prototype.generateStreamResponse;
 
     try {
         for (const scenario of [
@@ -539,7 +538,7 @@ test("mounted append route rejects unauthorized and mismatched scopes before sid
                 retrievals++;
                 return [];
             };
-            OpenAIService.prototype.generateStreamResponse = async () => {
+            PlatformChatService.prototype.generateStreamResponse = async () => {
                 modelCalls++;
                 return (async function* () {})();
             };
@@ -588,7 +587,7 @@ test("mounted append route rejects unauthorized and mismatched scopes before sid
         db.select = originalSelect;
         db.insert = originalInsert;
         hybridBookSearchService.search = originalSearch;
-        OpenAIService.prototype.generateStreamResponse = originalGenerate;
+        PlatformChatService.prototype.generateStreamResponse = originalGenerate;
     }
 });
 
@@ -601,7 +600,8 @@ test("mounted append route persists and terminates a failed partial stream", asy
     const originalInsert = db.insert;
     const originalUpdate = db.update;
     const originalSearch = hybridBookSearchService.search;
-    const originalGenerate = OpenAIService.prototype.generateStreamResponse;
+    const originalGenerate =
+        PlatformChatService.prototype.generateStreamResponse;
     const originalConsoleError = console.error;
     let selects = 0;
     const insertedMessages: unknown[] = [];
@@ -623,6 +623,9 @@ test("mounted append route persists and terminates a failed partial stream", asy
                         {
                             id: "book-1",
                             userId: "user-1",
+                            title: "Test Book",
+                            fileType: "epub",
+                            createdAt: new Date("2026-07-25T00:00:00.000Z"),
                             processingStatus: "ready",
                             processingError: null,
                             collectionName: "book_collection",
@@ -649,16 +652,9 @@ test("mounted append route persists and terminates a failed partial stream", asy
                 bestRank: 1,
             },
         ];
-        OpenAIService.prototype.generateStreamResponse = async () => {
+        PlatformChatService.prototype.generateStreamResponse = async () => {
             return (async function* () {
-                yield {
-                    choices: [
-                        {
-                            delta: { content: "partial" },
-                            finish_reason: null,
-                        },
-                    ],
-                } as never;
+                yield { content: "partial" };
                 throw new Error("model unavailable");
             })();
         };
@@ -742,7 +738,7 @@ test("mounted append route persists and terminates a failed partial stream", asy
 
         selects = 0;
         insertedMessages.length = 0;
-        OpenAIService.prototype.generateStreamResponse = async () => {
+        PlatformChatService.prototype.generateStreamResponse = async () => {
             const abortError = new Error("request cancelled");
             abortError.name = "AbortError";
             throw abortError;
@@ -817,21 +813,18 @@ test("mounted append route persists and terminates a failed partial stream", asy
 
         selects = 0;
         insertedMessages.length = 0;
-        OpenAIService.prototype.generateStreamResponse = async () => {
+        PlatformChatService.prototype.generateStreamResponse = async () => {
             return (async function* () {
+                yield { content: "limited" };
                 yield {
-                    choices: [
-                        {
-                            delta: { content: "limited" },
-                            finish_reason: "length",
-                        },
-                    ],
+                    content: "",
+                    finishReason: "length",
                     usage: {
                         prompt_tokens: 9,
                         completion_tokens: 3,
                         total_tokens: 12,
                     },
-                } as never;
+                };
             })();
         };
 
@@ -895,7 +888,7 @@ test("mounted append route persists and terminates a failed partial stream", asy
         db.insert = originalInsert;
         db.update = originalUpdate;
         hybridBookSearchService.search = originalSearch;
-        OpenAIService.prototype.generateStreamResponse = originalGenerate;
+        PlatformChatService.prototype.generateStreamResponse = originalGenerate;
         console.error = originalConsoleError;
     }
 });
@@ -909,7 +902,8 @@ test("mounted append route aborts on close and never writes after destruction", 
     const originalInsert = db.insert;
     const originalUpdate = db.update;
     const originalSearch = hybridBookSearchService.search;
-    const originalGenerate = OpenAIService.prototype.generateStreamResponse;
+    const originalGenerate =
+        PlatformChatService.prototype.generateStreamResponse;
     const insertedMessages: unknown[] = [];
     let response: Response | undefined;
     let modelCalls = 0;
@@ -948,6 +942,9 @@ test("mounted append route aborts on close and never writes after destruction", 
                         {
                             id: "book-1",
                             userId: "user-1",
+                            title: "Test Book",
+                            fileType: "epub",
+                            createdAt: new Date("2026-07-25T00:00:00.000Z"),
                             processingStatus: "ready",
                             processingError: null,
                             collectionName: "book_collection",
@@ -970,7 +967,7 @@ test("mounted append route aborts on close and never writes after destruction", 
             retrievalCalls++;
             return [];
         };
-        OpenAIService.prototype.generateStreamResponse = async () => {
+        PlatformChatService.prototype.generateStreamResponse = async () => {
             modelCalls++;
             return (async function* () {})();
         };
@@ -1025,7 +1022,7 @@ test("mounted append route aborts on close and never writes after destruction", 
             response?.emit("close");
             return [];
         };
-        OpenAIService.prototype.generateStreamResponse = async () => {
+        PlatformChatService.prototype.generateStreamResponse = async () => {
             modelCalls++;
             return (async function* () {})();
         };
@@ -1062,7 +1059,7 @@ test("mounted append route aborts on close and never writes after destruction", 
                 bestRank: 1,
             },
         ];
-        OpenAIService.prototype.generateStreamResponse = async (
+        PlatformChatService.prototype.generateStreamResponse = async (
             _messages,
             _systemPrompt,
             options
@@ -1070,14 +1067,7 @@ test("mounted append route aborts on close and never writes after destruction", 
             modelCalls++;
             generationSignal = options?.signal;
             return (async function* () {
-                yield {
-                    choices: [
-                        {
-                            delta: { content: "partial" },
-                            finish_reason: null,
-                        },
-                    ],
-                } as never;
+                yield { content: "partial" };
                 response?.emit("close");
                 const abortError = new Error("request cancelled");
                 abortError.name = "AbortError";
@@ -1140,7 +1130,7 @@ test("mounted append route aborts on close and never writes after destruction", 
         db.insert = originalInsert;
         db.update = originalUpdate;
         hybridBookSearchService.search = originalSearch;
-        OpenAIService.prototype.generateStreamResponse = originalGenerate;
+        PlatformChatService.prototype.generateStreamResponse = originalGenerate;
     }
 });
 
@@ -1157,7 +1147,8 @@ test("mounted create and append routes send only bounded persisted history to th
     const originalInsert = db.insert;
     const originalUpdate = db.update;
     const originalSearch = hybridBookSearchService.search;
-    const originalGenerate = OpenAIService.prototype.generateStreamResponse;
+    const originalGenerate =
+        PlatformChatService.prototype.generateStreamResponse;
 
     const storedHistory = [
         ...Array.from({ length: 23 }, (_, index) => ({
@@ -1217,6 +1208,9 @@ test("mounted create and append routes send only bounded persisted history to th
                             {
                                 id: "book-1",
                                 userId: "user-1",
+                                title: "Test Book",
+                                fileType: "epub",
+                                createdAt: new Date("2026-07-25T00:00:00.000Z"),
                                 processingStatus: "ready",
                                 processingError: null,
                                 collectionName: "book_collection",
@@ -1251,19 +1245,13 @@ test("mounted create and append routes send only bounded persisted history to th
                     bestRank: 1,
                 },
             ];
-            OpenAIService.prototype.generateStreamResponse = async (
+            PlatformChatService.prototype.generateStreamResponse = async (
                 messages
             ) => {
                 modelInputs.push(messages);
                 return (async function* () {
-                    yield {
-                        choices: [
-                            {
-                                delta: { content: "answer" },
-                                finish_reason: "stop",
-                            },
-                        ],
-                    } as never;
+                    yield { content: "answer" };
+                    yield { content: "", finishReason: "stop" };
                 })();
             };
 
@@ -1330,7 +1318,7 @@ test("mounted create and append routes send only bounded persisted history to th
         db.insert = originalInsert;
         db.update = originalUpdate;
         hybridBookSearchService.search = originalSearch;
-        OpenAIService.prototype.generateStreamResponse = originalGenerate;
+        PlatformChatService.prototype.generateStreamResponse = originalGenerate;
     }
 });
 

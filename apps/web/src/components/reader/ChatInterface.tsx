@@ -18,12 +18,11 @@ import { useChat } from "@/hooks/chat/useChat";
 import { useBookProcessingStatus } from "@/hooks/useBookProcessingStatus";
 import { canRetryBookProcessing } from "@/lib/bookProcessingRetry";
 import type { HighlightContext } from "@/types/highlightContext";
-
-const CHAT_MODELS = [
-    { value: "gpt-4o-mini", label: "GPT-4o mini" },
-    { value: "gpt-5.5-2026-04-23", label: "GPT-5.5" },
-    { value: "gpt-5.4-mini-2026-03-17", label: "GPT-5.4 mini" },
-];
+import {
+    chatModelOptions,
+    PLATFORM_CHAT_MODELS,
+    useChatProviderStatus,
+} from "@/lib/chatProvider";
 
 interface ChatInterfaceProps {
     isMobile?: boolean;
@@ -77,7 +76,13 @@ export function ChatInterface({
         isRetrying,
         retryError,
     } = useBookProcessingStatus(bookId);
-    const [selectedModel, setSelectedModel] = useState(CHAT_MODELS[0].value);
+    const chatProviderQuery = useChatProviderStatus();
+    const modelOptions = chatProviderQuery.data
+        ? chatModelOptions(chatProviderQuery.data)
+        : PLATFORM_CHAT_MODELS;
+    const [selectedModel, setSelectedModel] = useState(
+        PLATFORM_CHAT_MODELS[0].value as string
+    );
     const [isComposerFocused, setIsComposerFocused] = useState(false);
     const [isDesktopHistoryVisible, setIsDesktopHistoryVisible] =
         useState(false);
@@ -126,6 +131,14 @@ export function ChatInterface({
             inputRef.current?.focus();
         }
     }, [highlightContext, isDocumentReady, isMobile]);
+
+    useEffect(() => {
+        const status = chatProviderQuery.data;
+        if (!status) return;
+        if (!status.models.includes(selectedModel)) {
+            setSelectedModel(status.defaultModel);
+        }
+    }, [chatProviderQuery.data, selectedModel]);
 
     return (
         <div className={`relative flex ${!isMobile && "h-full w-full"}`}>
@@ -221,6 +234,7 @@ export function ChatInterface({
                     isDocumentReady={isDocumentReady}
                     isCheckingStatus={!processingStatus}
                     processingError={processingError}
+                    isProviderStatusPending={!chatProviderQuery.data}
                     canRetryProcessing={canRetryProcessing}
                     isRetrying={isRetrying}
                     retryError={retryError ? retryError.message : null}
@@ -229,6 +243,7 @@ export function ChatInterface({
                     onClearHighlightContext={onClearHighlightContext}
                     selectedModel={selectedModel}
                     setSelectedModel={setSelectedModel}
+                    modelOptions={modelOptions}
                     inputRef={inputRef}
                     showModelSelector={
                         !isMobile ||
@@ -315,6 +330,7 @@ const ChatInput = ({
     handleSubmit,
     isDocumentReady,
     isCheckingStatus,
+    isProviderStatusPending,
     processingError,
     canRetryProcessing,
     isRetrying,
@@ -324,6 +340,7 @@ const ChatInput = ({
     onClearHighlightContext,
     selectedModel,
     setSelectedModel,
+    modelOptions,
     inputRef,
     showModelSelector,
     onComposerFocusChange,
@@ -340,6 +357,7 @@ const ChatInput = ({
     isDocumentReady: boolean;
     isCheckingStatus: boolean;
     processingError: string | null;
+    isProviderStatusPending: boolean;
     canRetryProcessing: boolean;
     isRetrying: boolean;
     retryError: string | null;
@@ -348,6 +366,7 @@ const ChatInput = ({
     onClearHighlightContext?: () => void;
     selectedModel: string;
     setSelectedModel: (value: string) => void;
+    modelOptions: ReadonlyArray<{ value: string; label: string }>;
     inputRef: React.RefObject<HTMLInputElement | null>;
     showModelSelector: boolean;
     onComposerFocusChange: (focused: boolean) => void;
@@ -401,10 +420,11 @@ const ChatInput = ({
                     <select
                         value={selectedModel}
                         onChange={(e) => setSelectedModel(e.target.value)}
+                        disabled={isProviderStatusPending}
                         aria-label="Chat model"
                         className="h-11 appearance-none rounded-[var(--radius-input)] border border-[var(--color-chat-rule)] bg-[var(--color-chat-raised)] pl-3 pr-8 text-sm font-semibold text-[var(--color-chat-text)] outline-none transition-[background-color,border-color] duration-short hover:bg-[var(--color-chat)] focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-[var(--color-accent-2)]"
                     >
-                        {CHAT_MODELS.map((model) => (
+                        {modelOptions.map((model) => (
                             <option key={model.value} value={model.value}>
                                 {model.label}
                             </option>
@@ -468,13 +488,13 @@ const ChatInput = ({
                           : "Document context is processing..."
                 }
                 className="h-11 flex-1 border-0 bg-transparent px-2 font-sans text-sm font-semibold text-[var(--color-ink)] shadow-none outline-none placeholder:text-[var(--color-ink-soft)] focus-visible:outline-none"
-                disabled={!isDocumentReady}
+                disabled={!isDocumentReady || isProviderStatusPending}
             />
             <Button
                 type="submit"
                 size="icon"
                 variant="default"
-                disabled={!isDocumentReady}
+                disabled={!isDocumentReady || isProviderStatusPending}
                 aria-label="Send message"
                 className="h-11 w-11 rounded-[var(--radius-pill)] bg-[var(--color-accent)] text-[var(--color-accent-ink)] hover:bg-[var(--color-accent-deep)] disabled:bg-[var(--color-rule)]"
             >
