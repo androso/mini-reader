@@ -50,6 +50,11 @@ test(
                     "user_id" uuid NOT NULL REFERENCES "users"("id"),
                     "file_key" text NOT NULL,
                     "file_type" "file_type",
+                    "original_filename" text NOT NULL,
+                    "embedded_title" text,
+                    "creator" text,
+                    "identifier" text,
+                    "metadata_extracted_at" timestamp,
                     "collection_name" text,
                     "processing_status" text NOT NULL DEFAULT 'processing',
                     "processing_error" text,
@@ -85,8 +90,8 @@ test(
                 `
                     INSERT INTO "books" (
                         "id", "title", "user_id", "file_key", "file_type",
-                        "collection_name", "processing_status"
-                    ) VALUES ($1, 'Queued book', $2, $3, 'epub', $4, 'processing')
+                        "original_filename", "collection_name", "processing_status"
+                    ) VALUES ($1, 'Queued book', $2, $3, 'epub', 'Queued book', $4, 'processing')
                 `,
                 [bookId, userId, fileKey, collectionName]
             );
