@@ -107,6 +107,35 @@ export const useChat = (bookId: string) => {
                             continue;
                         }
 
+                        if (jsonData.type === "status") {
+                            if (jsonData.status !== "searching_web") continue;
+                            setChatState((prev) => {
+                                const messages = [...prev.messages];
+                                const lastMessage =
+                                    messages[messages.length - 1];
+
+                                if (lastMessage?.role === "assistant") {
+                                    messages[messages.length - 1] = {
+                                        ...lastMessage,
+                                        activityStatus: "searching_web",
+                                    };
+                                }
+
+                                return {
+                                    ...prev,
+                                    messages,
+                                    currentConversation:
+                                        prev.currentConversation
+                                            ? {
+                                                  ...prev.currentConversation,
+                                                  messages,
+                                              }
+                                            : null,
+                                };
+                            });
+                            continue;
+                        }
+
                         if (jsonData.type === "sources") {
                             setChatState((prev) => {
                                 const messages = [...prev.messages];
@@ -152,6 +181,7 @@ export const useChat = (bookId: string) => {
                                             jsonData.status ?? null,
                                         finishReason:
                                             jsonData.finishReason ?? null,
+                                        activityStatus: null,
                                     };
                                 }
 
@@ -179,6 +209,7 @@ export const useChat = (bookId: string) => {
                                 if (lastMessage?.role === "assistant") {
                                     messages[messages.length - 1] = {
                                         ...lastMessage,
+                                        activityStatus: null,
                                         content: jsonData.error,
                                     };
                                 }
@@ -186,6 +217,13 @@ export const useChat = (bookId: string) => {
                                 return {
                                     ...prev,
                                     messages,
+                                    currentConversation:
+                                        prev.currentConversation
+                                            ? {
+                                                  ...prev.currentConversation,
+                                                  messages,
+                                              }
+                                            : null,
                                 };
                             });
                             continue;
@@ -203,6 +241,7 @@ export const useChat = (bookId: string) => {
                                         content:
                                             lastMessage.content +
                                             jsonData.content,
+                                        activityStatus: null,
                                     };
                                 }
 
@@ -224,6 +263,28 @@ export const useChat = (bookId: string) => {
                     }
                 }
             }
+            setChatState((prev) => {
+                const messages = [...prev.messages];
+                const lastMessage = messages[messages.length - 1];
+
+                if (lastMessage?.role === "assistant") {
+                    messages[messages.length - 1] = {
+                        ...lastMessage,
+                        activityStatus: null,
+                    };
+                }
+
+                return {
+                    ...prev,
+                    messages,
+                    currentConversation: prev.currentConversation
+                        ? {
+                              ...prev.currentConversation,
+                              messages,
+                          }
+                        : null,
+                };
+            });
             return conversationId;
         },
         []
@@ -308,17 +369,28 @@ export const useChat = (bookId: string) => {
                 });
             } catch (error) {
                 console.error("Error:", error);
-                setChatState((prev) => ({
-                    ...prev,
-                    messages: [
-                        ...prev.messages,
-                        {
-                            role: "assistant",
-                            content:
-                                "Sorry, there was an error processing your request.",
-                        },
-                    ],
-                }));
+                setChatState((prev) => {
+                    const messages = [...prev.messages];
+                    const lastMessage = messages[messages.length - 1];
+                    if (lastMessage?.role === "assistant") {
+                        messages[messages.length - 1] = {
+                            ...lastMessage,
+                            activityStatus: null,
+                        };
+                    }
+
+                    return {
+                        ...prev,
+                        messages: [
+                            ...messages,
+                            {
+                                role: "assistant",
+                                content:
+                                    "Sorry, there was an error processing your request.",
+                            },
+                        ],
+                    };
+                });
             }
         },
         [input, chatState, bookId, handleMessageStream, queryClient]

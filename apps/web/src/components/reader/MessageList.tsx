@@ -1,23 +1,17 @@
 import { ScrollArea } from "@radix-ui/react-scroll-area";
-import { BookOpenText, ChevronDown } from "lucide-react";
+import { BookOpenText, ChevronDown, LoaderCircle } from "lucide-react";
 import { memo } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeKatex from "rehype-katex";
 import remarkMath from "remark-math";
-
-export type ContextSource = {
-    id: string;
-    chunkIndex: number;
-    score: number;
-    bestRank: number;
-    excerpt: string;
-};
+import { normalizeAllowedWebUrl, type ContextSource } from "@/lib/chatSources";
 
 export type Message = {
     id?: string | null;
     role: string;
     content: string;
     contextSources?: ContextSource[] | null;
+    activityStatus?: "searching_web" | null;
     completionStatus?: "complete" | "truncated" | "cancelled" | "failed" | null;
     finishReason?: string | null;
 };
@@ -34,51 +28,109 @@ const completionNotices: Partial<
 const formatScore = (score: number) =>
     Number.isFinite(score) ? score.toFixed(4) : "n/a";
 
-const MessageSources = ({ sources }: { sources: ContextSource[] }) => (
-    <details className="group max-w-[85%] rounded-[var(--radius-input)] border border-[var(--color-chat-rule)] bg-[var(--color-chat-raised)] text-[var(--color-chat-muted)]">
-        <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 py-2 text-xs font-semibold text-[var(--color-chat-text)] marker:hidden [&::-webkit-details-marker]:hidden">
-            <BookOpenText className="h-4 w-4 text-[var(--color-accent-2)]" />
-            <span>Sources</span>
-            <span className="rounded-[var(--radius-pill)] bg-[var(--color-chat)] px-2 py-0.5 text-[11px] leading-4 text-[var(--color-chat-muted)]">
-                {sources.length}
-            </span>
-            <ChevronDown className="ml-auto h-4 w-4 text-[var(--color-chat-muted)] transition-transform group-open:rotate-180" />
-        </summary>
-        <div className="max-h-80 space-y-3 overflow-y-auto border-t border-[var(--color-chat-rule)] px-3 py-3">
-            {sources.map((source, index) => (
-                <div
-                    key={`${source.id}-${index}`}
-                    className="border-b border-[var(--color-chat-rule)] pb-3 last:border-b-0 last:pb-0"
-                >
-                    <div className="font-label mb-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-semibold uppercase tracking-normal text-[var(--color-chat-muted)]">
-                        <span>Chunk {source.chunkIndex}</span>
-                        <span>Score {formatScore(source.score)}</span>
-                        <span>Rank {source.bestRank}</span>
-                    </div>
-                    <p className="whitespace-pre-wrap break-words text-xs leading-relaxed text-[var(--color-chat-muted)]">
-                        {source.excerpt}
-                    </p>
-                </div>
-            ))}
-        </div>
-    </details>
-);
+const MessageSources = ({ sources }: { sources: ContextSource[] }) => {
+    const allowedUrls = new Set(
+        sources
+            .filter((source) => source.sourceType === "web")
+            .map((source) => source.url)
+    );
+    return (
+        <details className="group max-w-[85%] rounded-[var(--radius-input)] border border-[var(--color-chat-rule)] bg-[var(--color-chat-raised)] text-[var(--color-chat-muted)]">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 py-2 text-xs font-semibold text-[var(--color-chat-text)] marker:hidden [&::-webkit-details-marker]:hidden">
+                <BookOpenText className="h-4 w-4 text-[var(--color-accent-2)]" />
+                <span>Sources</span>
+                <span className="rounded-[var(--radius-pill)] bg-[var(--color-chat)] px-2 py-0.5 text-[11px] leading-4 text-[var(--color-chat-muted)]">
+                    {sources.length}
+                </span>
+                <ChevronDown className="ml-auto h-4 w-4 text-[var(--color-chat-muted)] transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="max-h-80 space-y-3 overflow-y-auto border-t border-[var(--color-chat-rule)] px-3 py-3">
+                {sources.map((source, index) => {
+                    if (source.sourceType === "web") {
+                        const url = normalizeAllowedWebUrl(
+                            source.url,
+                            allowedUrls
+                        );
+                        return (
+                            <div
+                                key={`${source.url}-${index}`}
+                                className="border-b border-[var(--color-chat-rule)] pb-3 last:border-b-0 last:pb-0"
+                            >
+                                <p className="break-words text-xs leading-relaxed">
+                                    {source.title}
+                                </p>
+                                {url && (
+                                    <a
+                                        href={url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="break-all text-xs underline"
+                                    >
+                                        {new URL(url).hostname}
+                                    </a>
+                                )}
+                            </div>
+                        );
+                    }
+                    return (
+                        <div
+                            key={`${source.id}-${index}`}
+                            className="border-b border-[var(--color-chat-rule)] pb-3 last:border-b-0 last:pb-0"
+                        >
+                            <div className="font-label mb-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-semibold uppercase tracking-normal text-[var(--color-chat-muted)]">
+                                <span>Chunk {source.chunkIndex}</span>
+                                <span>Score {formatScore(source.score)}</span>
+                                <span>Rank {source.bestRank}</span>
+                            </div>
+                            <p className="whitespace-pre-wrap break-words text-xs leading-relaxed text-[var(--color-chat-muted)]">
+                                {source.excerpt}
+                            </p>
+                        </div>
+                    );
+                })}
+            </div>
+        </details>
+    );
+};
 
-const AssistantMessageContent = ({ content }: { content: string }) => (
-    <ReactMarkdown
-        remarkPlugins={[remarkMath]}
-        rehypePlugins={[rehypeKatex]}
-        components={{
-            a: ({ children, ...props }) => (
-                <a {...props} target="_blank" rel="noreferrer">
-                    {children}
-                </a>
-            ),
-        }}
-    >
-        {content}
-    </ReactMarkdown>
-);
+const AssistantMessageContent = ({
+    content,
+    sources,
+}: {
+    content: string;
+    sources: ContextSource[];
+}) => {
+    const allowedUrls = new Set(
+        sources
+            .filter((source) => source.sourceType === "web")
+            .map((source) => source.url)
+    );
+    return (
+        <ReactMarkdown
+            remarkPlugins={[remarkMath]}
+            rehypePlugins={[rehypeKatex]}
+            components={{
+                a: ({ children, href }) => {
+                    const safeUrl = normalizeAllowedWebUrl(href, allowedUrls);
+                    return safeUrl ? (
+                        <a
+                            href={safeUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >
+                            {children}
+                        </a>
+                    ) : (
+                        <>{children}</>
+                    );
+                },
+                img: ({ alt }) => <>{alt ?? ""}</>,
+            }}
+        >
+            {content}
+        </ReactMarkdown>
+    );
+};
 
 const MessageList = memo(({ messages }: { messages: Message[] }) => {
     return (
@@ -120,11 +172,24 @@ const MessageList = memo(({ messages }: { messages: Message[] }) => {
                             }`}
                         >
                             {isAssistant ? (
-                                <div className="chat-markdown font-sans text-sm font-semibold leading-relaxed">
-                                    <AssistantMessageContent
-                                        content={message.content}
-                                    />
-                                </div>
+                                message.activityStatus === "searching_web" &&
+                                !message.content ? (
+                                    <div
+                                        className="flex items-center gap-2 font-sans text-sm font-semibold leading-relaxed text-[var(--color-chat-muted)]"
+                                        role="status"
+                                        aria-live="polite"
+                                    >
+                                        <LoaderCircle className="h-4 w-4 animate-spin" />
+                                        <span>Searching the web…</span>
+                                    </div>
+                                ) : (
+                                    <div className="chat-markdown font-sans text-sm font-semibold leading-relaxed">
+                                        <AssistantMessageContent
+                                            content={message.content}
+                                            sources={sources}
+                                        />
+                                    </div>
+                                )
                             ) : (
                                 <p className="whitespace-pre-wrap font-sans text-sm font-semibold leading-relaxed">
                                     {message.content}
