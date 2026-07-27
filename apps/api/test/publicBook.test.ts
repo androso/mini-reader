@@ -6,6 +6,11 @@ import { publicBookSelection, toPublicBook } from "../src/services/PublicBook";
 const privateBook: SelectBook = {
     id: "book-1",
     title: "A book",
+    originalFilename: "wrong-name.epub",
+    embeddedTitle: "A book",
+    creator: "An Author",
+    identifier: "urn:isbn:test",
+    metadataExtractedAt: new Date("2026-01-01T00:00:00.000Z"),
     userId: "user-1",
     fileKey: "private/storage-key",
     fileType: "epub",

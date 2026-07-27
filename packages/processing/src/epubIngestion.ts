@@ -4,6 +4,11 @@ import {
     processEpubBuffer,
 } from "@reader/epub/dist/server";
 import { TextChunker } from "./chunkText";
+import {
+    normalizeBookMetadataValue,
+    type ExtractedBookContent,
+    type ExtractedBookMetadata,
+} from "./bookProcessing";
 
 export const createEpubCollectionName = async (fileBuffer: Buffer) => {
     const [content] = await processEpubBuffer(fileBuffer);
@@ -17,18 +22,38 @@ export const createEpubCollectionName = async (fileBuffer: Buffer) => {
     return `book_${hash.digest("hex").slice(0, 12)}`;
 };
 
-export const extractEpubChunks = async (
+export const extractEpubBook = async (
     fileBuffer: Buffer,
     chunker = new TextChunker()
-) => {
-    const { chapters } = await extractEpubTextBlocks(fileBuffer);
+): Promise<ExtractedBookContent> => {
+    const content = await extractEpubTextBlocks(fileBuffer);
     const chunks: string[] = [];
 
-    for (const chapter of chapters) {
+    for (const chapter of content.chapters) {
         for (const block of chapter.textBlocks) {
             chunks.push(...chunker.chunkText(block.text));
         }
     }
 
-    return chunks;
+    return {
+        chunks,
+        metadata: normalizeEpubMetadata(content.content.metadata),
+    };
+};
+
+const normalizeEpubMetadata = (metadata: {
+    title?: unknown;
+    creator?: unknown;
+    identifier?: unknown;
+}): ExtractedBookMetadata => ({
+    title: normalizeBookMetadataValue(metadata.title),
+    creator: normalizeBookMetadataValue(metadata.creator),
+    identifier: normalizeBookMetadataValue(metadata.identifier),
+});
+
+export const extractEpubMetadata = async (
+    fileBuffer: Buffer
+): Promise<ExtractedBookMetadata> => {
+    const [content] = await processEpubBuffer(fileBuffer);
+    return normalizeEpubMetadata(content.metadata);
 };

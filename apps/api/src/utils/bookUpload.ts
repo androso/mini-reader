@@ -6,7 +6,7 @@ export const createOriginalUploadKey = (userId: string, bookId: string) =>
 
 export const createBookUploadPlan = (
     userId: string,
-    title: string,
+    originalFilename: string,
     fileType: ProcessUploadedBookPayload["fileType"],
     createId: () => string = randomUUID
 ) => {
@@ -16,7 +16,8 @@ export const createBookUploadPlan = (
     return {
         book: {
             id: bookId,
-            title,
+            title: originalFilename,
+            originalFilename,
             userId,
             fileKey,
             fileType,

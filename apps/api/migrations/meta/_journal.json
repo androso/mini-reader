@@ -127,6 +127,13 @@
       "when": 1784910886361,
       "tag": "0017_tired_micromax",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1784985062746,
+      "tag": "0018_rich_nomad",
+      "breakpoints": true
     }
   ]
 }

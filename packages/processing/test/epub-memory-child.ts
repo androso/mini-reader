@@ -1,5 +1,5 @@
 import JSZip from "jszip";
-import { extractEpubChunks } from "../src/epubIngestion";
+import { extractEpubBook } from "../src/epubIngestion";
 
 const createLargeSyntheticEpub = async () => {
     const zip = new JSZip();
@@ -30,8 +30,8 @@ const createLargeSyntheticEpub = async () => {
 
 async function main() {
     const buffer = await createLargeSyntheticEpub();
-    const chunks = await extractEpubChunks(buffer);
-    if (!chunks || chunks.length === 0) {
+    const { chunks } = await extractEpubBook(buffer);
+    if (chunks.length === 0) {
         throw new Error("No chunks extracted from EPUB fixture");
     }
     console.log(`EPUB_EXTRACTION_OK:${chunks.length}`);

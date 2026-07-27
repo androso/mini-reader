@@ -1,11 +1,34 @@
 import type { StorageProvider, VectorStoreProvider } from "@reader/providers";
 import { storageProvider, vectorStore, createLogger } from "@reader/providers";
-import { extractEpubChunks } from "./epubIngestion";
-import { extractPdfChunks } from "./pdfIngestion";
+import { extractEpubBook, extractEpubMetadata } from "./epubIngestion";
+import { extractPdfBook, extractPdfMetadata } from "./pdfIngestion";
 
 const log = createLogger("bookProcessing");
 
 export type BookFileType = "epub" | "pdf";
+export interface ExtractedBookMetadata {
+    title: string | null;
+    creator: string | null;
+    identifier: string | null;
+}
+
+export interface ExtractedBookContent {
+    chunks: string[];
+    metadata: ExtractedBookMetadata;
+}
+
+export const normalizeBookMetadataValue = (value: unknown): string | null => {
+    if (typeof value !== "string") {
+        return null;
+    }
+
+    const normalized = value
+        .replace(/[\u0000-\u001f\u007f-\u009f]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 500);
+    return normalized || null;
+};
 
 export interface ProcessBookInput {
     bookId: string;
@@ -17,8 +40,8 @@ export interface ProcessBookDependencies {
     storage: StorageProvider;
     vectorStore: VectorStoreProvider;
     searchIndexStore?: SearchIndexStore;
-    extractEpubChunks?: (fileBuffer: Buffer) => Promise<string[]>;
-    extractPdfChunks?: (fileBuffer: Buffer) => Promise<string[]>;
+    extractEpubBook?: (fileBuffer: Buffer) => Promise<ExtractedBookContent>;
+    extractPdfBook?: (fileBuffer: Buffer) => Promise<ExtractedBookContent>;
 }
 
 export interface SearchIndexStore {
@@ -32,6 +55,7 @@ export interface ProcessBookResult {
     collectionName: string;
     chunks: number;
     reusedCollection: boolean;
+    metadata: ExtractedBookMetadata;
 }
 
 export const createBookCollectionName = (bookId: string) =>
@@ -62,8 +86,8 @@ export const processBookForSearch = async (
         fileType: input.fileType,
     });
 
-    const epubChunks = dependencies.extractEpubChunks ?? extractEpubChunks;
-    const pdfChunks = dependencies.extractPdfChunks ?? extractPdfChunks;
+    const epubExtractor = dependencies.extractEpubBook ?? extractEpubBook;
+    const pdfExtractor = dependencies.extractPdfBook ?? extractPdfBook;
 
     log.info("Generating collection name", {
         fileKey: input.fileKey,
@@ -91,10 +115,11 @@ export const processBookForSearch = async (
         fileType: input.fileType,
         collectionName,
     });
-    const chunks =
+    const content =
         input.fileType === "pdf"
-            ? await pdfChunks(fileBuffer)
-            : await epubChunks(fileBuffer);
+            ? await pdfExtractor(fileBuffer)
+            : await epubExtractor(fileBuffer);
+    const { chunks } = content;
     log.info("Text chunks extracted", {
         fileKey: input.fileKey,
         collectionName,
@@ -142,5 +167,14 @@ export const processBookForSearch = async (
         collectionName,
         chunks: chunks.length,
         reusedCollection: false,
+        metadata: content.metadata,
     };
 };
+
+export const extractBookMetadata = (
+    fileBuffer: Buffer,
+    fileType: BookFileType
+): Promise<ExtractedBookMetadata> =>
+    fileType === "pdf"
+        ? extractPdfMetadata(fileBuffer)
+        : extractEpubMetadata(fileBuffer);

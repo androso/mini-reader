@@ -9,7 +9,7 @@ test("one generated UUID is shared by the object key, book row, and queue job", 
     const id = "11111111-1111-1111-1111-111111111111";
     const plan = createBookUploadPlan(
         "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
-        "book.epub",
+        "wrong-name.epub",
         "epub",
         () => id
     );
@@ -17,6 +17,8 @@ test("one generated UUID is shared by the object key, book row, and queue job", 
     assert.equal(plan.book.id, id);
     assert.equal(plan.job.bookId, id);
     assert.equal(plan.book.fileKey, plan.job.fileKey);
+    assert.equal(plan.book.title, "wrong-name.epub");
+    assert.equal(plan.book.originalFilename, "wrong-name.epub");
     assert.equal(
         plan.book.fileKey,
         `users/${plan.book.userId}/books/${id}/original`

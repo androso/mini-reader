@@ -86,6 +86,11 @@ test("a backfilled legacy PDF is projected publicly as a PDF", () => {
     const migratedBook: SelectBook = {
         id: "legacy-pdf-book-id",
         title: "Legacy PDF",
+        originalFilename: "Legacy PDF.pdf",
+        embeddedTitle: null,
+        creator: null,
+        identifier: null,
+        metadataExtractedAt: null,
         userId: "user-1",
         fileKey: "pdf-0123456789ab",
         fileType: "pdf",

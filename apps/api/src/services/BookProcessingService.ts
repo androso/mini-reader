@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import {
     processBookForSearch,
     type BookFileType,
+    type ExtractedBookMetadata,
     type ProcessBookResult,
 } from "@reader/processing";
 import { createLogger, storageProvider, vectorStore } from "@reader/providers";
@@ -35,7 +36,12 @@ export interface BookProcessingRepository {
         bookId: string,
         userId: string
     ): Promise<BookProcessingRecord | null>;
-    markReady(bookId: string, collectionName: string): Promise<boolean>;
+    markReady(
+        bookId: string,
+        userId: string,
+        collectionName: string,
+        metadata: ExtractedBookMetadata
+    ): Promise<boolean>;
     markFailed(bookId: string, error: string): Promise<void>;
 }
 
@@ -76,18 +82,24 @@ export const bookProcessingRepository: BookProcessingRepository = {
         return book ?? null;
     },
 
-    async markReady(bookId, collectionName) {
-        log.info("Marking book as ready", { bookId, collectionName });
+    async markReady(bookId, userId, collectionName, metadata) {
+        log.info("Marking book as ready", { bookId, userId, collectionName });
         const updated = await db
             .update(Books)
             .set({
                 collectionName,
                 processingStatus: "ready",
                 processingError: null,
+                embeddedTitle: metadata.title,
+                creator: metadata.creator,
+                identifier: metadata.identifier,
+                metadataExtractedAt: new Date(),
+                ...(metadata.title === null ? {} : { title: metadata.title }),
             })
             .where(
                 and(
                     eq(Books.id, bookId),
+                    eq(Books.userId, userId),
                     eq(Books.processingStatus, "processing")
                 )
             )
@@ -95,6 +107,7 @@ export const bookProcessingRepository: BookProcessingRepository = {
         const published = updated.length === 1;
         log.info("Book ready publication completed", {
             bookId,
+            userId,
             collectionName,
             published,
         });
@@ -167,7 +180,9 @@ export const handleProcessUploadedBook = async (
 
         const published = await repository.markReady(
             payload.bookId,
-            result.collectionName
+            payload.userId,
+            result.collectionName,
+            result.metadata
         );
         if (!published) {
             await (

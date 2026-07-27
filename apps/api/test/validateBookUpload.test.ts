@@ -150,7 +150,7 @@ const expectGenericRejectionWithoutSideEffects = async (buffer: Buffer) => {
     const calls: string[] = [];
     await assert.rejects(
         acceptBookUpload(
-            { userId: "user-a", title: "spoofed.epub", buffer },
+            { userId: "user-a", originalFilename: "spoofed.epub", buffer },
             {
                 uploadFile: async () => void calls.push("storage"),
                 insertBook: async () => {
@@ -175,7 +175,7 @@ test("detects PDF content despite a misleading submitted name and MIME", async (
     const result = await acceptBookUpload(
         {
             userId: "user-a",
-            title: "renamed.epub",
+            originalFilename: "renamed.epub",
             buffer: Buffer.from("%PDF-1.7\n"),
         },
         {
@@ -192,13 +192,15 @@ test("detects PDF content despite a misleading submitted name and MIME", async (
     assert.equal(result.uploadPlan.book.fileType, "pdf");
     assert.equal(result.uploadPlan.job.fileType, "pdf");
     assert.equal(result.book.fileType, "pdf");
+    assert.equal(result.book.originalFilename, "renamed.epub");
+    assert.equal(result.book.title, "renamed.epub");
     assert.deepEqual(calls, ["storage", "database", "queue"]);
 });
 
 test("accepts an EPUB container despite a misleading submitted name and MIME", async () => {
     const epub = await makeEpub();
     const result = await acceptBookUpload(
-        { userId: "user-a", title: "book.pdf", buffer: epub },
+        { userId: "user-a", originalFilename: "book.pdf", buffer: epub },
         {
             uploadFile: async () => {},
             insertBook: async (book) => book,

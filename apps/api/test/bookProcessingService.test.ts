@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { BookProcessingRepository } from "../src/services/BookProcessingService";
 import { handleProcessUploadedBook } from "../src/services/BookProcessingService";
-import type { BookFileType } from "@reader/processing";
+import type { BookFileType, ExtractedBookMetadata } from "@reader/processing";
 
 const payload = {
     bookId: "book-1",
@@ -10,12 +10,22 @@ const payload = {
     fileKey: "epub-key",
     fileType: "epub" as BookFileType,
 };
+const metadata: ExtractedBookMetadata = {
+    title: "The Left Hand of Darkness",
+    creator: "Ursula K. Le Guin",
+    identifier: "urn:isbn:978...",
+};
 
 const createRepository = (
     overrides: Partial<BookProcessingRepository> = {}
 ) => {
     const calls = {
-        ready: [] as string[],
+        ready: [] as Array<{
+            bookId: string;
+            userId: string;
+            collectionName: string;
+            metadata: typeof metadata;
+        }>,
         failed: [] as string[],
     };
     const repository: BookProcessingRepository = {
@@ -28,8 +38,13 @@ const createRepository = (
             processingStatus: "processing",
             processingError: null,
         }),
-        markReady: async (_, collectionName) => {
-            calls.ready.push(collectionName);
+        markReady: async (bookId, userId, collectionName, extracted) => {
+            calls.ready.push({
+                bookId,
+                userId,
+                collectionName,
+                metadata: extracted,
+            });
             return true;
         },
         markFailed: async (_, error) => {
@@ -51,11 +66,19 @@ test("successful synchronous processing marks book ready", async () => {
             collectionName: "book_collection",
             chunks: 2,
             reusedCollection: false,
+            metadata,
         })
     );
 
     assert.equal(result.collectionName, "book_collection");
-    assert.deepEqual(calls.ready, ["book_collection"]);
+    assert.deepEqual(calls.ready, [
+        {
+            bookId: "book-1",
+            userId: "user-1",
+            collectionName: "book_collection",
+            metadata,
+        },
+    ]);
     assert.deepEqual(calls.failed, []);
 });
 
@@ -135,6 +158,7 @@ test("processing ignores a stale queued file key and never looks up duplicates",
                 collectionName: "book_book_1",
                 chunks: 2,
                 reusedCollection: false,
+                metadata,
             };
         }
     );
@@ -144,7 +168,7 @@ test("processing ignores a stale queued file key and never looks up duplicates",
         fileKey: authoritativeFileKey,
     });
     assert.equal(result.reusedCollection, false);
-    assert.deepEqual(calls.ready, ["book_book_1"]);
+    assert.equal(calls.ready[0]?.collectionName, "book_book_1");
 });
 
 test("file type mismatch fails safely", async () => {
@@ -165,6 +189,7 @@ test("file type mismatch fails safely", async () => {
             collectionName: "unexpected",
             chunks: 1,
             reusedCollection: false,
+            metadata,
         })),
         /file type changed/
     );
@@ -194,6 +219,7 @@ test("books outside processing state never start artifact generation", async () 
                 collectionName: "unexpected",
                 chunks: 1,
                 reusedCollection: false,
+                metadata,
             };
         }),
         /not processing/
@@ -207,8 +233,13 @@ test("books outside processing state never start artifact generation", async () 
 test("late publication loss removes newly generated artifacts", async () => {
     const cleaned: string[] = [];
     const { repository, calls } = createRepository({
-        markReady: async (_, collectionName) => {
-            calls.ready.push(collectionName);
+        markReady: async (bookId, userId, collectionName, extracted) => {
+            calls.ready.push({
+                bookId,
+                userId,
+                collectionName,
+                metadata: extracted,
+            });
             return false;
         },
     });
@@ -221,6 +252,7 @@ test("late publication loss removes newly generated artifacts", async () => {
                 collectionName: "book_book_1",
                 chunks: 2,
                 reusedCollection: false,
+                metadata,
             }),
             {
                 cleanupCollectionArtifacts: async (collectionName) => {
@@ -231,7 +263,7 @@ test("late publication loss removes newly generated artifacts", async () => {
         /left processing before publication/
     );
 
-    assert.deepEqual(calls.ready, ["book_book_1"]);
+    assert.equal(calls.ready[0]?.collectionName, "book_book_1");
     assert.deepEqual(cleaned, ["book_book_1"]);
     assert.equal(calls.failed.length, 1);
 });

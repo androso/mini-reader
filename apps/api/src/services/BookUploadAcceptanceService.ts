@@ -25,7 +25,7 @@ export class BookUploadEnqueueError extends Error {
 }
 
 export const acceptBookUpload = async <T>(
-    input: { userId: string; title: string; buffer: Buffer },
+    input: { userId: string; originalFilename: string; buffer: Buffer },
     dependencies: BookUploadAcceptanceDependencies<T>
 ) => {
     let fileType: ProcessUploadedBookPayload["fileType"];
@@ -36,7 +36,7 @@ export const acceptBookUpload = async <T>(
     }
     const uploadPlan = createBookUploadPlan(
         input.userId,
-        input.title,
+        input.originalFilename,
         fileType
     );
     await dependencies.uploadFile(uploadPlan.book.fileKey, input.buffer);

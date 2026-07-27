@@ -129,7 +129,7 @@ router.post(
                 acceptedUpload = await acceptBookUpload(
                     {
                         userId: req.user.id,
-                        title: req.file.originalname,
+                        originalFilename: req.file.originalname,
                         buffer: fileBuffer,
                     },
                     {

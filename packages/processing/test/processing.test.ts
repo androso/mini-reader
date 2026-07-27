@@ -3,12 +3,34 @@ import path from "node:path";
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { StorageProvider, VectorStoreProvider } from "@reader/providers";
+import JSZip from "jszip";
 import {
     createBookCollectionName,
     decodePdfTextRuns,
+    extractEpubBook,
+    extractPdfBook,
+    normalizeBookMetadataValue,
     processBookForSearch,
     TextChunker,
 } from "../src";
+
+const createMetadataEpub = async () => {
+    const zip = new JSZip();
+    zip.file("mimetype", "application/epub+zip", { compression: "STORE" });
+    zip.file(
+        "META-INF/container.xml",
+        '<?xml version="1.0"?><container xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="EPUB/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>'
+    );
+    zip.file(
+        "EPUB/content.opf",
+        '<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>  The Left Hand   of Darkness  </dc:title><dc:creator> Ursula K. Le Guin </dc:creator><dc:identifier> urn:isbn:test </dc:identifier></metadata><manifest><item id="chapter" href="chapter.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="chapter"/></spine></package>'
+    );
+    zip.file(
+        "EPUB/chapter.xhtml",
+        '<html xmlns="http://www.w3.org/1999/xhtml"><body><p>Winter is an inimical world.</p></body></html>'
+    );
+    return zip.generateAsync({ type: "nodebuffer" });
+};
 
 const createMockStorage = (file = Buffer.from("book")): StorageProvider => ({
     uploadFile: async () => undefined,
@@ -80,7 +102,14 @@ test("processes EPUB with mocked storage and vector store", async () => {
             storage: createMockStorage(),
             vectorStore: vector.provider,
             searchIndexStore: searchIndex.provider,
-            extractEpubChunks: async () => ["one", "two"],
+            extractEpubBook: async () => ({
+                chunks: ["one", "two"],
+                metadata: {
+                    title: "Embedded title",
+                    creator: null,
+                    identifier: null,
+                },
+            }),
         }
     );
 
@@ -89,6 +118,11 @@ test("processes EPUB with mocked storage and vector store", async () => {
         collectionName,
         chunks: 2,
         reusedCollection: false,
+        metadata: {
+            title: "Embedded title",
+            creator: null,
+            identifier: null,
+        },
     });
     assert.deepEqual(vector.calls.resetCollection, [collectionName]);
     assert.deepEqual(vector.calls.addDocuments, [
@@ -112,7 +146,14 @@ test("processes PDF with mocked storage and vector store", async () => {
         {
             storage: createMockStorage(),
             vectorStore: vector.provider,
-            extractPdfChunks: async () => ["pdf text"],
+            extractPdfBook: async () => ({
+                chunks: ["pdf text"],
+                metadata: {
+                    title: null,
+                    creator: "PDF Author",
+                    identifier: null,
+                },
+            }),
         }
     );
 
@@ -135,7 +176,10 @@ test("identical content in different books uses isolated collections", async () 
         {
             storage: createMockStorage(Buffer.from("identical")),
             vectorStore: vector.provider,
-            extractEpubChunks: async () => ["same text"],
+            extractEpubBook: async () => ({
+                chunks: ["same text"],
+                metadata: { title: null, creator: null, identifier: null },
+            }),
         }
     );
     const second = await processBookForSearch(
@@ -147,7 +191,10 @@ test("identical content in different books uses isolated collections", async () 
         {
             storage: createMockStorage(Buffer.from("identical")),
             vectorStore: vector.provider,
-            extractEpubChunks: async () => ["same text"],
+            extractEpubBook: async () => ({
+                chunks: ["same text"],
+                metadata: { title: null, creator: null, identifier: null },
+            }),
         }
     );
 
@@ -171,7 +218,14 @@ test("fails when processing extracts no chunks", async () => {
             {
                 storage: createMockStorage(),
                 vectorStore: vector.provider,
-                extractEpubChunks: async () => [],
+                extractEpubBook: async () => ({
+                    chunks: [],
+                    metadata: {
+                        title: null,
+                        creator: null,
+                        identifier: null,
+                    },
+                }),
             }
         ),
         /No valid text chunks extracted/
@@ -403,6 +457,64 @@ test("text chunker rejects unsafe size options but permits minimum above maximum
                 maxChunkSize: 20,
             })
     );
+});
+
+test("normalizes untrusted embedded metadata values", () => {
+    assert.equal(
+        normalizeBookMetadataValue(`  A\u0000  B\n${"x".repeat(600)}  `),
+        `A B ${"x".repeat(496)}`
+    );
+    assert.equal(normalizeBookMetadataValue(" \u0007 \n "), null);
+    assert.equal(normalizeBookMetadataValue({ title: "unsafe" }), null);
+});
+
+test("extracts normalized EPUB metadata with chapter chunks", async () => {
+    const content = await extractEpubBook(await createMetadataEpub());
+    assert.deepEqual(content.metadata, {
+        title: "The Left Hand of Darkness",
+        creator: "Ursula K. Le Guin",
+        identifier: "urn:isbn:test",
+    });
+    assert.ok(
+        content.chunks.some((chunk) =>
+            chunk.includes("Winter is an inimical world.")
+        )
+    );
+});
+
+test("maps PDF title and author from one parsed document", async () => {
+    let parses = 0;
+    const parse = async () => {
+        parses++;
+        return {
+            Transcoder: "test",
+            Meta: {
+                Title: "  The Left Hand of Darkness ",
+                Author: " Ursula K. Le Guin ",
+            },
+            Pages: [
+                {
+                    Texts: [
+                        {
+                            R: [{ T: "Winter%20is%20an%20inimical%20world." }],
+                        },
+                    ],
+                },
+            ],
+        };
+    };
+    const content = await extractPdfBook(
+        Buffer.from("pdf"),
+        undefined,
+        parse as unknown as Parameters<typeof extractPdfBook>[2]
+    );
+    assert.equal(parses, 1);
+    assert.deepEqual(content.metadata, {
+        title: "The Left Hand of Darkness",
+        creator: "Ursula K. Le Guin",
+        identifier: null,
+    });
+    assert.deepEqual(content.chunks, ["Winter is an inimical world."]);
 });
 
 test("PDF text extraction decodes every run in source order", () => {

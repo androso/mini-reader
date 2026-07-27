@@ -80,6 +80,11 @@ export const CodexCredentials = pgTable("codex_credentials", {
 export const Books = pgTable("books", {
     id: uuid("id").defaultRandom().primaryKey(),
     title: text("title").notNull(),
+    originalFilename: text("original_filename").notNull(),
+    embeddedTitle: text("embedded_title"),
+    creator: text("creator"),
+    identifier: text("identifier"),
+    metadataExtractedAt: timestamp("metadata_extracted_at"),
     userId: uuid("user_id")
         .references(() => Users.id)
         .notNull(),

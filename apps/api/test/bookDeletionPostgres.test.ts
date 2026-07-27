@@ -141,7 +141,13 @@ test(
                         const published =
                             await processing.bookProcessingRepository.markReady(
                                 bookId,
-                                "late_collection"
+                                userId,
+                                "late_collection",
+                                {
+                                    title: null,
+                                    creator: null,
+                                    identifier: null,
+                                }
                             );
                         assert.equal(published, false);
                         await processing.bookProcessingRepository.markFailed(
