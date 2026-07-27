@@ -21,7 +21,7 @@
     },
     "devDependencies": {
         "@types/jsdom": "^21.1.7",
-        "@types/node": "^22.10.2",
-        "typescript": "^5.7.2"
+        "@types/node": "^20.19.43",
+        "typescript": "^5.9.3"
     }
 }
