@@ -123,8 +123,9 @@ Codex auth is opt-in and experimental. Set `CODEX_OAUTH_ENABLED=true` and
 generate `CODEX_CREDENTIAL_ENCRYPTION_KEY` with `openssl rand -base64 32`; key
 rotation without re-encrypting rows disconnects existing accounts. Connection
 uses a manual localhost callback paste in Reader settings and changes generated
-chat responses only. Keep `OPENAI_API_KEY`: ingestion and semantic retrieval
-continue to use Platform `/v1/embeddings`.
+book-text answers only. Keep `OPENAI_API_KEY`: ingestion, semantic retrieval,
+grounding classification, and book-scoped web search continue to use Platform
+OpenAI APIs.
 
 ## 4. Build, migrate, and start
 
@@ -132,6 +133,7 @@ continue to use Platform `/v1/embeddings`.
 docker compose --env-file .env.prod -f docker-compose.prod.yml build app
 docker compose --env-file .env.prod -f docker-compose.prod.yml up -d postgres
 docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm app pnpm db:migrate
+docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm app pnpm --filter @reader/api metadata:backfill
 docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --wait
 ```
 
@@ -146,8 +148,12 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml logs -f app
 
 `pnpm db:migrate` applies the Postgres queue/pgvector migration (`0012`), legacy
 file-type backfill (`0013`), UUID progress constraints (`0014`), chat completion
-fields (`0015`), and private execution metadata (`0016`). Existing object keys
-and collection names remain supported, while new clients use only book UUIDs.
+fields (`0015`), private execution metadata (`0016`), and embedded book metadata
+columns (`0018`). Run `pnpm --filter @reader/api metadata:backfill` in the built
+app image immediately afterward. Missing or malformed legacy books are logged
+and retried by a later run without blocking startup; database-level failures
+still stop deployment. Existing object keys and collection names remain
+supported, while new clients use only book UUIDs.
 
 Book processing is single-flight inside the app process. Queue failures preserve
 the S3 original in `queue_failed` for `POST /api/books/{bookId}/retry`.
@@ -187,6 +193,7 @@ cd /opt/reader
 git pull
 docker compose --env-file .env.prod -f docker-compose.prod.yml build app
 docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm app pnpm db:migrate
+docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm app pnpm --filter @reader/api metadata:backfill
 docker compose --env-file .env.prod -f docker-compose.prod.yml up -d
 docker compose --env-file .env.prod -f docker-compose.prod.yml logs -f app
 ```
@@ -203,9 +210,9 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml logs -f app
 4. If a book is `queue_failed`, retry it through
    `POST /api/books/{bookId}/retry`; delete a test book and confirm it disappears
    without a late processor publishing it again.
-5. Ask a chat question and confirm the stream emits a terminal outcome. A
-   legitimate no-match may return the fixed refusal; processing, failed, or
-   unavailable context must fail closed rather than call the model.
+5. Ask a book-supported and a book-related external-fact chat question. Confirm
+   both streams emit terminal outcomes, external answers contain clickable web
+   citations, and unrelated, ambiguous, or unavailable grounding fails closed.
 6. Open an EPUB containing executable markup and confirm it is sanitized. Scroll
    the library and confirm EPUB covers load only near the viewport without stale
    covers appearing on another book.

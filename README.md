@@ -48,14 +48,16 @@ cp apps/web/.env.template apps/web/.env
 ```
 
 The template's PostgreSQL URL matches `compose.dev.yml`. Set `JWT_SECRET` to a
-random local value. `OPENAI_API_KEY` remains required for book ingestion,
-semantic retrieval through `/v1/embeddings`, and default book-grounded chat.
+random local value. `OPENAI_API_KEY` remains required for ingestion, semantic
+retrieval, grounding classification, book-scoped web search, and default
+book-text answers.
 Never commit either generated environment file.
 
 Apply migrations and start both applications:
 
 ```bash
 pnpm db:migrate
+pnpm --filter @reader/api metadata:backfill
 pnpm dev
 ```
 
@@ -145,8 +147,9 @@ set `CODEX_OAUTH_ENABLED=true` and generate
 `CODEX_CREDENTIAL_ENCRYPTION_KEY` with `openssl rand -base64 32`. Users connect
 under **Settings → AI provider** with a manual flow: after authorization, they
 copy the unreachable `http://localhost:1455/auth/callback?...` URL from the
-browser bar and paste it into Reader. Codex then covers generated chat responses
-for that user only; ingestion and semantic search still use `OPENAI_API_KEY`.
+browser bar and paste it into Reader. Codex then covers generated book-text
+answers for that user only; ingestion, semantic retrieval, grounding
+classification, and book-scoped web search still use `OPENAI_API_KEY`.
 Rotating the encryption key without re-encrypting stored rows disconnects
 existing Codex accounts.
 
@@ -188,16 +191,26 @@ Book chat authorizes the resource before conversation writes, SSE headers,
 retrieval, or model calls. PostgreSQL is the source of history: the API accepts
 one trimmed message up to 8,000 characters, ignores client-supplied roles or
 transcripts, and sends the newest history fitting both 30 messages and 60,000
-characters. Streams end with a terminal `complete`, `truncated`, `cancelled`,
-or `failed` outcome. Missing, processing, failed, or unavailable book context
-fails closed; a legitimate no-match returns a fixed complete refusal. Public
-message responses omit private execution metadata.
+characters. It answers from retrieved book chunks when they support the
+question. When the book lacks the fact, it may search the public web only for a
+safe standalone 3–300 character extract of the current question. Upload
+filenames/titles, private chunks, history, and highlights never enter the
+web-enabled request. External answers include clickable citations; unrelated or
+ambiguous questions are refused without search, and classifier or search
+failures fail closed. Streams end with a terminal `complete`, `truncated`,
+`cancelled`, or `failed` outcome. Missing, processing, failed, or unavailable
+book context fails closed. Public message responses omit private execution
+metadata.
 
-The migration sequence implementing the compact runtime is `0012` for the
+The migration sequence implementing the compact runtime includes `0012` for the
 Postgres queue and pgvector, `0013` for legacy file-type backfill, `0014` for
-UUID progress ownership and foreign keys, `0015` for completion outcomes, and
-`0016` for private execution metadata. Apply it with `pnpm db:migrate` before
-starting an updated deployment.
+UUID progress ownership and foreign keys, `0015` for completion outcomes, `0016`
+for private execution metadata, and `0018` for embedded book metadata. For an
+updated deployment, run `pnpm db:migrate`, then
+`pnpm --filter @reader/api metadata:backfill`, before application startup.
+Individual missing or malformed legacy books are logged and left eligible for a
+later retry without blocking application startup; database-level failures still
+make the command exit non-zero.
 
 Interactive API documentation is available at `/api-docs`, with the generated
 OpenAPI JSON at `/api-docs.json`. It describes cookie authentication and public

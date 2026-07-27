@@ -140,6 +140,7 @@ docker compose --env-file "$READER_ENV_FILE" -f docker-compose.prod.yml config >
 docker compose --env-file "$READER_ENV_FILE" -f docker-compose.prod.yml build app
 docker compose --env-file "$READER_ENV_FILE" -f docker-compose.prod.yml up -d --wait postgres
 docker compose --env-file "$READER_ENV_FILE" -f docker-compose.prod.yml run --rm app pnpm db:migrate
+docker compose --env-file "$READER_ENV_FILE" -f docker-compose.prod.yml run --rm app pnpm --filter @reader/api metadata:backfill
 
 if systemctl list-unit-files 2>/dev/null | grep -q '^caddy\.service'; then
     echo "Disabling host caddy.service..."

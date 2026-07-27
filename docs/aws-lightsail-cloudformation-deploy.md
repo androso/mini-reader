@@ -113,7 +113,7 @@ The bootstrap process:
 4. writes `/opt/reader/.env.prod`;
 5. builds the app image;
 6. starts Postgres;
-7. runs `pnpm db:migrate` inside the app container;
+7. runs `pnpm db:migrate` and `pnpm --filter @reader/api metadata:backfill` inside the app container;
 8. disables host `caddy.service` if present;
 9. starts the full Compose stack (`postgres`, `app`, `caddy`) with `docker compose up -d --wait`;
 10. registers a nightly database backup cron job.
@@ -135,9 +135,9 @@ same-origin Caddy entrypoint. Compose exposes port 3000 internally to Caddy;
 only Caddy publishes public ports 80/443.
 
 Codex connection uses a manual localhost callback paste in Reader settings and
-changes generated chat responses only. Keep the Platform `OPENAI_API_KEY`
-configured because ingestion and semantic retrieval continue to use
-`/v1/embeddings`.
+changes generated book-text answers only. Keep the Platform `OPENAI_API_KEY`
+configured because ingestion, semantic retrieval, grounding classification, and
+book-scoped web search continue to use OpenAI APIs.
 
 ## 4. Updates
 
@@ -148,6 +148,7 @@ cd /opt/reader
 git pull
 docker compose --env-file .env.prod -f docker-compose.prod.yml build app
 docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm app pnpm db:migrate
+docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm app pnpm --filter @reader/api metadata:backfill
 docker compose --env-file .env.prod -f docker-compose.prod.yml up -d
 docker compose --env-file .env.prod -f docker-compose.prod.yml logs -f app
 ````
@@ -201,8 +202,9 @@ Run a product smoke test:
    to `ready`, open the protected file, and save/restore owner-scoped progress;
 4. exercise `POST /api/books/{bookId}/retry` for a `queue_failed` book and delete
    a test book without a late processing publication;
-5. ask one chat question and confirm a terminal completion outcome. A no-match
-   may return the fixed refusal; unavailable context must fail closed;
+5. ask book-supported and external book-fact chat questions, confirm cited
+   external answers and terminal outcomes, and confirm unavailable grounding
+   fails closed;
 6. confirm executable EPUB markup is sanitized and EPUB covers load only near
    the viewport without stale blob URLs.
 
@@ -212,10 +214,13 @@ Run a product smoke test:
   Chroma, ALBs, or GitHub Actions deployment roles.
 - The vector store is pgvector.
 - Book processing is single-flight in the app process through the Postgres-backed runner.
-- Migrations `0012` through `0016` add the Postgres queue/pgvector path, legacy
-  file-type compatibility, UUID progress constraints, completion outcomes, and
-  private execution metadata. Existing object keys and collection names remain
-  compatible; all public calls use book UUIDs.
+- Migrations `0012` through `0018` add the Postgres queue/pgvector path, legacy
+  file-type compatibility, UUID progress constraints, completion outcomes,
+  private execution metadata, and embedded book metadata. Run the metadata
+  backfill after migration and before startup. Individual legacy-book failures
+  remain retryable and do not block startup; database-level failures still stop
+  deployment. Existing object keys and collection names remain compatible; all
+  public calls use book UUIDs.
 - Queue failures preserve the S3 original for the retry endpoint. Deletion uses
   the retryable `deleting` state and removes queued work before artifact cleanup,
   so recovery requires both the database backup and S3 originals.
