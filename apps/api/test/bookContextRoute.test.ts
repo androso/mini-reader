@@ -10,10 +10,10 @@ import {
 } from "../src/db/schema";
 import {
     BOOK_CONTEXT_FAILURE_MESSAGES,
-    NO_RELEVANT_BOOK_CONTEXT_RESPONSE,
     type BookContextStatus,
 } from "../src/services/BookContextState";
 import { hybridBookSearchService } from "../src/services/HybridBookSearchService";
+import { bookGroundedSearchService } from "../src/services/BookGroundedSearchService";
 import {
     PlatformChatService,
     type ChatMessage,
@@ -50,7 +50,7 @@ const routeHandler = () => {
     return layer.route.stack[2].handle;
 };
 
-const invoke = async (handler: RequestHandler) => {
+const invoke = async (handler: RequestHandler, message = "Question") => {
     const writes: string[] = [];
     let nextError: unknown;
     let writableEnded = false;
@@ -101,7 +101,7 @@ const invoke = async (handler: RequestHandler) => {
             rid: "book-1",
             cid: "conversation-1",
         },
-        body: { message: "Question" },
+        body: { message },
         user: {
             id: "user-1",
             email: "owner@example.com",
@@ -337,10 +337,13 @@ test("no-match is persisted refusal while ready passages alone reach OpenAI", as
     const originalSearch = hybridBookSearchService.search;
     const originalGenerate =
         PlatformChatService.prototype.generateStreamResponse;
+    const originalAssess = bookGroundedSearchService.assessQuestion;
+    const originalWebSearch = bookGroundedSearchService.searchBookWeb;
 
     try {
         for (const hasPassages of [false, true]) {
             let modelCalls = 0;
+            let webSearchCalls = 0;
             const insertedMessages: unknown[] = [];
             const generatedMessageBatches: ChatMessage[][] = [];
             db.select = (() => ({
@@ -359,6 +362,13 @@ test("no-match is persisted refusal while ready passages alone reach OpenAI", as
                                 userId: "user-1",
                                 processingStatus: "ready",
                                 title: "A Wizard of Earthsea",
+                                originalFilename: "private.epub",
+                                embeddedTitle: "A Wizard of Earthsea",
+                                creator: "Ursula K. Le Guin",
+                                identifier: "urn:isbn:test",
+                                metadataExtractedAt: new Date(
+                                    "2026-07-25T00:00:00.000Z"
+                                ),
                                 fileType: "epub",
                                 fileKey: "users/user-1/private.epub",
                                 createdAt: new Date("2026-07-25T00:00:00.000Z"),
@@ -390,6 +400,18 @@ test("no-match is persisted refusal while ready passages alone reach OpenAI", as
                           },
                       ]
                     : [];
+            bookGroundedSearchService.assessQuestion = async () => ({
+                kind: "decision",
+                decision: hasPassages ? "answer_from_book" : "search_web",
+                standalonePublicQuestion: hasPassages ? "Question" : null,
+            });
+            bookGroundedSearchService.searchBookWeb = async () => {
+                webSearchCalls++;
+                return {
+                    kind: "no_cited_answer",
+                    usage: null,
+                };
+            };
             PlatformChatService.prototype.generateStreamResponse = async (
                 messages
             ) => {
@@ -413,26 +435,46 @@ test("no-match is persisted refusal while ready passages alone reach OpenAI", as
 
             assert.equal(result.nextError, undefined);
             assert.equal(modelCalls, hasPassages ? 1 : 0);
+            assert.equal(webSearchCalls, 0);
+            assert.equal(
+                result.writes.filter((frame) =>
+                    frame.includes('"type":"status"')
+                ).length,
+                0
+            );
             if (!hasPassages) {
                 assert.deepEqual(result.writes, [
                     `data: ${JSON.stringify({
-                        content: NO_RELEVANT_BOOK_CONTEXT_RESPONSE,
+                        content:
+                            "I couldn't find reliable public sources about this book. Try naming the person, character, place, or adaptation directly.",
                     })}\n\n`,
                     `data: ${JSON.stringify({
                         type: "terminal",
                         status: "complete",
-                        finishReason: "no_relevant_context",
+                        finishReason: "no_relevant_web_context",
                     })}\n\n`,
                     "data: [DONE]\n\n",
                 ]);
-                const executionMetadata = (
-                    insertedMessages[1] as {
-                        executionMetadata: MessageExecutionMetadata;
-                    }
-                ).executionMetadata;
+                const assistantMessage = insertedMessages[1];
+                assert.ok(
+                    assistantMessage &&
+                        typeof assistantMessage === "object" &&
+                        "executionMetadata" in assistantMessage
+                );
+                const executionMetadata = assistantMessage.executionMetadata;
+                assert.ok(
+                    executionMetadata &&
+                        typeof executionMetadata === "object" &&
+                        "generationDurationMs" in executionMetadata &&
+                        typeof executionMetadata.generationDurationMs ===
+                            "number" &&
+                        "totalLatencyMs" in executionMetadata &&
+                        typeof executionMetadata.totalLatencyMs === "number"
+                );
                 assert.deepEqual(executionMetadata, {
                     modelId: null,
-                    generationDurationMs: 0,
+                    generationDurationMs:
+                        executionMetadata.generationDurationMs,
                     totalLatencyMs: executionMetadata.totalLatencyMs,
                     usage: null,
                     langfuseTraceId: null,
@@ -442,25 +484,28 @@ test("no-match is persisted refusal while ready passages alone reach OpenAI", as
                 assert.deepEqual(insertedMessages[1], {
                     conversationId: "conversation-1",
                     role: "assistant",
-                    content: NO_RELEVANT_BOOK_CONTEXT_RESPONSE,
+                    content:
+                        "I couldn't find reliable public sources about this book. Try naming the person, character, place, or adaptation directly.",
                     contextSources: null,
                     completionStatus: "complete",
-                    finishReason: "no_relevant_context",
+                    finishReason: "no_relevant_web_context",
                     executionMetadata,
                 });
                 continue;
             }
 
-            const systemPrompt = generatedMessageBatches[0]?.[0]?.content;
-            assert.match(systemPrompt ?? "", /Book metadata:/);
-            assert.match(systemPrompt ?? "", /A Wizard of Earthsea/);
-            assert.match(systemPrompt ?? "", /\"fileType\":\"epub\"/);
+            const evidenceMessage = generatedMessageBatches[0]?.[0];
+            assert.equal(evidenceMessage?.role, "user");
             assert.match(
-                systemPrompt ?? "",
-                /\"libraryAddedAt\":\"2026-07-25T00:00:00.000Z\"/
+                evidenceMessage?.content ?? "",
+                /A Wizard of Earthsea/
             );
-            assert.doesNotMatch(systemPrompt ?? "", /private\.epub/);
-            assert.doesNotMatch(systemPrompt ?? "", /book_ready/);
+            assert.match(evidenceMessage?.content ?? "", /relevant passage/);
+            assert.doesNotMatch(
+                evidenceMessage?.content ?? "",
+                /private\.epub/
+            );
+            assert.doesNotMatch(evidenceMessage?.content ?? "", /book_ready/);
 
             assert.deepEqual(result.writes, [
                 `data: ${JSON.stringify({ content: "model answer" })}\n\n`,
@@ -468,6 +513,7 @@ test("no-match is persisted refusal while ready passages alone reach OpenAI", as
                     type: "sources",
                     sources: [
                         {
+                            sourceType: "book",
                             id: "chunk-1",
                             chunkIndex: 0,
                             score: 1,
@@ -509,5 +555,155 @@ test("no-match is persisted refusal while ready passages alone reach OpenAI", as
         db.update = originalUpdate;
         hybridBookSearchService.search = originalSearch;
         PlatformChatService.prototype.generateStreamResponse = originalGenerate;
+        bookGroundedSearchService.assessQuestion = originalAssess;
+        bookGroundedSearchService.searchBookWeb = originalWebSearch;
+    }
+});
+
+test("resolved follow-up uses only the standalone public question for web search", async () => {
+    const handler = routeHandler();
+    const originalSelect = db.select;
+    const originalInsert = db.insert;
+    const originalUpdate = db.update;
+    const originalSearch = hybridBookSearchService.search;
+    const originalAssess = bookGroundedSearchService.assessQuestion;
+    const originalWebSearch = bookGroundedSearchService.searchBookWeb;
+    const insertedMessages: unknown[] = [];
+    const resolvedQuestion =
+        "What academic recognition has David Deutsch received?";
+    const answer =
+        "David Deutsch is a Fellow of the Royal Society. [1](<https://example.com/david-deutsch>)";
+    const sources = [
+        {
+            sourceType: "web" as const,
+            url: "https://example.com/david-deutsch",
+            title: "David Deutsch",
+        },
+    ];
+    let webSearchInput:
+        | { publicQuestion: string; signal?: AbortSignal }
+        | undefined;
+
+    try {
+        db.select = (() => ({
+            from: (table: unknown) => ({
+                where: () => {
+                    if (table === Conversations) {
+                        return Promise.resolve([{ id: "conversation-1" }]);
+                    }
+                    if (table === Messages) {
+                        return {
+                            orderBy: async () => [
+                                {
+                                    id: "message-1",
+                                    role: "user",
+                                    content: "Who is the author?",
+                                    createdAt: new Date(
+                                        "2026-07-25T00:00:00.000Z"
+                                    ),
+                                },
+                                {
+                                    id: "message-2",
+                                    role: "assistant",
+                                    content: "The author is David Deutsch.",
+                                    createdAt: new Date(
+                                        "2026-07-25T00:00:01.000Z"
+                                    ),
+                                },
+                            ],
+                        };
+                    }
+                    assert.equal(table, Books);
+                    return Promise.resolve([
+                        {
+                            id: "book-1",
+                            userId: "user-1",
+                            processingStatus: "ready",
+                            title: "The Fabric of Reality",
+                            originalFilename: "private.epub",
+                            embeddedTitle: "The Fabric of Reality",
+                            creator: "David Deutsch",
+                            identifier: "urn:isbn:test",
+                            metadataExtractedAt: new Date(
+                                "2026-07-25T00:00:00.000Z"
+                            ),
+                            fileType: "epub",
+                            fileKey: "users/user-1/private.epub",
+                            createdAt: new Date("2026-07-25T00:00:00.000Z"),
+                            processingError: null,
+                            collectionName: "book_ready",
+                        },
+                    ]);
+                },
+            }),
+        })) as unknown as typeof db.select;
+        db.insert = ((table: unknown) => ({
+            values: async (values: unknown) => {
+                assert.equal(table, Messages);
+                insertedMessages.push(values);
+            },
+        })) as unknown as typeof db.insert;
+        db.update = (() => ({
+            set: () => ({ where: async () => undefined }),
+        })) as unknown as typeof db.update;
+        hybridBookSearchService.search = async () => [];
+        bookGroundedSearchService.assessQuestion = async () => ({
+            kind: "decision",
+            decision: "search_web",
+            standalonePublicQuestion: resolvedQuestion,
+        });
+        bookGroundedSearchService.searchBookWeb = async (input) => {
+            webSearchInput = input;
+            return { kind: "answer", content: answer, sources, usage: null };
+        };
+
+        const result = await invoke(
+            handler,
+            "What are his recognitions in the academic world?"
+        );
+
+        assert.equal(result.nextError, undefined);
+        assert.equal(webSearchInput?.publicQuestion, resolvedQuestion);
+        assert.doesNotMatch(
+            JSON.stringify(webSearchInput),
+            /What are his recognitions|Who is the author|The author is David Deutsch/
+        );
+        assert.deepEqual(result.writes, [
+            `data: ${JSON.stringify({
+                type: "status",
+                status: "searching_web",
+            })}\n\n`,
+            `data: ${JSON.stringify({ content: answer })}\n\n`,
+            `data: ${JSON.stringify({ type: "sources", sources })}\n\n`,
+            `data: ${JSON.stringify({
+                type: "terminal",
+                status: "complete",
+                finishReason: "web_search",
+            })}\n\n`,
+            "data: [DONE]\n\n",
+        ]);
+        const assistantMessage = insertedMessages[1];
+        assert.ok(
+            assistantMessage &&
+                typeof assistantMessage === "object" &&
+                "executionMetadata" in assistantMessage
+        );
+        const executionMetadata = assistantMessage.executionMetadata;
+        assert.deepEqual(insertedMessages[1], {
+            conversationId: "conversation-1",
+            role: "assistant",
+            content: answer,
+            contextSources: sources,
+            completionStatus: "complete",
+            finishReason: "web_search",
+            executionMetadata,
+        });
+    } finally {
+        db.select = originalSelect;
+        db.insert = originalInsert;
+        db.update = originalUpdate;
+        hybridBookSearchService.search = originalSearch;
+        bookGroundedSearchService.assessQuestion = originalAssess;
+        bookGroundedSearchService.searchBookWeb = originalWebSearch;
     }
 });

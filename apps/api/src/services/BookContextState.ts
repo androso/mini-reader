@@ -46,6 +46,3 @@ export const BOOK_CONTEXT_FAILURE_MESSAGES: Record<
     retrieval_unavailable:
         "Book context is temporarily unavailable. Please try again later.",
 };
-
-export const NO_RELEVANT_BOOK_CONTEXT_RESPONSE =
-    "I couldn't find relevant context in this book to answer that question.";

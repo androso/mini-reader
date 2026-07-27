@@ -4,6 +4,7 @@ import test from "node:test";
 import {
     PUBLIC_MESSAGE_SELECTION,
     buildMessageExecutionMetadata,
+    normalizeMessageContextSources,
     normalizeMessageTokenUsage,
 } from "../src/services/ChatExecutionMetadata";
 
@@ -166,6 +167,42 @@ test("no-model execution remains truthful and durations are nonnegative", () => 
             langfuseTraceId: null,
         }
     );
+});
+test("normalizes legacy book and safe web sources while dropping malformed rows", () => {
+    assert.deepEqual(
+        normalizeMessageContextSources([
+            {
+                id: "legacy",
+                chunkIndex: 0,
+                score: 0.9,
+                bestRank: 1,
+                excerpt: "Legacy excerpt",
+            },
+            {
+                sourceType: "web",
+                url: "https://example.com/source",
+                title: " Example ",
+            },
+            { sourceType: "web", url: "http://127.0.0.1/private", title: "No" },
+            { sourceType: "book", id: "", chunkIndex: -1 },
+        ]),
+        [
+            {
+                sourceType: "book",
+                id: "legacy",
+                chunkIndex: 0,
+                score: 0.9,
+                bestRank: 1,
+                excerpt: "Legacy excerpt",
+            },
+            {
+                sourceType: "web",
+                url: "https://example.com/source",
+                title: "Example",
+            },
+        ]
+    );
+    assert.equal(normalizeMessageContextSources([{ invalid: true }]), null);
 });
 
 test("public message projection excludes private execution metadata", () => {

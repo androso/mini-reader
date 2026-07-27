@@ -213,12 +213,25 @@ test("OpenAPI exposes machine-readable chat stream events and DONE framing", () 
     const streamSchema = spec.components.schemas.ChatStreamEvent;
     assert.deepEqual(streamSchema.oneOf, [
         { $ref: "#/components/schemas/ChatConversationEvent" },
+        { $ref: "#/components/schemas/ChatStatusEvent" },
         { $ref: "#/components/schemas/ChatContentEvent" },
         { $ref: "#/components/schemas/ChatSourcesEvent" },
         { $ref: "#/components/schemas/ChatContextErrorEvent" },
         { $ref: "#/components/schemas/ChatFatalErrorEvent" },
         { $ref: "#/components/schemas/ChatTerminalEvent" },
     ]);
+    assert.deepEqual(spec.components.schemas.ChatStatusEvent.required, [
+        "type",
+        "status",
+    ]);
+    assert.deepEqual(
+        spec.components.schemas.ChatStatusEvent.properties.type.enum,
+        ["status"]
+    );
+    assert.deepEqual(
+        spec.components.schemas.ChatStatusEvent.properties.status.enum,
+        ["searching_web"]
+    );
     assert.match(streamSchema.description, /\[DONE\]/);
     assert.match(streamSchema.description, /fatal error/i);
     assert.deepEqual(spec.components.schemas.ChatFatalErrorEvent.required, [

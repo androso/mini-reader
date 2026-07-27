@@ -1,8 +1,14 @@
 import {
     Messages,
+    type BookMessageContextSource,
+    type MessageContextSource,
     type MessageExecutionMetadata,
     type MessageTokenUsage,
 } from "../db/schema";
+import {
+    normalizePublicWebUrl,
+    normalizeWebSourceTitle,
+} from "./WebSourceSafety";
 
 export const PUBLIC_MESSAGE_SELECTION = {
     id: Messages.id,
@@ -13,6 +19,54 @@ export const PUBLIC_MESSAGE_SELECTION = {
     completionStatus: Messages.completionStatus,
     finishReason: Messages.finishReason,
     createdAt: Messages.createdAt,
+};
+
+export const normalizeMessageContextSources = (
+    value: unknown
+): MessageContextSource[] | null => {
+    if (!Array.isArray(value)) return null;
+    const normalized: MessageContextSource[] = [];
+    for (const item of value) {
+        if (!item || typeof item !== "object") continue;
+        const candidate = item as Record<string, unknown>;
+        if (candidate.sourceType === "web") {
+            const url = normalizePublicWebUrl(candidate.url);
+            if (!url) continue;
+            normalized.push({
+                sourceType: "web",
+                url,
+                title: normalizeWebSourceTitle(candidate.title, url),
+            });
+            continue;
+        }
+        if (
+            candidate.sourceType !== undefined &&
+            candidate.sourceType !== "book"
+        )
+            continue;
+        if (
+            typeof candidate.id !== "string" ||
+            !candidate.id.trim() ||
+            typeof candidate.excerpt !== "string" ||
+            !candidate.excerpt.trim() ||
+            !Number.isInteger(candidate.chunkIndex) ||
+            Number(candidate.chunkIndex) < 0 ||
+            typeof candidate.score !== "number" ||
+            !Number.isFinite(candidate.score) ||
+            !Number.isInteger(candidate.bestRank) ||
+            Number(candidate.bestRank) <= 0
+        )
+            continue;
+        normalized.push({
+            sourceType: "book",
+            id: candidate.id,
+            chunkIndex: candidate.chunkIndex as number,
+            score: candidate.score,
+            bestRank: candidate.bestRank as number,
+            excerpt: candidate.excerpt,
+        } satisfies BookMessageContextSource);
+    }
+    return normalized.length ? normalized : null;
 };
 
 const nonNegativeDuration = (value: unknown) => {

@@ -5,6 +5,7 @@ import {
     Books,
     Conversations,
     Messages,
+    type BookMessageContextSource,
     type MessageContextSource,
     type MessageExecutionMetadata,
 } from "../db/schema";
@@ -21,10 +22,12 @@ import {
     type ChatProviderSelection,
 } from "../services/ChatCompletionService";
 import {
-    buildBookContextSystemPrompt,
+    BOOK_GROUNDED_SYSTEM_PROMPT,
+    buildBookContextMessage,
     buildRetrievalQuery,
     normalizeHighlightContext,
     type HighlightContext,
+    type BookPromptMetadata,
 } from "../services/HighlightContext";
 import { Router, Request, Response } from "express";
 import { hybridBookSearchService } from "../services/HybridBookSearchService";
@@ -55,14 +58,18 @@ import {
 } from "../services/ChatCompletionOutcome";
 import {
     BOOK_CONTEXT_FAILURE_MESSAGES,
-    NO_RELEVANT_BOOK_CONTEXT_RESPONSE,
     classifyStoredBookContext,
     type BookContextStatus,
 } from "../services/BookContextState";
 import {
     buildMessageExecutionMetadata,
+    normalizeMessageContextSources,
     PUBLIC_MESSAGE_SELECTION,
 } from "../services/ChatExecutionMetadata";
+import {
+    BOOK_WEB_SEARCH_MODEL,
+    bookGroundedSearchService,
+} from "../services/BookGroundedSearchService";
 
 const router = Router();
 const chatCompletionService = new ChatCompletionService();
@@ -250,8 +257,9 @@ const summarizeRetrievedChunks = (
 
 const buildContextSources = (
     results: Awaited<ReturnType<typeof hybridBookSearchService.search>>
-): MessageContextSource[] =>
+): BookMessageContextSource[] =>
     results.map((result) => ({
+        sourceType: "book",
         id: result.id,
         chunkIndex: result.chunkIndex,
         score: result.score,
@@ -270,31 +278,24 @@ const buildRagMessages = async (
 ): Promise<{
     messages: ChatMessage[];
     status: BookContextStatus;
-    sources: MessageContextSource[] | null;
+    book: BookPromptMetadata | null;
+    bookContext: string | null;
+    sources: BookMessageContextSource[] | null;
 }> => {
     log.debug("Building RAG messages", {
         resourceType,
         resourceId,
         userId,
-        query: query.slice(0, 200),
+        queryLength: query.length,
     });
-    if (resourceType !== "book") {
-        log.debug("Non-book resource, skipping retrieval", {
-            resourceType,
-            resourceId,
-        });
-        return {
-            messages,
-            status: "retrieval_unavailable",
-            sources: null,
-        };
-    }
+    const empty = (
+        status: BookContextStatus,
+        book: BookPromptMetadata | null = null
+    ) => ({ messages, status, book, bookContext: null, sources: null });
+    if (resourceType !== "book") return empty("retrieval_unavailable");
 
     const loadBookSpan = trace.startObservation("load_book", {
-        input: {
-            resourceType,
-            resourceId,
-        },
+        input: { resourceType, resourceId },
     });
     let book: typeof Books.$inferSelect | undefined;
     try {
@@ -307,45 +308,26 @@ const buildRagMessages = async (
                 found: Boolean(book),
                 processingStatus: book?.processingStatus,
                 hasCollection: Boolean(book?.collectionName),
-                collectionName: book?.collectionName,
             },
         });
     } catch (error) {
         recordObservationError(loadBookSpan, error, "Book lookup failed");
-        log.error("Book lookup failed while retrieving context", {
-            resourceId,
-            userId,
-        });
-        return {
-            messages,
-            status: "retrieval_unavailable",
-            sources: null,
-        };
+        return empty("retrieval_unavailable");
     } finally {
         loadBookSpan.end();
     }
 
     const contextState = classifyStoredBookContext(book);
-    if (contextState !== "ready") {
-        log.info("Book context is not ready for retrieval", {
-            resourceId,
-            userId,
-            contextState,
-        });
-        return { messages, status: contextState, sources: null };
-    }
-    if (!book?.collectionName) {
-        return { messages, status: "retrieval_unavailable", sources: null };
-    }
+    if (contextState !== "ready") return empty(contextState);
+    if (!book?.collectionName) return empty("retrieval_unavailable");
+    const modelMetadata: BookPromptMetadata = {
+        title: book.embeddedTitle ?? null,
+        creator: book.creator ?? null,
+        identifier: book.identifier ?? null,
+        fileType: book.fileType,
+    };
     const collectionName = book.collectionName;
-
     try {
-        log.info("Retrieving book context", {
-            resourceId,
-            userId,
-            collectionName,
-        });
-        const start = Date.now();
         const retrievalSpan = trace.startObservation("hybrid_retrieval", {
             input: {
                 collectionName,
@@ -368,6 +350,12 @@ const buildRagMessages = async (
                     capture: getLangfuseCaptureConfig(),
                 }
             );
+            retrievalSpan.update({
+                output: {
+                    resultCount: searchResults.length,
+                    selectedChunks: summarizeRetrievedChunks(searchResults),
+                },
+            });
         } catch (error) {
             recordObservationError(
                 retrievalSpan,
@@ -381,60 +369,22 @@ const buildRagMessages = async (
         const relevantResults = searchResults.filter(
             (result) => result.content.trim().length > 0
         );
-        const documents = relevantResults.map((result) => result.content);
-        const duration = Date.now() - start;
-        log.info("Book context retrieved", {
-            resourceId,
-            collectionName,
-            retrievedChunkCount: documents.length,
-            durationMs: duration,
-        });
-
-        if (!documents.length) {
-            log.warn("No relevant chunks retrieved", {
-                resourceId,
-                collectionName,
-            });
-            return { messages, status: "no_relevant_context", sources: null };
-        }
-
-        const sources = buildContextSources(relevantResults);
-        const promptSpan = trace.startObservation("build_rag_prompt", {
-            input: {
-                retrievedChunkCount: documents.length,
-                baseMessageCount: messages.length,
-            },
-        });
-        const context = documents.join("\n\n---\n\n");
-        log.debug("Constructed context for LLM", {
-            resourceId,
-            contextLength: context.length,
-        });
-        promptSpan.update({
-            output: {
-                contextLength: context.length,
-                messageCount: messages.length + 1,
-                selectedChunks: summarizeRetrievedChunks(relevantResults),
-            },
-        });
-        promptSpan.end();
+        if (!relevantResults.length)
+            return empty("no_relevant_context", modelMetadata);
+        const bookContext = relevantResults
+            .map((result) => result.content)
+            .join("\n\n---\n\n");
         return {
             status: "ready",
-            sources,
+            book: modelMetadata,
+            bookContext,
+            sources: buildContextSources(relevantResults),
             messages: [
-                {
-                    role: "system" as const,
-                    content: buildBookContextSystemPrompt(
-                        context,
-                        {
-                            bookId: book.id,
-                            title: book.title,
-                            fileType: book.fileType,
-                            libraryAddedAt: book.createdAt.toISOString(),
-                        },
-                        highlightContext
-                    ),
-                },
+                buildBookContextMessage(
+                    bookContext,
+                    modelMetadata,
+                    highlightContext
+                ),
                 ...messages,
             ],
         };
@@ -442,24 +392,27 @@ const buildRagMessages = async (
         log.error("Error retrieving book context", {
             resourceId,
             collectionName,
+            error: getErrorDetail(error),
         });
-        return {
-            messages,
-            status: "retrieval_unavailable",
-            sources: null,
-        };
+        return empty("retrieval_unavailable");
     }
 };
 
-const writeContextFailureAndEnd = (
-    res: Response,
-    status: Exclude<BookContextStatus, "ready" | "no_relevant_context">
-) => {
+type ChatFailureStatus =
+    | Exclude<BookContextStatus, "ready" | "no_relevant_context">
+    | "grounding_unavailable"
+    | "web_search_unavailable";
+
+const writeChatFailureAndEnd = (res: Response, status: ChatFailureStatus) => {
+    const messages: Record<ChatFailureStatus, string> = {
+        ...BOOK_CONTEXT_FAILURE_MESSAGES,
+        grounding_unavailable:
+            "Book answer grounding is temporarily unavailable. Please try again later.",
+        web_search_unavailable:
+            "External book search is temporarily unavailable. Please try again later.",
+    };
     res.write(
-        `data: ${JSON.stringify({
-            error: BOOK_CONTEXT_FAILURE_MESSAGES[status],
-            status,
-        })}\n\n`
+        `data: ${JSON.stringify({ error: messages[status], status })}\n\n`
     );
     res.write(
         `data: ${JSON.stringify({
@@ -518,7 +471,7 @@ const streamAssistantResponse = async ({
             userId,
             selection,
             messages,
-            "You are a helpful assistant.",
+            BOOK_GROUNDED_SYSTEM_PROMPT,
             {
                 signal: responseAbort.controller.signal,
                 ...(traceOpenAI && selection.provider === "openai"
@@ -708,89 +661,147 @@ const runChatCompletion = async ({
     const responseAbort = createResponseAbortController(res);
     const responseClosed = () =>
         responseAbort.wasClosed() || res.destroyed || res.writableEnded;
+    const emitComplete = async (
+        content: string,
+        finishReason: string,
+        contextSources: MessageContextSource[] | null,
+        modelId: string | null,
+        generationDurationMs: number,
+        usage: unknown
+    ) => {
+        await saveAssistantMessage(
+            conversationId,
+            content,
+            contextSources,
+            "complete",
+            finishReason,
+            buildMessageExecutionMetadata({
+                modelId,
+                generationDurationMs,
+                totalLatencyMs: Date.now() - startedAt,
+                usage,
+                langfuseTraceId: trace.traceId,
+            }),
+            trace
+        );
+        if (responseClosed()) return;
+        res.write(`data: ${JSON.stringify({ content })}\n\n`);
+        if (contextSources?.length)
+            res.write(
+                `data: ${JSON.stringify({ type: "sources", sources: contextSources })}\n\n`
+            );
+        res.write(
+            `data: ${JSON.stringify({
+                type: "terminal",
+                status: "complete",
+                finishReason,
+            })}\n\n`
+        );
+        res.write("data: [DONE]\n\n");
+        res.end();
+    };
 
     try {
         if (responseClosed()) return;
-
-        const retrievalQuery = buildRetrievalQuery(query, highlightContext);
         const ragResult = await buildRagMessages(
             resourceType,
             resourceId,
             userId,
             messages,
-            retrievalQuery,
+            buildRetrievalQuery(query, highlightContext),
             highlightContext,
             trace
         );
         if (responseClosed()) return;
-
         if (
             ragResult.status !== "ready" &&
             ragResult.status !== "no_relevant_context"
         ) {
-            trace.setTraceIO({
-                output: {
-                    status: "failed",
-                    finishReason: ragResult.status,
-                },
-            });
-            writeContextFailureAndEnd(res, ragResult.status);
+            writeChatFailureAndEnd(res, ragResult.status);
+            return;
+        }
+        if (!ragResult.book) {
+            writeChatFailureAndEnd(res, "retrieval_unavailable");
             return;
         }
 
-        if (ragResult.status === "no_relevant_context") {
-            const executionMetadata = buildMessageExecutionMetadata({
-                modelId: null,
-                generationDurationMs: 0,
-                totalLatencyMs: Date.now() - startedAt,
-                usage: null,
-                langfuseTraceId: trace.traceId,
-            });
-            await saveAssistantMessage(
-                conversationId,
-                NO_RELEVANT_BOOK_CONTEXT_RESPONSE,
+        const assessment = await bookGroundedSearchService.assessQuestion({
+            question: query,
+            history: messages,
+            book: ragResult.book,
+            bookContext: ragResult.bookContext,
+            highlightContext,
+            signal: responseAbort.controller.signal,
+        });
+        if (responseClosed()) return;
+        if (assessment.kind === "grounding_unavailable") {
+            writeChatFailureAndEnd(res, "grounding_unavailable");
+            return;
+        }
+        if (assessment.decision === "reject_unrelated") {
+            await emitComplete(
+                "I can only answer questions about this book.",
+                "not_about_book",
                 null,
-                "complete",
-                "no_relevant_context",
-                executionMetadata,
-                trace
+                null,
+                0,
+                null
             );
-            trace.setTraceIO({
-                output: {
-                    status: "complete",
-                    finishReason: "no_relevant_context",
-                    assistantResponseLength:
-                        NO_RELEVANT_BOOK_CONTEXT_RESPONSE.length,
-                    sourceCount: 0,
-                },
-            });
-            if (!responseClosed()) {
-                res.write(
-                    `data: ${JSON.stringify({
-                        content: NO_RELEVANT_BOOK_CONTEXT_RESPONSE,
-                    })}\n\n`
-                );
-                res.write(
-                    `data: ${JSON.stringify({
-                        type: "terminal",
-                        status: "complete",
-                        finishReason: "no_relevant_context",
-                    })}\n\n`
-                );
-                res.write("data: [DONE]\n\n");
-                res.end();
-            }
             return;
         }
 
-        if (!ragResult.sources?.length) {
-            trace.setTraceIO({
-                output: {
-                    status: "failed",
-                    finishReason: "retrieval_unavailable",
-                },
+        const useWeb =
+            assessment.decision === "search_web" ||
+            ragResult.status === "no_relevant_context" ||
+            !ragResult.sources?.length;
+        if (useWeb) {
+            const publicQuestion = assessment.standalonePublicQuestion;
+            if (!publicQuestion) {
+                await emitComplete(
+                    "I couldn't find reliable public sources about this book. Try naming the person, character, place, or adaptation directly.",
+                    "no_relevant_web_context",
+                    null,
+                    null,
+                    0,
+                    null
+                );
+                return;
+            }
+            res.write(
+                `data: ${JSON.stringify({
+                    type: "status",
+                    status: "searching_web",
+                })}\n\n`
+            );
+            const searchStartedAt = Date.now();
+            const result = await bookGroundedSearchService.searchBookWeb({
+                publicQuestion,
+                signal: responseAbort.controller.signal,
             });
-            writeContextFailureAndEnd(res, "retrieval_unavailable");
+            if (responseClosed()) return;
+            if (result.kind === "web_search_unavailable") {
+                writeChatFailureAndEnd(res, "web_search_unavailable");
+                return;
+            }
+            if (result.kind === "no_cited_answer") {
+                await emitComplete(
+                    "I couldn't find reliable public sources about this book. Try naming the person, character, place, or adaptation directly.",
+                    "no_relevant_web_context",
+                    null,
+                    BOOK_WEB_SEARCH_MODEL,
+                    Date.now() - searchStartedAt,
+                    result.usage
+                );
+                return;
+            }
+            await emitComplete(
+                result.content,
+                "web_search",
+                result.sources,
+                BOOK_WEB_SEARCH_MODEL,
+                Date.now() - searchStartedAt,
+                result.usage
+            );
             return;
         }
 
@@ -807,38 +818,25 @@ const runChatCompletion = async ({
             traceOpenAI: resourceType === "book",
             responseAbort,
         });
-        const executionMetadata = buildMessageExecutionMetadata({
-            modelId: selection.model,
-            generationDurationMs: outcome.generationDurationMs,
-            totalLatencyMs: Date.now() - startedAt,
-            usage: outcome.usage,
-            langfuseTraceId: trace.traceId,
-        });
-
         await saveAssistantMessage(
             conversationId,
             outcome.content,
             ragResult.sources,
             outcome.status,
             outcome.finishReason,
-            executionMetadata,
+            buildMessageExecutionMetadata({
+                modelId: selection.model,
+                generationDurationMs: outcome.generationDurationMs,
+                totalLatencyMs: Date.now() - startedAt,
+                usage: outcome.usage,
+                langfuseTraceId: trace.traceId,
+            }),
             trace
         );
-        trace.setTraceIO({
-            output: {
-                status: outcome.status,
-                finishReason: outcome.finishReason,
-                assistantResponseLength: outcome.content.length,
-                sourceCount: ragResult.sources?.length ?? 0,
-            },
-        });
-
         if (!responseClosed()) {
-            if (ragResult.sources?.length) {
-                res.write(
-                    `data: ${JSON.stringify({ type: "sources", sources: ragResult.sources })}\n\n`
-                );
-            }
+            res.write(
+                `data: ${JSON.stringify({ type: "sources", sources: ragResult.sources })}\n\n`
+            );
             res.write(
                 `data: ${JSON.stringify({
                     type: "terminal",
@@ -1288,7 +1286,14 @@ router.get(
                         .where(eq(Messages.conversationId, conversationId))
                         .orderBy(Messages.createdAt);
 
-                    res.send({ messages });
+                    res.send({
+                        messages: messages.map((message) => ({
+                            ...message,
+                            contextSources: normalizeMessageContextSources(
+                                message.contextSources
+                            ),
+                        })),
+                    });
                 },
             });
         } catch (error) {

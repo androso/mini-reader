@@ -332,7 +332,7 @@ export class HybridBookSearchService {
         });
         log.debug("Search query", {
             collectionName,
-            query: query.slice(0, 200),
+            queryLength: query.length,
         });
 
         const [lexicalResults, vectorResults] = await Promise.all([

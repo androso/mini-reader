@@ -19,6 +19,7 @@ import {
     PlatformChatService,
     type ChatMessage,
 } from "../src/services/OpenAIServices";
+import { bookGroundedSearchService } from "../src/services/BookGroundedSearchService";
 
 process.env.JWT_SECRET ??= "chat-route-authorization-test-secret";
 process.env.OPENAI_API_KEY ??= "chat-route-authorization-test-key";
@@ -27,6 +28,12 @@ const chatRouter = (
         default: typeof import("../src/routes/Chat.routes").default;
     }
 ).default;
+
+bookGroundedSearchService.assessQuestion = async () => ({
+    kind: "decision",
+    decision: "answer_from_book",
+    standalonePublicQuestion: null,
+});
 
 type RouteLayer = {
     route?: {
@@ -204,6 +211,7 @@ test("mounted conversation detail serializes only the public message projection"
         content: "Stored answer",
         contextSources: [
             {
+                sourceType: "book",
                 id: "chunk-1",
                 chunkIndex: 0,
                 score: 0.9,
@@ -691,6 +699,7 @@ test("mounted append route persists and terminates a failed partial stream", asy
                 type: "sources",
                 sources: [
                     {
+                        sourceType: "book",
                         id: "chunk-1",
                         chunkIndex: 0,
                         score: 1,
@@ -723,6 +732,7 @@ test("mounted append route persists and terminates a failed partial stream", asy
                 content: "partial",
                 contextSources: [
                     {
+                        sourceType: "book",
                         id: "chunk-1",
                         chunkIndex: 0,
                         score: 1,
@@ -768,6 +778,7 @@ test("mounted append route persists and terminates a failed partial stream", asy
                 type: "sources",
                 sources: [
                     {
+                        sourceType: "book",
                         id: "chunk-1",
                         chunkIndex: 0,
                         score: 1,
@@ -798,6 +809,7 @@ test("mounted append route persists and terminates a failed partial stream", asy
                 content: "",
                 contextSources: [
                     {
+                        sourceType: "book",
                         id: "chunk-1",
                         chunkIndex: 0,
                         score: 1,
@@ -871,6 +883,7 @@ test("mounted append route persists and terminates a failed partial stream", asy
                 content: "limited",
                 contextSources: [
                     {
+                        sourceType: "book",
                         id: "chunk-1",
                         chunkIndex: 0,
                         score: 1,
@@ -1113,6 +1126,7 @@ test("mounted append route aborts on close and never writes after destruction", 
                 content: "partial",
                 contextSources: [
                     {
+                        sourceType: "book",
                         id: "chunk-1",
                         chunkIndex: 0,
                         score: 1,
@@ -1285,12 +1299,8 @@ test("mounted create and append routes send only bounded persisted history to th
 
             assert.equal(result.nextError, undefined, route);
             assert.equal(modelInputs.length, 1, route);
-            assert.equal(modelInputs[0][0].role, "system", route);
-            assert.match(
-                modelInputs[0][0].content,
-                /authoritative book context/,
-                route
-            );
+            assert.equal(modelInputs[0][0].role, "user", route);
+            assert.match(modelInputs[0][0].content, /book_evidence/, route);
             assert.deepEqual(modelInputs[0].slice(1), expectedHistory, route);
             assert.equal(
                 modelInputs[0].filter(

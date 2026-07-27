@@ -157,13 +157,24 @@ export const Conversations = pgTable("conversations", {
     resourceId: uuid("resource_id").notNull(),
 });
 
-export type MessageContextSource = {
+export type BookMessageContextSource = {
+    sourceType: "book";
     id: string;
     chunkIndex: number;
     score: number;
     bestRank: number;
     excerpt: string;
 };
+
+export type WebMessageContextSource = {
+    sourceType: "web";
+    url: string;
+    title: string;
+};
+
+export type MessageContextSource =
+    | BookMessageContextSource
+    | WebMessageContextSource;
 
 export type MessageTokenUsage = {
     inputTokens: number;

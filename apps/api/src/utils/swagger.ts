@@ -123,21 +123,46 @@ const createDefinition = (
                     },
                 },
                 ContextSource: {
-                    type: "object",
-                    required: [
-                        "id",
-                        "chunkIndex",
-                        "score",
-                        "bestRank",
-                        "excerpt",
+                    oneOf: [
+                        {
+                            type: "object",
+                            required: [
+                                "sourceType",
+                                "id",
+                                "chunkIndex",
+                                "score",
+                                "bestRank",
+                                "excerpt",
+                            ],
+                            properties: {
+                                sourceType: {
+                                    type: "string",
+                                    enum: ["book"],
+                                },
+                                id: { type: "string" },
+                                chunkIndex: { type: "integer", minimum: 0 },
+                                score: { type: "number" },
+                                bestRank: { type: "integer", minimum: 1 },
+                                excerpt: { type: "string" },
+                            },
+                        },
+                        {
+                            type: "object",
+                            required: ["sourceType", "url", "title"],
+                            properties: {
+                                sourceType: {
+                                    type: "string",
+                                    enum: ["web"],
+                                },
+                                url: {
+                                    type: "string",
+                                    format: "uri",
+                                },
+                                title: { type: "string", maxLength: 200 },
+                            },
+                        },
                     ],
-                    properties: {
-                        id: { type: "string" },
-                        chunkIndex: { type: "integer" },
-                        score: { type: "number" },
-                        bestRank: { type: "integer" },
-                        excerpt: { type: "string" },
-                    },
+                    discriminator: { propertyName: "sourceType" },
                 },
                 PublicMessage: {
                     type: "object",
@@ -236,6 +261,14 @@ const createDefinition = (
                         conversationId: { type: "string", format: "uuid" },
                     },
                 },
+                ChatStatusEvent: {
+                    type: "object",
+                    required: ["type", "status"],
+                    properties: {
+                        type: { type: "string", enum: ["status"] },
+                        status: { type: "string", enum: ["searching_web"] },
+                    },
+                },
                 ChatContentEvent: {
                     type: "object",
                     required: ["content"],
@@ -266,6 +299,8 @@ const createDefinition = (
                                 "not_found",
                                 "ingestion_failed",
                                 "retrieval_unavailable",
+                                "grounding_unavailable",
+                                "web_search_unavailable",
                             ],
                         },
                     },
@@ -284,6 +319,7 @@ const createDefinition = (
                         "JSON payload from an SSE data frame. Normal streams end with a terminal event and the literal data sentinel [DONE]. A fatal error after headers were sent emits ChatFatalErrorEvent and closes without terminal or [DONE].",
                     oneOf: [
                         { $ref: "#/components/schemas/ChatConversationEvent" },
+                        { $ref: "#/components/schemas/ChatStatusEvent" },
                         { $ref: "#/components/schemas/ChatContentEvent" },
                         { $ref: "#/components/schemas/ChatSourcesEvent" },
                         { $ref: "#/components/schemas/ChatContextErrorEvent" },

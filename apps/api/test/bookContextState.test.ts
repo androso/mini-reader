@@ -3,7 +3,6 @@ import test from "node:test";
 import {
     BOOK_CONTEXT_FAILURE_MESSAGES,
     BOOK_CONTEXT_STATUSES,
-    NO_RELEVANT_BOOK_CONTEXT_RESPONSE,
     classifyStoredBookContext,
 } from "../src/services/BookContextState";
 
@@ -63,15 +62,11 @@ test("stored book state classifies every safe context boundary", () => {
     );
 });
 
-test("context failures and no-match refusal are fixed safe strings", () => {
+test("context failures are fixed safe strings", () => {
     assert.deepEqual(Object.keys(BOOK_CONTEXT_FAILURE_MESSAGES).sort(), [
         "ingestion_failed",
         "not_found",
         "processing",
         "retrieval_unavailable",
     ]);
-    assert.equal(
-        NO_RELEVANT_BOOK_CONTEXT_RESPONSE,
-        "I couldn't find relevant context in this book to answer that question."
-    );
 });
