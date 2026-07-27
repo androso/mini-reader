@@ -37,27 +37,29 @@ Install dependencies and start PostgreSQL:
 corepack enable
 corepack prepare pnpm@10.11.1 --activate
 pnpm install --frozen-lockfile
-docker compose -f compose.dev.yml up -d
+docker compose -f compose.dev.yml up -d --wait
 ```
 
-Create local environment files and set a development JWT secret:
+Create local environment files:
 
 ```bash
 cp .env.template .env
 cp apps/web/.env.template apps/web/.env
+openssl rand -base64 32
 ```
 
-The template's PostgreSQL URL matches `compose.dev.yml`. Set `JWT_SECRET` to a
-random local value. `OPENAI_API_KEY` remains required for ingestion, semantic
-retrieval, grounding classification, book-scoped web search, and default
-book-text answers.
+Paste the generated value into `JWT_SECRET` in `.env`. The template's
+PostgreSQL URL matches `compose.dev.yml`. `OPENAI_API_KEY` remains required for
+ingestion, semantic retrieval, grounding classification, book-scoped web
+search, and default book-text answers. The Google OAuth values are optional in
+development; replace the placeholder web client ID only when configuring
+Google sign-in.
 Never commit either generated environment file.
 
 Apply migrations and start both applications:
 
 ```bash
 pnpm db:migrate
-pnpm --filter @reader/api metadata:backfill
 pnpm dev
 ```
 
@@ -87,7 +89,7 @@ and the [Code of Conduct](CODE_OF_CONDUCT.md).
 ## Commands
 
 - `pnpm dev`: run the API and web app in development mode. The API runs the Postgres-backed book processing runner in-process.
-- `pnpm build`: compile the backend packages and API app.
+- `pnpm build`: compile the shared packages, API app, and web app.
 - `pnpm test`: run EPUB, processing, API, and web tests.
 - `pnpm api:dev`: run only the API app on port `3000`.
 - `pnpm web:dev`: run the Next.js web app on port `3001`.
@@ -206,8 +208,15 @@ The migration sequence implementing the compact runtime includes `0012` for the
 Postgres queue and pgvector, `0013` for legacy file-type backfill, `0014` for
 UUID progress ownership and foreign keys, `0015` for completion outcomes, `0016`
 for private execution metadata, and `0018` for embedded book metadata. For an
-updated deployment, run `pnpm db:migrate`, then
-`pnpm --filter @reader/api metadata:backfill`, before application startup.
+updated deployment, run:
+
+```bash
+pnpm --filter @reader/api build
+pnpm db:migrate
+pnpm --filter @reader/api metadata:backfill
+```
+
+Complete these steps before application startup.
 Individual missing or malformed legacy books are logged and left eligible for a
 later retry without blocking application startup; database-level failures still
 make the command exit non-zero.
