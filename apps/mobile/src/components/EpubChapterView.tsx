@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Linking, StyleSheet, View } from "react-native";
+import { Keyboard, Linking, StyleSheet, View } from "react-native";
 import { WebView, type WebViewMessageEvent } from "react-native-webview";
 import type { EpubReaderChapter, HighlightContext } from "@reader/contracts";
 import { resourceUri } from "@/lib/downloads";
@@ -14,7 +14,8 @@ export type ReaderBridgeMessage =
           chapterId: string;
       }
     | { type: "pull-state"; edge: "top" | "bottom"; state: "pull" | "release" }
-    | { type: "navigate"; direction: "previous" | "next" };
+    | { type: "navigate"; direction: "previous" | "next" }
+    | { type: "tap" };
 
 const escapeScript = (value: string) =>
     value.replace(/\\/g, "\\\\").replace(/`/g, "\\`").replace(/\$\{/g, "\\${");
@@ -55,6 +56,7 @@ const bridgeScript = (chapterId: string) => `
   let edge = null;
   let released = false;
   document.addEventListener('touchstart', (event) => {
+    send({ type: 'tap' });
     startY = event.touches[0]?.clientY || 0;
     edge = window.scrollY <= 0 ? 'top' :
       window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 1 ? 'bottom' : null;
@@ -213,6 +215,8 @@ export const EpubChapterView = ({
                 });
             } else if (message.type === "navigate") {
                 onNavigate(message.direction);
+            } else if (message.type === "tap") {
+                Keyboard.dismiss();
             }
         } catch {
             // Ignore messages that do not conform to the app-controlled bridge.

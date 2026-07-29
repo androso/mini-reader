@@ -61,6 +61,20 @@ test("connected Codex users see every subscription model in the reader picker", 
     );
 });
 
+test("Codex picker labels use short Sol/Terra/Luna names", () => {
+    assert.deepEqual(
+        CODEX_CHAT_MODELS.map(({ value, label }) => ({ value, label })),
+        [
+            { value: "gpt-5.6", label: "Sol" },
+            { value: "gpt-5.6-terra", label: "Terra" },
+            { value: "gpt-5.6-luna", label: "Luna" },
+            { value: "gpt-5.5", label: "5.5" },
+            { value: "gpt-5.4", label: "5.4" },
+            { value: "gpt-5.4-mini", label: "5.4-mini" },
+        ]
+    );
+});
+
 test("disconnect returns model options and stale selection to Platform defaults", () => {
     const connected = status({
         provider: "codex",

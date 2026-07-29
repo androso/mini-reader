@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import {
     ActivityIndicator,
+    KeyboardAvoidingView,
+    Platform,
     Pressable,
     ScrollView,
     StyleSheet,
@@ -295,7 +297,11 @@ export default function Reader() {
 
     return (
         <View style={styles.root}>
-            <View style={[styles.readerPane, isTablet && styles.readerTablet]}>
+            <KeyboardAvoidingView
+                behavior={Platform.OS === "ios" ? "padding" : undefined}
+                enabled={!isTablet}
+                style={[styles.readerPane, isTablet && styles.readerTablet]}
+            >
                 <View style={styles.header}>
                     <Pressable
                         accessibilityRole="button"
@@ -392,7 +398,7 @@ export default function Reader() {
                         onClearHighlight={() => setHighlight(null)}
                     />
                 )}
-            </View>
+            </KeyboardAvoidingView>
             {isTablet && (
                 <ReaderChat
                     bookId={bookId}

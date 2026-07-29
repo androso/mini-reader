@@ -1,13 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
     ActivityIndicator,
+    Keyboard,
     Modal,
+    Platform,
     Pressable,
     ScrollView,
     StyleSheet,
     Text,
     TextInput,
+    useWindowDimensions,
     View,
+    type StyleProp,
+    type ViewStyle,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useNetInfo } from "@react-native-community/netinfo";
@@ -19,6 +24,7 @@ import type {
     HighlightContext,
 } from "@reader/contracts";
 import { apiFetch, apiJson } from "@/lib/api";
+import { chatModelLabel } from "@/lib/chatModelLabel";
 import { createSseParserState, pushSseChunk } from "@/lib/sse";
 import { ActionButton } from "./ActionButton";
 import { color, radius, space, type } from "@/theme/tokens";
@@ -71,6 +77,7 @@ export const ReaderChat = ({
 }) => {
     const network = useNetInfo();
     const queryClient = useQueryClient();
+    const { height: windowHeight } = useWindowDimensions();
     const messageScroll = useRef<ScrollView>(null);
     const [expanded, setExpanded] = useState(isTablet);
     const [historyOpen, setHistoryOpen] = useState(false);
@@ -80,9 +87,29 @@ export const ReaderChat = ({
     const [streaming, setStreaming] = useState(false);
     const [error, setError] = useState("");
     const [modelPickerOpen, setModelPickerOpen] = useState(false);
+    const [androidKeyboardHeight, setAndroidKeyboardHeight] = useState(0);
 
     useEffect(() => {
         if (isTablet) setExpanded(true);
+    }, [isTablet]);
+
+    useEffect(() => {
+        // Edge-to-edge Android ignores adjustResize for layout, so lift only the
+        // chat overlay instead of resizing the WebView reader shell.
+        if (Platform.OS !== "android" || isTablet) {
+            setAndroidKeyboardHeight(0);
+            return;
+        }
+        const show = Keyboard.addListener("keyboardDidShow", (event) => {
+            setAndroidKeyboardHeight(event.endCoordinates.height);
+        });
+        const hide = Keyboard.addListener("keyboardDidHide", () => {
+            setAndroidKeyboardHeight(0);
+        });
+        return () => {
+            show.remove();
+            hide.remove();
+        };
     }, [isTablet]);
 
     const provider = useQuery({
@@ -222,11 +249,43 @@ export const ReaderChat = ({
         () => provider.data?.models ?? ["gpt-4o-mini"],
         [provider.data?.models]
     );
-    const panelStyle = isTablet
-        ? styles.tabletPanel
-        : expanded
-          ? styles.expandedPanel
-          : styles.composerPanel;
+    const panelStyle = useMemo<StyleProp<ViewStyle>>(() => {
+        if (isTablet) return styles.tabletPanel;
+
+        const bottom =
+            androidKeyboardHeight > 0
+                ? androidKeyboardHeight + space.xs
+                : space.md;
+        const keyboardOpen = androidKeyboardHeight > 0;
+
+        if (expanded) {
+            // Lift with the IME, but keep a compact sheet so the panel does not
+            // stretch edge-to-edge (and briefly overflow) while Gboard opens.
+            if (keyboardOpen) {
+                const available =
+                    windowHeight - androidKeyboardHeight - space.md;
+                return {
+                    position: "absolute",
+                    left: space.md,
+                    right: space.md,
+                    bottom,
+                    height: Math.min(
+                        windowHeight * 0.5,
+                        Math.max(available, 0)
+                    ),
+                    borderRadius: radius.panel,
+                    borderWidth: 1,
+                };
+            }
+            return styles.expandedPanel;
+        }
+
+        return [
+            styles.composerPanel,
+            { bottom },
+            keyboardOpen && styles.composerPanelRaised,
+        ];
+    }, [androidKeyboardHeight, expanded, isTablet, windowHeight]);
 
     return (
         <View pointerEvents="box-none" style={[styles.panel, panelStyle]}>
@@ -420,7 +479,7 @@ export const ReaderChat = ({
                     <View style={styles.composer}>
                         <Pressable
                             accessibilityRole="button"
-                            accessibilityLabel={`Model: ${selectedModel}`}
+                            accessibilityLabel={`Model: ${chatModelLabel(selectedModel)}`}
                             onPress={() => setModelPickerOpen(true)}
                             style={({ pressed }) => [
                                 styles.modelButton,
@@ -428,7 +487,7 @@ export const ReaderChat = ({
                             ]}
                         >
                             <Text numberOfLines={1} style={styles.modelLabel}>
-                                {selectedModel}
+                                {chatModelLabel(selectedModel)}
                             </Text>
                             <Feather
                                 name="chevron-down"
@@ -506,7 +565,7 @@ export const ReaderChat = ({
                         {models.map((model) => (
                             <ActionButton
                                 key={model}
-                                label={model}
+                                label={chatModelLabel(model)}
                                 icon={
                                     model === selectedModel ? "check" : "circle"
                                 }
@@ -543,6 +602,10 @@ const styles = StyleSheet.create({
         borderRadius: radius.panel,
         backgroundColor: color.transparent,
         borderWidth: 0,
+    },
+    composerPanelRaised: {
+        backgroundColor: color.darkPaper,
+        borderWidth: 1,
     },
     expandedPanel: {
         position: "absolute",

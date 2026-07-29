@@ -1,5 +1,5 @@
 import Pdf from "react-native-pdf";
-import { StyleSheet, View } from "react-native";
+import { Keyboard, StyleSheet, View } from "react-native";
 import { apiUrl, authorizedHeaders } from "@/lib/api";
 import { color } from "@/theme/tokens";
 
@@ -30,6 +30,7 @@ export const PdfBookView = ({
             enablePaging
             horizontal={false}
             onPageChanged={onPage}
+            onPageSingleTap={() => Keyboard.dismiss()}
             style={styles.pdf}
         />
     </View>
