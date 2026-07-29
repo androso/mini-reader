@@ -15,6 +15,10 @@ const expectedPaths = [
     "/api/auth/signup",
     "/api/auth/login",
     "/api/auth/logout",
+    "/api/auth/mobile/signup",
+    "/api/auth/mobile/login",
+    "/api/auth/mobile/refresh",
+    "/api/auth/mobile/logout",
     "/api/user",
     "/api/chat-provider",
     "/api/chat-provider/codex/authorize",
@@ -24,6 +28,10 @@ const expectedPaths = [
     "/api/books/{bookId}/retry",
     "/api/books/{bookId}/status",
     "/api/books/{bookId}",
+    "/api/books/{bookId}/reader-manifest",
+    "/api/books/{bookId}/reader-chapters/{chapterId}",
+    "/api/books/{bookId}/reader-resources/{resourceId}",
+    "/api/books/{bookId}/reader-package/retry",
     "/api/{bookId}/progress",
     "/api/{resourceType}/{bookId}/conversations",
     "/api/{resourceType}/{bookId}/conversations/{conversationId}/messages",
@@ -62,7 +70,10 @@ test("OpenAPI advertises the active environment cookie without global env mutati
         nodeEnv: "production",
     }) as OpenApiRecord;
 
-    assert.deepEqual(development.security, [{ readerSession: [] }]);
+    assert.deepEqual(development.security, [
+        { readerSession: [] },
+        { mobileBearer: [] },
+    ]);
     assert.equal(
         development.components.securitySchemes.readerSession.name,
         "reader_session"
@@ -91,9 +102,14 @@ test("OpenAPI advertises the active environment cookie without global env mutati
         assert.deepEqual(development.paths[pathName][method].security, []);
     }
 
-    const serialized = JSON.stringify(development).toLowerCase();
-    assert.equal(serialized.includes('"scheme":"bearer"'), false);
-    assert.equal(serialized.includes('"name":"authorization"'), false);
+    assert.equal(
+        development.components.securitySchemes.mobileBearer.scheme,
+        "bearer"
+    );
+    assert.match(
+        development.components.securitySchemes.mobileBearer.description,
+        /never falls back/
+    );
 });
 
 test("OpenAPI public schemas exclude private storage and execution fields", () => {

@@ -40,6 +40,13 @@ export const bookProcessingJobStatusEnum = pgEnum(
     "book_processing_job_status",
     ["queued", "processing", "retrying", "completed", "failed"]
 );
+export const readerPackageJobStatusEnum = pgEnum("reader_package_job_status", [
+    "queued",
+    "processing",
+    "retrying",
+    "completed",
+    "failed",
+]);
 
 export const Users = pgTable("users", {
     id: uuid("id").defaultRandom().primaryKey(),
@@ -76,6 +83,31 @@ export const CodexCredentials = pgTable("codex_credentials", {
         .notNull(),
 });
 
+export const MobileSessions = pgTable(
+    "mobile_sessions",
+    {
+        id: uuid("id").defaultRandom().primaryKey(),
+        userId: uuid("user_id")
+            .references(() => Users.id, { onDelete: "cascade" })
+            .notNull(),
+        tokenHash: text("token_hash").notNull(),
+        expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+        revokedAt: timestamp("revoked_at", { withTimezone: true }),
+        replacedById: uuid("replaced_by_id"),
+        lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+        createdAt: timestamp("created_at", { withTimezone: true })
+            .defaultNow()
+            .notNull(),
+        updatedAt: timestamp("updated_at", { withTimezone: true })
+            .defaultNow()
+            .notNull(),
+    },
+    (table) => [
+        index("mobile_sessions_user_id_idx").on(table.userId),
+        index("mobile_sessions_expires_at_idx").on(table.expiresAt),
+    ]
+);
+
 // here, we call books the .epub and .pdf files
 export const Books = pgTable("books", {
     id: uuid("id").defaultRandom().primaryKey(),
@@ -93,8 +125,118 @@ export const Books = pgTable("books", {
     collectionName: text("collection_name"),
     processingStatus: text("processing_status").default("processing").notNull(),
     processingError: text("processing_error"),
+    readerPackageStatus: text("reader_package_status")
+        .default("not_requested")
+        .notNull(),
+    readerPackageError: text("reader_package_error"),
+    readerPackageGeneratedAt: timestamp("reader_package_generated_at", {
+        withTimezone: true,
+    }),
+    readerPackageToc:
+        jsonb("reader_package_toc").$type<ReaderPackageTocEntry[]>(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+export type ReaderChapterBlock = {
+    id: string;
+    html: string;
+    text: string;
+};
+
+export type ReaderPackageTocEntry = {
+    title: string;
+    level: number;
+    chapterId: string | null;
+    blockId: string | null;
+};
+
+export const ReaderChapters = pgTable(
+    "reader_chapters",
+    {
+        bookId: uuid("book_id")
+            .references(() => Books.id, { onDelete: "cascade" })
+            .notNull(),
+        id: text("id").notNull(),
+        title: text("title"),
+        href: text("href").notNull(),
+        chapterOrder: integer("chapter_order").notNull(),
+        blocks: jsonb("blocks").$type<ReaderChapterBlock[]>().notNull(),
+        createdAt: timestamp("created_at", { withTimezone: true })
+            .defaultNow()
+            .notNull(),
+    },
+    (table) => [
+        primaryKey({
+            columns: [table.bookId, table.id],
+            name: "reader_chapters_book_id_id_pk",
+        }),
+        uniqueIndex("reader_chapters_book_order_idx").on(
+            table.bookId,
+            table.chapterOrder
+        ),
+    ]
+);
+
+export const ReaderResources = pgTable(
+    "reader_resources",
+    {
+        bookId: uuid("book_id")
+            .references(() => Books.id, { onDelete: "cascade" })
+            .notNull(),
+        id: text("id").notNull(),
+        storageKey: text("storage_key").notNull(),
+        mediaType: text("media_type").notNull(),
+        size: integer("size").notNull(),
+        isCover: boolean("is_cover").default(false).notNull(),
+        createdAt: timestamp("created_at", { withTimezone: true })
+            .defaultNow()
+            .notNull(),
+    },
+    (table) => [
+        primaryKey({
+            columns: [table.bookId, table.id],
+            name: "reader_resources_book_id_id_pk",
+        }),
+        uniqueIndex("reader_resources_storage_key_idx").on(table.storageKey),
+    ]
+);
+
+export const ReaderPackageJobs = pgTable(
+    "reader_package_jobs",
+    {
+        id: text("id").primaryKey(),
+        bookId: uuid("book_id")
+            .references(() => Books.id, { onDelete: "cascade" })
+            .notNull(),
+        userId: uuid("user_id")
+            .references(() => Users.id, { onDelete: "cascade" })
+            .notNull(),
+        status: readerPackageJobStatusEnum("status")
+            .default("queued")
+            .notNull(),
+        attempts: integer("attempts").default(0).notNull(),
+        maxAttempts: integer("max_attempts").default(3).notNull(),
+        lastError: text("last_error"),
+        availableAt: timestamp("available_at", { withTimezone: true })
+            .defaultNow()
+            .notNull(),
+        lockedAt: timestamp("locked_at", { withTimezone: true }),
+        completedAt: timestamp("completed_at", { withTimezone: true }),
+        createdAt: timestamp("created_at", { withTimezone: true })
+            .defaultNow()
+            .notNull(),
+        updatedAt: timestamp("updated_at", { withTimezone: true })
+            .defaultNow()
+            .notNull(),
+    },
+    (table) => [
+        uniqueIndex("reader_package_jobs_book_id_idx").on(table.bookId),
+        index("reader_package_jobs_due_idx").on(
+            table.status,
+            table.availableAt
+        ),
+    ]
+);
 
 export const BookSearchChunks = pgTable(
     "book_search_chunks",

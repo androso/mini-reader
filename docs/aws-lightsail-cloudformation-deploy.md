@@ -134,6 +134,10 @@ check and use the Secure, HttpOnly `__Host-reader_session` cookie through one
 same-origin Caddy entrypoint. Compose exposes port 3000 internally to Caddy;
 only Caddy publishes public ports 80/443.
 
+Set `EXPO_PUBLIC_API_URL` to this same public HTTPS origin when creating Expo
+internal builds. The mobile app uses short-lived Bearer access tokens and
+rotating refresh tokens against the same API and database.
+
 Codex connection uses a manual localhost callback paste in Reader settings and
 changes generated book-text answers only. Keep the Platform `OPENAI_API_KEY`
 configured because ingestion, semantic retrieval, grounding classification, and

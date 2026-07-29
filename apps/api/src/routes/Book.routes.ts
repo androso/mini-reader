@@ -35,6 +35,12 @@ import {
     deleteOwnedBook,
 } from "../services/BookDeletionService";
 import { uploadRateLimit } from "../middleware/rateLimit";
+import {
+    enqueueReaderPackage,
+    getOwnedReaderChapter,
+    getOwnedReaderManifest,
+    getOwnedReaderResource,
+} from "../services/ReaderPackageService";
 
 const log = createLogger("books");
 
@@ -202,6 +208,20 @@ router.post(
                 fileKey: book.fileKey,
                 fileType,
             });
+
+            if (fileType === "epub") {
+                try {
+                    await enqueueReaderPackage(book.id, req.user.id);
+                } catch (error) {
+                    log.error("Reader package enqueue failed", {
+                        bookId: book.id,
+                        error:
+                            error instanceof Error
+                                ? error.message
+                                : String(error),
+                    });
+                }
+            }
 
             const [queuedBook] = await db
                 .select(publicBookSelection)
@@ -412,6 +432,147 @@ router.get(
  *       404: { description: Book not found }
  *       500: { $ref: '#/components/responses/InternalError' }
  */
+
+/**
+ * @swagger
+ * /api/books/{bookId}/reader-manifest:
+ *   get:
+ *     tags: [Books]
+ *     summary: Get the sanitized reader package manifest for an owned EPUB
+ *     parameters:
+ *       - in: path
+ *         name: bookId
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       200:
+ *         description: Reader package is ready
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ReaderManifest' }
+ *       202: { description: Reader package generation is in progress }
+ *       404: { description: Owned book not found }
+ *       409: { description: Unsupported file or failed package generation }
+ */
+router.get(
+    "/:bookId/reader-manifest",
+    authenticate,
+    asyncHandler(async (req, res) => {
+        const result = await getOwnedReaderManifest(
+            req.params.bookId,
+            req.user.id
+        );
+        if (result.kind === "not_found") {
+            res.status(404).json({ error: "Book was not found" });
+            return;
+        }
+        if (result.kind === "unsupported") {
+            res.status(409).json({
+                error: "Reader packages are available only for EPUB books",
+            });
+            return;
+        }
+        if (result.kind === "processing") {
+            res.status(202).json({ status: "processing" });
+            return;
+        }
+        if (result.kind === "failed") {
+            res.status(409).json({
+                status: "failed",
+                error: result.error ?? "Reader package generation failed",
+                retryable: true,
+            });
+            return;
+        }
+        res.setHeader("Cache-Control", "private, no-store");
+        res.status(200).json(result.manifest);
+    })
+);
+
+/**
+ * @swagger
+ * /api/books/{bookId}/reader-chapters/{chapterId}:
+ *   get:
+ *     tags: [Books]
+ *     summary: Get one sanitized chapter from an owned reader package
+ *     responses:
+ *       200: { description: Sanitized chapter blocks }
+ *       404: { description: Owned chapter not found }
+ */
+router.get(
+    "/:bookId/reader-chapters/:chapterId",
+    authenticate,
+    asyncHandler(async (req, res) => {
+        const chapter = await getOwnedReaderChapter(
+            req.params.bookId,
+            req.params.chapterId,
+            req.user.id
+        );
+        if (!chapter) {
+            res.status(404).json({ error: "Reader chapter was not found" });
+            return;
+        }
+        res.setHeader("Cache-Control", "private, no-store");
+        res.status(200).json(chapter);
+    })
+);
+
+/**
+ * @swagger
+ * /api/books/{bookId}/reader-resources/{resourceId}:
+ *   get:
+ *     tags: [Books]
+ *     summary: Get one private derived resource from an owned reader package
+ *     responses:
+ *       200: { description: Derived image bytes }
+ *       404: { description: Owned resource not found }
+ */
+router.get(
+    "/:bookId/reader-resources/:resourceId",
+    authenticate,
+    asyncHandler(async (req, res) => {
+        const resource = await getOwnedReaderResource(
+            req.params.bookId,
+            req.params.resourceId,
+            req.user.id
+        );
+        if (!resource) {
+            res.status(404).json({ error: "Reader resource was not found" });
+            return;
+        }
+        res.setHeader("Content-Type", resource.mediaType);
+        res.setHeader("Cache-Control", "private, max-age=86400");
+        res.setHeader("X-Content-Type-Options", "nosniff");
+        res.status(200).send(resource.bytes);
+    })
+);
+
+/**
+ * @swagger
+ * /api/books/{bookId}/reader-package/retry:
+ *   post:
+ *     tags: [Books]
+ *     summary: Retry reader-package generation for an owned EPUB
+ *     responses:
+ *       202: { description: Retry queued }
+ *       404: { description: Owned EPUB not found }
+ */
+router.post(
+    "/:bookId/reader-package/retry",
+    authenticate,
+    asyncHandler(async (req, res) => {
+        const queued = await enqueueReaderPackage(
+            req.params.bookId,
+            req.user.id,
+            true
+        );
+        if (!queued) {
+            res.status(404).json({ error: "Owned EPUB was not found" });
+            return;
+        }
+        res.status(202).json({ status: "processing" });
+    })
+);
 
 router.get(
     "/:id",

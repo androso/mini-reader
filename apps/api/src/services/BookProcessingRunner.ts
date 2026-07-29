@@ -4,6 +4,7 @@ import {
     processUploadedBook,
     type ProcessUploadedBookPayload,
 } from "./BookProcessingService";
+import { processNextReaderPackageJob } from "./ReaderPackageService";
 
 const log = createLogger("BookProcessingRunner");
 
@@ -289,7 +290,10 @@ class BookProcessingRunner {
         try {
             await reclaimStaleProcessingJobs();
             const job = await claimNextJob();
-            if (!job) return;
+            if (!job) {
+                await processNextReaderPackageJob();
+                return;
+            }
 
             const isFinalAttempt = shouldMarkBookFailed(
                 job.attemptsMade,

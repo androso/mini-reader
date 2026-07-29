@@ -97,6 +97,10 @@ test("a backfilled legacy PDF is projected publicly as a PDF", () => {
         collectionName: null,
         processingStatus: "failed",
         processingError: null,
+        readerPackageStatus: "not_requested",
+        readerPackageError: null,
+        readerPackageGeneratedAt: null,
+        readerPackageToc: null,
         createdAt: new Date("2025-01-01T00:00:00.000Z"),
     };
 

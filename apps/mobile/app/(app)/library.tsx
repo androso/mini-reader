@@ -1,0 +1,405 @@
+import { useMemo, useRef, useState } from "react";
+import {
+    ActivityIndicator,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    useWindowDimensions,
+    View,
+} from "react-native";
+import { router } from "expo-router";
+import * as DocumentPicker from "expo-document-picker";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { PublicBook } from "@reader/contracts";
+import { ActionButton } from "@/components/ActionButton";
+import { BookCard } from "@/components/BookCard";
+import { apiFetch, apiJson } from "@/lib/api";
+import { downloadBook, removeDownload } from "@/lib/downloads";
+import { listDownloads } from "@/lib/database";
+import { booksQueryKey, useBooks } from "@/hooks/useBooks";
+import { color, radius, space, type } from "@/theme/tokens";
+
+type Filter = "all" | "epub" | "pdf";
+
+export default function Library() {
+    const { width } = useWindowDimensions();
+    const queryClient = useQueryClient();
+    const books = useBooks();
+    const downloads = useQuery({
+        queryKey: ["downloads"],
+        queryFn: listDownloads,
+    });
+    const [filter, setFilter] = useState<Filter>("all");
+    const [notice, setNotice] = useState("");
+    const [pendingDeletes, setPendingDeletes] = useState<Set<string>>(
+        new Set()
+    );
+    const deleteTimers = useRef(
+        new Map<string, ReturnType<typeof setTimeout>>()
+    );
+
+    const upload = useMutation({
+        mutationFn: async () => {
+            const result = await DocumentPicker.getDocumentAsync({
+                type: ["application/epub+zip", "application/pdf"],
+                copyToCacheDirectory: true,
+                multiple: false,
+            });
+            if (result.canceled) return;
+            const asset = result.assets[0];
+            const form = new FormData();
+            form.append("file", {
+                uri: asset.uri,
+                name: asset.name,
+                type:
+                    asset.mimeType ??
+                    (asset.name.toLowerCase().endsWith(".pdf")
+                        ? "application/pdf"
+                        : "application/epub+zip"),
+            } as unknown as Blob);
+            await apiJson("/api/books", { method: "POST", body: form });
+        },
+        onSuccess: () => {
+            setNotice("Book accepted. Mentarie is preparing it.");
+            void queryClient.invalidateQueries({ queryKey: booksQueryKey });
+        },
+        onError: (error) =>
+            setNotice(
+                error instanceof Error
+                    ? error.message
+                    : "The upload couldn’t be completed."
+            ),
+    });
+
+    const retry = async (book: PublicBook) => {
+        await apiJson(`/api/books/${book.id}/retry`, { method: "POST" });
+        await queryClient.invalidateQueries({ queryKey: booksQueryKey });
+    };
+
+    const startDownload = async (book: PublicBook) => {
+        setNotice(`Downloading “${book.title}”…`);
+        await downloadBook(book);
+        setNotice(`“${book.title}” is available offline.`);
+        await queryClient.invalidateQueries({ queryKey: ["downloads"] });
+    };
+
+    const scheduleDelete = (book: PublicBook) => {
+        setPendingDeletes((current) => new Set(current).add(book.id));
+        setNotice(`“${book.title}” will be deleted in 6 seconds.`);
+        const timer = setTimeout(() => {
+            void apiFetch(`/api/books/${book.id}`, { method: "DELETE" })
+                .then(async (response) => {
+                    if (!response.ok)
+                        throw new Error("The book could not be deleted.");
+                    await removeDownload(book.id);
+                    await Promise.all([
+                        queryClient.invalidateQueries({
+                            queryKey: booksQueryKey,
+                        }),
+                        queryClient.invalidateQueries({
+                            queryKey: ["downloads"],
+                        }),
+                    ]);
+                    setNotice(`“${book.title}” was deleted.`);
+                })
+                .catch((error: Error) => setNotice(error.message))
+                .finally(() => {
+                    setPendingDeletes((current) => {
+                        const next = new Set(current);
+                        next.delete(book.id);
+                        return next;
+                    });
+                    deleteTimers.current.delete(book.id);
+                });
+        }, 6000);
+        deleteTimers.current.set(book.id, timer);
+    };
+
+    const undoDelete = () => {
+        for (const timer of deleteTimers.current.values()) clearTimeout(timer);
+        deleteTimers.current.clear();
+        setPendingDeletes(new Set());
+        setNotice("Deletion cancelled.");
+    };
+
+    const visibleBooks = useMemo(
+        () =>
+            (books.data ?? []).filter(
+                (book) => filter === "all" || book.fileType === filter
+            ),
+        [books.data, filter]
+    );
+    const recent = visibleBooks[0];
+    const rest = recent ? visibleBooks.slice(1) : visibleBooks;
+    const cardWidth: `${number}%` =
+        width >= 1000
+            ? "31.8%"
+            : width >= 680
+              ? "48.5%"
+              : width >= 360
+                ? "47.8%"
+                : "100%";
+    const downloadFor = (bookId: string) =>
+        downloads.data?.find((record) => record.book_id === bookId);
+    const cardProps = (book: PublicBook) => ({
+        book,
+        download: downloadFor(book.id),
+        pendingDelete: pendingDeletes.has(book.id),
+        onOpen: () =>
+            router.push({
+                pathname: "/(app)/reader/[bookId]",
+                params: { bookId: book.id },
+            }),
+        onRetry: () => void retry(book),
+        onDownload: () =>
+            void startDownload(book).catch((error: Error) =>
+                setNotice(error.message)
+            ),
+        onRemoveDownload: () =>
+            void removeDownload(book.id).then(() =>
+                queryClient.invalidateQueries({
+                    queryKey: ["downloads"],
+                })
+            ),
+        onDelete: () => scheduleDelete(book),
+    });
+
+    return (
+        <View style={styles.root}>
+            <ScrollView
+                contentContainerStyle={styles.content}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={books.isRefetching}
+                        onRefresh={() => void books.refetch()}
+                        tintColor={color.accent}
+                    />
+                }
+            >
+                <View style={styles.header}>
+                    <View>
+                        <Text style={styles.wordmark}>Mentarie</Text>
+                        <Text style={styles.heading}>Your library</Text>
+                    </View>
+                    <View style={styles.headerActions}>
+                        <ActionButton
+                            label="Settings"
+                            icon="settings"
+                            tone="secondary"
+                            compact
+                            onPress={() => router.push("/(app)/settings")}
+                        />
+                        <ActionButton
+                            label="Upload book"
+                            icon="plus"
+                            compact
+                            loading={upload.isPending}
+                            onPress={() => upload.mutate()}
+                        />
+                    </View>
+                </View>
+                <View accessibilityRole="tablist" style={styles.filters}>
+                    {(["all", "epub", "pdf"] as const).map((value) => (
+                        <ActionButton
+                            key={value}
+                            label={
+                                value === "all" ? "All" : value.toUpperCase()
+                            }
+                            tone={filter === value ? "primary" : "secondary"}
+                            compact
+                            onPress={() => setFilter(value)}
+                        />
+                    ))}
+                </View>
+                <Text accessibilityLiveRegion="polite" style={styles.notice}>
+                    {notice || " "}
+                </Text>
+                {books.isLoading ? (
+                    <View style={styles.loading}>
+                        <ActivityIndicator color={color.accent} />
+                        <Text style={styles.loadingText}>
+                            Loading your library…
+                        </Text>
+                    </View>
+                ) : visibleBooks.length === 0 ? (
+                    <View style={styles.empty}>
+                        <Text style={styles.emptyMark}>M</Text>
+                        <Text style={styles.emptyTitle}>
+                            No books here yet.
+                        </Text>
+                        <Text style={styles.emptyCopy}>
+                            Upload an EPUB or PDF to read, save it offline, and
+                            ask questions grounded in its text.
+                        </Text>
+                        <ActionButton
+                            label="Upload book"
+                            icon="upload"
+                            onPress={() => upload.mutate()}
+                        />
+                    </View>
+                ) : (
+                    <>
+                        {recent && (
+                            <View style={styles.recent}>
+                                <Text style={styles.sectionLabel}>
+                                    RECENT READING
+                                </Text>
+                                <BookCard {...cardProps(recent)} emphasized />
+                            </View>
+                        )}
+                        {rest.length > 0 && (
+                            <View style={styles.catalogue}>
+                                {rest.map((book) => (
+                                    <BookCard
+                                        key={book.id}
+                                        {...cardProps(book)}
+                                        style={{ width: cardWidth }}
+                                    />
+                                ))}
+                            </View>
+                        )}
+                    </>
+                )}
+            </ScrollView>
+            {pendingDeletes.size > 0 && (
+                <View style={styles.undo}>
+                    <Text style={styles.undoText}>
+                        Book queued for deletion.
+                    </Text>
+                    <ActionButton
+                        label="Undo"
+                        icon="rotate-ccw"
+                        tone="secondary"
+                        compact
+                        onPress={undoDelete}
+                    />
+                </View>
+            )}
+        </View>
+    );
+}
+
+const styles = StyleSheet.create({
+    root: { flex: 1, backgroundColor: color.darkPaper },
+    content: {
+        paddingHorizontal: space.md,
+        paddingTop: space.xl,
+        paddingBottom: 120,
+        gap: space.lg,
+        maxWidth: 1180,
+        width: "100%",
+        alignSelf: "center",
+    },
+    header: {
+        gap: space.md,
+        flexDirection: "row",
+        alignItems: "flex-end",
+        justifyContent: "space-between",
+        flexWrap: "wrap",
+    },
+    wordmark: {
+        color: color.accentSoft,
+        fontFamily: type.semibold,
+        fontSize: 15,
+    },
+    heading: {
+        color: color.darkInk,
+        fontFamily: type.bold,
+        fontSize: 34,
+        letterSpacing: -0.8,
+    },
+    headerActions: {
+        flexDirection: "row",
+        flexWrap: "wrap",
+        gap: space.xs,
+    },
+    filters: {
+        flexDirection: "row",
+        gap: space.xs,
+        flexWrap: "wrap",
+    },
+    notice: {
+        minHeight: 20,
+        color: color.darkInk2,
+        fontFamily: type.body,
+        fontSize: 13,
+    },
+    loading: {
+        minHeight: 280,
+        alignItems: "center",
+        justifyContent: "center",
+        gap: space.sm,
+    },
+    loadingText: {
+        color: color.darkInk2,
+        fontFamily: type.body,
+        fontSize: 15,
+    },
+    empty: {
+        alignItems: "flex-start",
+        gap: space.md,
+        padding: space.xl,
+        borderWidth: 1,
+        borderColor: color.darkRaised,
+        borderRadius: radius.lg,
+        backgroundColor: color.darkRaised,
+    },
+    emptyMark: {
+        width: 48,
+        height: 48,
+        borderRadius: radius.pill,
+        backgroundColor: color.accent,
+        color: color.darkInk,
+        textAlign: "center",
+        textAlignVertical: "center",
+        fontFamily: type.bold,
+        fontSize: 20,
+    },
+    emptyTitle: {
+        color: color.darkInk,
+        fontFamily: type.bold,
+        fontSize: 24,
+    },
+    emptyCopy: {
+        color: color.darkInk2,
+        fontFamily: type.body,
+        fontSize: 16,
+        lineHeight: 24,
+        maxWidth: 580,
+    },
+    recent: { gap: space.sm },
+    sectionLabel: {
+        color: color.darkInk2,
+        fontFamily: type.mono,
+        fontSize: 11,
+        letterSpacing: 1.1,
+    },
+    catalogue: {
+        flexDirection: "row",
+        flexWrap: "wrap",
+        alignItems: "flex-start",
+        gap: space.md,
+    },
+    undo: {
+        position: "absolute",
+        left: space.md,
+        right: space.md,
+        bottom: space.lg,
+        minHeight: 64,
+        padding: space.sm,
+        paddingLeft: space.md,
+        borderRadius: radius.lg,
+        backgroundColor: color.paper2,
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: space.sm,
+    },
+    undoText: {
+        flex: 1,
+        color: color.ink,
+        fontFamily: type.medium,
+        fontSize: 14,
+    },
+});

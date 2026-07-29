@@ -1,0 +1,53 @@
+{
+  "expo": {
+    "name": "Mentarie",
+    "slug": "mentarie",
+    "version": "1.0.0",
+    "orientation": "default",
+    "scheme": "mentarie",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.androso.mentarie",
+      "infoPlist": {
+        "UIFileSharingEnabled": false,
+        "LSSupportsOpeningDocumentsInPlace": false
+      }
+    },
+    "android": {
+      "package": "com.androso.mentarie",
+      "adaptiveIcon": {
+        "backgroundColor": "#101820"
+      }
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-secure-store",
+        {
+          "configureAndroidBackup": false,
+          "faceIDPermission": "Allow Mentarie to unlock your private reading session."
+        }
+      ],
+      [
+        "expo-document-picker",
+        {
+          "iCloudContainerEnvironment": "Production"
+        }
+      ],
+      "expo-sqlite"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "53327732-24bb-423c-8369-8a1430d2e9b2"
+      }
+    }
+  }
+}

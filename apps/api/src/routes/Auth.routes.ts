@@ -13,6 +13,11 @@ import { Users } from "../db/schema";
 import { eq } from "drizzle-orm";
 import { clearAuthCookies, setAuthCookie } from "../utils/authCookie";
 import { asyncHandler } from "../middleware/asyncHandler";
+import {
+    createMobileSession,
+    revokeMobileSession,
+    rotateMobileSession,
+} from "../services/MobileSessionService";
 const router: Router = express.Router();
 
 export interface PublicUser {
@@ -39,6 +44,11 @@ export const toPublicUser = (user: unknown): PublicUser => {
 };
 
 export const authResponse = (user: unknown) => ({ user: toPublicUser(user) });
+
+const mobileAuthResponse = async (user: unknown) => ({
+    ...(await createMobileSession((user as { id: string }).id)),
+    user: toPublicUser(user),
+});
 
 /**
  * @swagger
@@ -328,6 +338,114 @@ export const createLoginHandler = (
     });
 
 router.post("/login", createLoginHandler());
+
+/**
+ * @swagger
+ * /api/auth/mobile/signup:
+ *   post:
+ *     tags: [Auth]
+ *     security: []
+ *     summary: Create an email/password account for the native app
+ *     responses:
+ *       201:
+ *         description: Mobile session created
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/MobileSession' }
+ *       400: { description: Invalid signup details }
+ *       409: { description: Email already exists }
+ */
+router.post(
+    "/mobile/signup",
+    asyncHandler(async (req, res) => {
+        const result = await registerEmailUser(req.body, emailAuthRepository);
+        if (!result.ok) {
+            res.status(result.status).json({ message: result.message });
+            return;
+        }
+        res.status(201).json(await mobileAuthResponse(result.user));
+    })
+);
+
+/**
+ * @swagger
+ * /api/auth/mobile/login:
+ *   post:
+ *     tags: [Auth]
+ *     security: []
+ *     summary: Start a native email/password session
+ *     responses:
+ *       200:
+ *         description: Mobile session created
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/MobileSession' }
+ *       401: { description: Invalid email or password }
+ */
+router.post(
+    "/mobile/login",
+    asyncHandler(async (req, res) => {
+        const result = await authenticateEmailUser(
+            req.body,
+            emailAuthRepository
+        );
+        if (!result.ok) {
+            res.status(result.status).json({ message: result.message });
+            return;
+        }
+        res.status(200).json(await mobileAuthResponse(result.user));
+    })
+);
+
+/**
+ * @swagger
+ * /api/auth/mobile/refresh:
+ *   post:
+ *     tags: [Auth]
+ *     security: []
+ *     summary: Rotate a single-use mobile refresh token
+ *     responses:
+ *       200:
+ *         description: Replacement mobile session
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/MobileSession' }
+ *       401: { description: Refresh token invalid, expired, or already used }
+ */
+router.post(
+    "/mobile/refresh",
+    asyncHandler(async (req, res) => {
+        const session = await rotateMobileSession(req.body?.refreshToken);
+        if (!session) {
+            res.status(401).json({
+                message: "Refresh token is invalid, expired, or already used",
+            });
+            return;
+        }
+        res.status(200).json({
+            ...session,
+            user: toPublicUser(session.user),
+        });
+    })
+);
+
+/**
+ * @swagger
+ * /api/auth/mobile/logout:
+ *   post:
+ *     tags: [Auth]
+ *     security: []
+ *     summary: Revoke a mobile refresh token
+ *     responses:
+ *       204: { description: Session revoked or already absent }
+ */
+router.post(
+    "/mobile/logout",
+    asyncHandler(async (req, res) => {
+        await revokeMobileSession(req.body?.refreshToken);
+        res.status(204).end();
+    })
+);
 
 /**
  * @swagger

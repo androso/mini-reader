@@ -33,6 +33,8 @@ declare global {
     namespace Express {
         interface Request {
             user: User;
+            authMethod?: "cookie" | "bearer";
+            mobileSessionId?: string;
         }
     }
 }

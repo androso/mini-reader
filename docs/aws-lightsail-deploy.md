@@ -119,6 +119,10 @@ Caddy, which is required by the API's unsafe-request Origin check and secure
 `__Host-reader_session` cookie. Compose exposes port 3000 internally to Caddy;
 only Caddy publishes public ports 80/443.
 
+Use the same public HTTPS origin as `EXPO_PUBLIC_API_URL` when producing iOS or
+Android internal builds. Mobile Bearer requests do not use the browser CSRF
+cookie path, but the API must remain publicly reachable over TLS.
+
 Codex auth is opt-in and experimental. Set `CODEX_OAUTH_ENABLED=true` and
 generate `CODEX_CREDENTIAL_ENCRYPTION_KEY` with `openssl rand -base64 32`; key
 rotation without re-encrypting rows disconnects existing accounts. Connection

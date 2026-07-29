@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from "express";
 import type { CorsOptions } from "cors";
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+const MOBILE_TOKEN_PATH_PREFIX = "/api/auth/mobile/";
 
 export const configuredFrontendOrigin = (): string | undefined => {
     const frontendUrl = process.env.FRONTEND_URL;
@@ -21,7 +22,7 @@ export const frontendCorsOptions = (): CorsOptions => {
             callback(null, !origin || origin === frontendOrigin);
         },
         methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-        allowedHeaders: ["Content-Type"],
+        allowedHeaders: ["Content-Type", "Authorization"],
         credentials: true,
     };
 };
@@ -32,6 +33,18 @@ export const enforceTrustedOrigin = (
     next: NextFunction
 ) => {
     if (SAFE_METHODS.has(req.method.toUpperCase())) {
+        next();
+        return;
+    }
+
+    // These endpoints create, rotate, or revoke explicit non-cookie credentials.
+    // They have no ambient browser authority, so browser-origin CSRF does not apply.
+    if (req.path.startsWith(MOBILE_TOKEN_PATH_PREFIX)) {
+        next();
+        return;
+    }
+
+    if (/^Bearer [^\s]+$/.test(req.get("authorization") ?? "")) {
         next();
         return;
     }

@@ -1,0 +1,10 @@
+{
+    "extends": "../../tsconfig.base.json",
+    "compilerOptions": {
+        "rootDir": ".",
+        "outDir": "../../.tmp/apps-mobile-test",
+        "typeRoots": ["../api/node_modules/@types"],
+        "types": ["node"]
+    },
+    "include": ["src/lib/sse.ts", "src/lib/downloadState.ts", "test/**/*.ts"]
+}

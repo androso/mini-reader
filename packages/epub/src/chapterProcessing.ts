@@ -86,6 +86,7 @@ const ALLOWED_HTML_ATTRIBUTES = [
     "data-epub-src",
     "data-epub-mime",
     "data-epub-svg",
+    "data-reader-resource-id",
 ].sort();
 
 const EPUB_IMAGE_MARKER_ATTRS = [

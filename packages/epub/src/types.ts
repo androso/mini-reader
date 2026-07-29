@@ -42,3 +42,37 @@ export interface ParsedEpubHref {
     path: string;
     fragment: string | null;
 }
+
+export interface ReaderPackageBlock {
+    id: string;
+    html: string;
+    text: string;
+}
+
+export interface ReaderPackageChapter {
+    id: string;
+    title: string | null;
+    href: string;
+    order: number;
+    blocks: ReaderPackageBlock[];
+}
+
+export interface ReaderPackageResource {
+    id: string;
+    mediaType: string;
+    bytes: Uint8Array;
+    isCover: boolean;
+}
+
+export interface ReaderPackage {
+    metadata: EpubMetadata;
+    chapters: ReaderPackageChapter[];
+    toc: Array<{
+        title: string;
+        level: number;
+        chapterId: string | null;
+        blockId: string | null;
+    }>;
+    resources: ReaderPackageResource[];
+    coverResourceId: string | null;
+}

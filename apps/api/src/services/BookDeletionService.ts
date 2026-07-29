@@ -2,7 +2,12 @@ import { createBookCollectionName } from "@reader/processing";
 import { deleteFile, vectorStore } from "@reader/providers";
 import { and, eq, ne, sql } from "drizzle-orm";
 import { db } from "../db";
-import { BookProcessingJobs, Books } from "../db/schema";
+import {
+    BookProcessingJobs,
+    Books,
+    ReaderPackageJobs,
+    ReaderResources,
+} from "../db/schema";
 import { bookSearchChunkStore } from "./BookSearchChunkStore";
 import { hybridBookSearchService } from "./HybridBookSearchService";
 
@@ -18,6 +23,8 @@ export interface BookDeletionRepository {
     findBook(bookId: string): Promise<DeletableBook | null>;
     markDeleting(bookId: string, userId: string): Promise<DeletableBook | null>;
     deleteProcessingJob(bookId: string): Promise<void>;
+    listReaderResourceKeys?(bookId: string): Promise<string[]>;
+    deleteReaderPackageJob?(bookId: string): Promise<void>;
     countOtherFileReferences(bookId: string, fileKey: string): Promise<number>;
     countOtherCollectionReferences(
         bookId: string,
@@ -83,6 +90,20 @@ export const bookDeletionRepository: BookDeletionRepository = {
         await db
             .delete(BookProcessingJobs)
             .where(eq(BookProcessingJobs.bookId, bookId));
+    },
+
+    async listReaderResourceKeys(bookId) {
+        const resources = await db
+            .select({ storageKey: ReaderResources.storageKey })
+            .from(ReaderResources)
+            .where(eq(ReaderResources.bookId, bookId));
+        return resources.map((resource) => resource.storageKey);
+    },
+
+    async deleteReaderPackageJob(bookId) {
+        await db
+            .delete(ReaderPackageJobs)
+            .where(eq(ReaderPackageJobs.bookId, bookId));
     },
 
     async countOtherFileReferences(bookId, fileKey) {
@@ -214,7 +235,16 @@ export const deleteOwnedBook = async (
     const book = await dependencies.repository.markDeleting(bookId, userId);
     if (!book) throw new BookDeletionNotFoundError();
 
+    const readerResourceKeys =
+        (await dependencies.repository.listReaderResourceKeys?.(book.id)) ?? [];
     await dependencies.repository.deleteProcessingJob(book.id);
+    await dependencies.repository.deleteReaderPackageJob?.(book.id);
+    for (const resourceKey of readerResourceKeys) {
+        await ignoreMissingArtifact(
+            () => dependencies.artifacts.deleteFile(resourceKey),
+            isMissingFileError
+        );
+    }
 
     const fileReferences =
         await dependencies.repository.countOtherFileReferences(

@@ -37,7 +37,7 @@ const createDefinition = (
                 "API for the compact Reader fork. Browser sessions use an HttpOnly cookie; book storage identifiers and chat execution metadata are private.",
         },
         servers: [{ url: "/", description: "Current Reader origin" }],
-        security: [{ readerSession: [] }],
+        security: [{ readerSession: [] }, { mobileBearer: [] }],
         components: {
             securitySchemes: {
                 readerSession: {
@@ -45,6 +45,13 @@ const createDefinition = (
                     in: "cookie",
                     name: cookieName,
                     description: `${nodeEnv === "production" ? "Production" : "Development"} HttpOnly session cookie. The alternate environment uses ${alternateCookieName}.`,
+                },
+                mobileBearer: {
+                    type: "http",
+                    scheme: "bearer",
+                    bearerFormat: "JWT",
+                    description:
+                        "Short-lived mobile access token. Authorization takes precedence over browser cookies and never falls back to them.",
                 },
             },
             schemas: {
@@ -59,6 +66,69 @@ const createDefinition = (
                         username: { type: "string", nullable: true },
                         createdAt: { type: "string", format: "date-time" },
                         updatedAt: { type: "string", format: "date-time" },
+                    },
+                },
+                MobileSession: {
+                    type: "object",
+                    required: [
+                        "accessToken",
+                        "refreshToken",
+                        "accessTokenExpiresIn",
+                        "refreshTokenExpiresAt",
+                        "user",
+                    ],
+                    properties: {
+                        accessToken: { type: "string" },
+                        refreshToken: { type: "string" },
+                        accessTokenExpiresIn: {
+                            type: "integer",
+                            example: 900,
+                        },
+                        refreshTokenExpiresAt: {
+                            type: "string",
+                            format: "date-time",
+                        },
+                        user: { $ref: "#/components/schemas/User" },
+                    },
+                },
+                ReaderManifest: {
+                    type: "object",
+                    required: [
+                        "bookId",
+                        "title",
+                        "status",
+                        "chapters",
+                        "toc",
+                        "resources",
+                        "generatedAt",
+                    ],
+                    properties: {
+                        bookId: { type: "string", format: "uuid" },
+                        title: { type: "string" },
+                        creator: { type: "string", nullable: true },
+                        status: { type: "string", enum: ["ready"] },
+                        chapters: { type: "array", items: { type: "object" } },
+                        toc: { type: "array", items: { type: "object" } },
+                        resources: {
+                            type: "array",
+                            items: {
+                                type: "object",
+                                required: ["id", "mediaType", "size"],
+                                properties: {
+                                    id: { type: "string" },
+                                    mediaType: { type: "string" },
+                                    size: { type: "integer" },
+                                },
+                            },
+                        },
+                        coverResourceId: {
+                            type: "string",
+                            nullable: true,
+                        },
+                        generatedAt: {
+                            type: "string",
+                            format: "date-time",
+                        },
                     },
                 },
                 PublicBook: {

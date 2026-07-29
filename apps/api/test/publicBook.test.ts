@@ -17,6 +17,10 @@ const privateBook: SelectBook = {
     collectionName: "private_collection",
     processingStatus: "processing",
     processingError: null,
+    readerPackageStatus: "not_requested",
+    readerPackageError: null,
+    readerPackageGeneratedAt: null,
+    readerPackageToc: null,
     createdAt: new Date("2026-01-01T00:00:00.000Z"),
 };
 

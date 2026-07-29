@@ -4,10 +4,10 @@
 [![CodeQL](https://github.com/androso/reader-monorepo/actions/workflows/codeql.yml/badge.svg)](https://github.com/androso/reader-monorepo/actions/workflows/codeql.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-Reader Platform is a self-hosted web application for reading EPUB and PDF
-books, tracking reading progress, and chatting against private book context.
-It combines a Next.js frontend, an Express API, and PostgreSQL with pgvector in
-one pnpm workspace.
+Reader Platform is a self-hosted web and native application for reading EPUB
+and PDF books, tracking reading progress, and chatting against private book
+context. It combines Next.js, Expo/React Native, an Express API, and PostgreSQL
+with pgvector in one pnpm workspace.
 
 The default deployment intentionally stays small: the API processes books in
 process through a PostgreSQL-backed queue, and PostgreSQL is the only required
@@ -18,6 +18,8 @@ reranking, and shadow infrastructure are outside the project's runtime scope.
 
 - `apps/api`: Express API for auth, books, chat, progress, storage, and current ingestion flow.
 - `apps/web`: Next.js frontend for the library, reader, auth, and chat UI.
+- `apps/mobile`: Expo Router app for iOS, Android, tablets, and explicit offline downloads.
+- `packages/contracts`: shared public API contracts used by the API and native client.
 - `packages/epub`: shared EPUB parsing utilities.
 - `packages/processing`: shared PDF/EPUB ingestion pipeline.
 - `packages/providers`: shared storage, vector store, and provider integrations.
@@ -94,6 +96,8 @@ and the [Code of Conduct](CODE_OF_CONDUCT.md).
 - `pnpm api:dev`: run only the API app on port `3000`.
 - `pnpm web:dev`: run the Next.js web app on port `3001`.
 - `pnpm web:build`: build the Next.js web app.
+- `pnpm mobile:dev`: start Metro for the Expo custom development client.
+- `pnpm mobile:typecheck`: validate the native TypeScript application.
 - `pnpm format:check`: verify repository formatting.
 - `pnpm db:generate`: generate Drizzle migrations from the API schema.
 - `pnpm db:migrate`: apply Drizzle migrations using `.env`.
@@ -109,6 +113,11 @@ Use `pnpm dev` for the normal full-stack loop. It starts:
 
 The API listens on `PORT` from `.env`, defaulting to `3000`. The web app calls
 the API through `NEXT_PUBLIC_API_URL` from `apps/web/.env`.
+
+The native app calls the same API through `EXPO_PUBLIC_API_URL`. Copy
+`apps/mobile/.env.template` to `apps/mobile/.env`, use a device-reachable origin,
+and use HTTPS for internal or production builds. Native modules require an Expo
+development build rather than Expo Go; see `apps/mobile/README.md`.
 
 Book uploads are processed asynchronously. The API stores the uploaded file,
 inserts a `processing` book row, enqueues a Postgres-backed job, and returns
@@ -137,6 +146,14 @@ Production uses `__Host-reader_session` with `Secure`, `SameSite=Lax`, and
 `Path=/`, while local development uses the non-secure `reader_session` name.
 Browser API calls include credentials, and `POST /api/auth/logout` clears both
 cookie names and returns `204`.
+
+The native app uses email/password endpoints under `/api/auth/mobile/*`.
+Access tokens last 15 minutes and are sent as Bearer authorization; opaque
+30-day refresh tokens are stored in platform secure storage, hashed in
+PostgreSQL, and rotated on every refresh. Reuse of an invalidated refresh token
+revokes the user's active mobile sessions. An Authorization header always takes
+precedence over cookies, so an invalid bearer token cannot fall back to a valid
+browser session. Browser cookie and exact-origin CSRF behavior is unchanged.
 
 `FRONTEND_URL` must be the exact browser origin, including its scheme and port
 when one is present. The API rejects every unsafe request whose `Origin` does
@@ -189,6 +206,14 @@ reader unmounts. Library EPUB covers load once they approach within 200px of
 the viewport, fetch the protected UUID endpoint with credentials, and clean up
 their observer, request, and blob URL.
 
+The API also generates a sanitized EPUB reader package through the existing
+Postgres-backed in-process runner. Manifests, chapters, ToC entries, and derived
+images stay owner-scoped; package work is retryable, stale locks are reclaimed,
+and derived resources are removed with the book. Native EPUB downloads save
+that package explicitly, while PDF downloads save the owned original. Partial
+downloads never become available offline, progress uses a monotonic revision,
+and chat remains online-only.
+
 Book chat authorizes the resource before conversation writes, SSE headers,
 retrieval, or model calls. PostgreSQL is the source of history: the API accepts
 one trimmed message up to 8,000 characters, ignores client-supplied roles or
@@ -222,9 +247,9 @@ later retry without blocking application startup; database-level failures still
 make the command exit non-zero.
 
 Interactive API documentation is available at `/api-docs`, with the generated
-OpenAPI JSON at `/api-docs.json`. It describes cookie authentication and public
-schemas only; storage keys and private chat execution metadata are not part of
-the API contract.
+OpenAPI JSON at `/api-docs.json`. It describes cookie and mobile bearer
+authentication plus public schemas; storage keys and private chat execution
+metadata are not part of the API contract.
 
 ## AWS infrastructure
 

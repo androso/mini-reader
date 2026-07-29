@@ -2,23 +2,10 @@ import { JSDOM } from "jsdom";
 import type JSZip from "jszip";
 import { buildTextBlocksFromDocument } from "./chapterProcessing";
 import { processEpubFile } from "./processing";
+import { installDomParser } from "./serverDom";
 import type { EpubContent } from "./types";
-
-export const installDomParser = () => {
-    if (typeof globalThis.DOMParser !== "undefined") return;
-
-    class ServerDOMParser {
-        parseFromString(source: string, mimeType: DOMParserSupportedType) {
-            const contentType =
-                mimeType === "text/html" ? "text/html" : "application/xml";
-            return new JSDOM(source, { contentType }).window.document;
-        }
-    }
-
-    (
-        globalThis as typeof globalThis & { DOMParser: typeof DOMParser }
-    ).DOMParser = ServerDOMParser as unknown as typeof DOMParser;
-};
+export { buildReaderPackage } from "./readerPackage";
+export { installDomParser } from "./serverDom";
 
 const toArrayBuffer = (buffer: Buffer): ArrayBuffer =>
     buffer.buffer.slice(

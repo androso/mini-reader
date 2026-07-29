@@ -170,6 +170,30 @@ test("safe methods bypass CSRF and trusted preflight supports credentials", asyn
     );
 });
 
+test("mobile token endpoints do not require a browser Origin", async () => {
+    process.env.FRONTEND_URL = trustedOrigin;
+    await withServer(
+        (app) => {
+            app.use(enforceTrustedOrigin);
+            app.post("/api/auth/mobile/login", (_req, res) =>
+                res.status(204).end()
+            );
+            app.post("/api/books", (_req, res) => res.status(204).end());
+        },
+        async (baseUrl) => {
+            const mobile = await fetch(`${baseUrl}/api/auth/mobile/login`, {
+                method: "POST",
+            });
+            assert.equal(mobile.status, 204);
+
+            const ownedMutation = await fetch(`${baseUrl}/api/books`, {
+                method: "POST",
+            });
+            assert.equal(ownedMutation.status, 403);
+        }
+    );
+});
+
 test("ordinary async rejections reach the generic terminal 500", async () => {
     await withServer(
         (app) => {

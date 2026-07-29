@@ -1,0 +1,1 @@
+ALTER TABLE "books" ADD COLUMN "reader_package_toc" jsonb;

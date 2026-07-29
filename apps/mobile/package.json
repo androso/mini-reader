@@ -1,0 +1,49 @@
+{
+    "name": "@reader/mobile",
+    "version": "1.0.0",
+    "private": true,
+    "main": "expo-router/entry",
+    "scripts": {
+        "start": "expo start --dev-client",
+        "android": "bash ./scripts/run-android.sh",
+        "ios": "expo run:ios",
+        "typecheck": "tsc --noEmit",
+        "test": "tsc -p tsconfig.test.json && node --test ../../.tmp/apps-mobile-test/test/*.js",
+        "export:android": "expo export --platform android",
+        "export:ios": "expo export --platform ios",
+        "doctor": "expo-doctor"
+    },
+    "dependencies": {
+        "@expo-google-fonts/jetbrains-mono": "*",
+        "@expo-google-fonts/literata": "*",
+        "@expo-google-fonts/plus-jakarta-sans": "*",
+        "@expo/vector-icons": "*",
+        "@react-native-community/netinfo": "*",
+        "@reader/contracts": "workspace:*",
+        "@tanstack/react-query": "^5.90.21",
+        "expo": "~57.0.0",
+        "expo-constants": "*",
+        "expo-dev-client": "*",
+        "expo-document-picker": "*",
+        "expo-file-system": "*",
+        "expo-font": "*",
+        "expo-linking": "*",
+        "expo-router": "~57.0.7",
+        "expo-secure-store": "*",
+        "expo-splash-screen": "*",
+        "expo-sqlite": "*",
+        "expo-status-bar": "*",
+        "react": "19.2.3",
+        "react-native": "0.86.0",
+        "react-native-blob-util": "*",
+        "react-native-pdf": "*",
+        "react-native-safe-area-context": "~5.7.0",
+        "react-native-screens": "*",
+        "react-native-webview": "13.16.1"
+    },
+    "devDependencies": {
+        "@types/react": "~19.2.2",
+        "expo-doctor": "*",
+        "typescript": "^5.9.2"
+    }
+}

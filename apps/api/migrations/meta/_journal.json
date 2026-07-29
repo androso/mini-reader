@@ -134,6 +134,20 @@
       "when": 1784985062746,
       "tag": "0018_rich_nomad",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1785248996734,
+      "tag": "0019_cool_roughhouse",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1785249472070,
+      "tag": "0020_aspiring_marauders",
+      "breakpoints": true
     }
   ]
 }

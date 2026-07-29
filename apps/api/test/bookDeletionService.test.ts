@@ -25,6 +25,7 @@ const createHarness = ({
     failFileOnce = false,
     artifactsMissing = false,
     failSearch = false,
+    readerResourceKeys = [],
 }: {
     initialBook?: DeletableBook | null;
     fileReferences?: number;
@@ -32,6 +33,7 @@ const createHarness = ({
     failFileOnce?: boolean;
     artifactsMissing?: boolean;
     failSearch?: boolean;
+    readerResourceKeys?: string[];
 } = {}) => {
     let book = initialBook ? { ...initialBook } : null;
     let shouldFailFile = failFileOnce;
@@ -59,6 +61,13 @@ const createHarness = ({
             },
             deleteProcessingJob: async () => {
                 events.push("deleteJob");
+            },
+            listReaderResourceKeys: async () => {
+                events.push("listReaderResources");
+                return readerResourceKeys;
+            },
+            deleteReaderPackageJob: async () => {
+                events.push("deleteReaderJob");
             },
             countOtherFileReferences: async () => {
                 events.push("countFileReferences");
@@ -131,7 +140,9 @@ test("deletion gates the book and removes its queued job before artifacts", asyn
     assert.deepEqual(harness.events, [
         "findBook",
         "markDeleting",
+        "listReaderResources",
         "deleteJob",
+        "deleteReaderJob",
         "countFileReferences",
         "deleteFile:legacy/shared-original",
         "countCollectionReferences",
@@ -140,6 +151,27 @@ test("deletion gates the book and removes its queued job before artifacts", asyn
         "clearCache:legacy_shared_collection",
         "deleteBook",
     ]);
+});
+
+test("deletion removes private derived EPUB resources before the book row", async () => {
+    const harness = createHarness({
+        readerResourceKeys: [
+            `users/${userId}/books/${bookId}/reader/cover`,
+            `users/${userId}/books/${bookId}/reader/diagram`,
+        ],
+    });
+
+    await deleteOwnedBook(bookId, userId, harness.dependencies);
+
+    const deleteBookIndex = harness.events.indexOf("deleteBook");
+    for (const key of [
+        `users/${userId}/books/${bookId}/reader/cover`,
+        `users/${userId}/books/${bookId}/reader/diagram`,
+    ]) {
+        const resourceIndex = harness.events.indexOf(`deleteFile:${key}`);
+        assert.ok(resourceIndex > -1);
+        assert.ok(resourceIndex < deleteBookIndex);
+    }
 });
 
 test("non-deleting legacy references protect shared file and collection artifacts", async () => {
