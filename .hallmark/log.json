@@ -1,5 +1,16 @@
 [
     {
+        "date": "2026-07-28",
+        "scope": "apps/mobile",
+        "macrostructure": "Adaptive Catalogue / Split Studio",
+        "theme": "custom",
+        "theme_axes": "light-dark / geometric-sans / chromatic-teal ~195°",
+        "vibe": "night sea, calm, literary",
+        "enrichment": "none",
+        "variation": "phone floating chat at 80 percent; tablet persistent reader-chat split",
+        "brief": "Native Mentarie library, reader, offline downloads, and contextual chat"
+    },
+    {
         "date": "2026-07-21",
         "scope": "app",
         "macrostructure": "Catalogue / Split Studio",
