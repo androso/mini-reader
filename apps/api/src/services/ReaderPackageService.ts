@@ -1,4 +1,4 @@
-import { buildReaderPackage } from "@reader/epub";
+import { buildReaderPackage } from "@reader/epub/dist/server";
 import { deleteFile, getFile, uploadFile } from "@reader/providers";
 import { and, asc, eq } from "drizzle-orm";
 import { db, pool } from "../db";
