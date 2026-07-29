@@ -27,6 +27,8 @@ import { apiFetch, apiJson } from "@/lib/api";
 import { chatModelLabel } from "@/lib/chatModelLabel";
 import { createSseParserState, pushSseChunk } from "@/lib/sse";
 import { ActionButton } from "./ActionButton";
+import { allowedUrlsFromSources, ChatMarkdown } from "./ChatMarkdown";
+import { MessageSources } from "./MessageSources";
 import { color, radius, space, type } from "@/theme/tokens";
 
 type ProviderStatus = {
@@ -424,13 +426,19 @@ export const ReaderChat = ({
                                             <ActivityIndicator
                                                 color={color.accentSoft}
                                             />
+                                        ) : message.role === "assistant" ? (
+                                            <ChatMarkdown
+                                                content={message.content}
+                                                allowedUrls={allowedUrlsFromSources(
+                                                    message.contextSources
+                                                )}
+                                            />
                                         ) : (
                                             <Text
                                                 selectable
                                                 style={[
                                                     styles.messageText,
-                                                    message.role === "user" &&
-                                                        styles.userMessageText,
+                                                    styles.userMessageText,
                                                 ]}
                                             >
                                                 {message.content}
@@ -439,14 +447,9 @@ export const ReaderChat = ({
                                     </View>
                                     {message.contextSources &&
                                         message.contextSources.length > 0 && (
-                                            <Text style={styles.sources}>
-                                                {message.contextSources.length}{" "}
-                                                source
-                                                {message.contextSources
-                                                    .length === 1
-                                                    ? ""
-                                                    : "s"}
-                                            </Text>
+                                            <MessageSources
+                                                sources={message.contextSources}
+                                            />
                                         )}
                                 </View>
                             ))}
@@ -707,11 +710,6 @@ const styles = StyleSheet.create({
         lineHeight: 23,
     },
     userMessageText: { color: color.ink },
-    sources: {
-        color: color.darkInk2,
-        fontFamily: type.mono,
-        fontSize: 11,
-    },
     composerArea: {
         padding: space.sm,
         paddingBottom: space.xs,
