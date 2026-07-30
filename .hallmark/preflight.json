@@ -1,25 +1,25 @@
 {
-    "date": "2026-07-21",
-    "scope": "apps/web",
-    "framework": "Next.js 15 app router with React 19 and Tailwind CSS 3",
+    "date": "2026-07-30",
+    "scope": "apps/mobile",
+    "framework": "Expo SDK 57, Expo Router, React Native 0.86, React 19",
     "routes": [
-        "apps/web/src/app/page.tsx",
-        "apps/web/src/app/login/page.tsx",
-        "apps/web/src/app/read/[id]/page.tsx"
+        "apps/mobile/app/(app)/library.tsx",
+        "apps/mobile/app/(app)/reader/[bookId].tsx",
+        "apps/mobile/app/(app)/settings.tsx"
     ],
     "fontStack": {
         "displayAndUi": "Plus Jakarta Sans",
         "reading": "Literata",
-        "conflict": "Source Sans Pro is referenced in globals.css but is not loaded"
+        "utility": "JetBrains Mono"
     },
-    "palette": "Mentarie neutral palette plus shadcn HSL compatibility variables",
-    "motion": "motion/react is installed and used by LoadingSpinner",
-    "spacing": "Tailwind utility spacing with no project-level named spacing tokens",
+    "palette": "Locked Mentarie Night Sea palette with dark-paper chrome, warm reading paper, teal actions, and coral destructive states",
+    "motion": "Restrained native press and focus feedback; Expo Router fade transitions; no decorative animation",
+    "spacing": "Named 4px-based space tokens in apps/mobile/src/theme/tokens.ts",
     "preserve": [
         "Mentarie product identity",
-        "Plus Jakarta Sans and Literata roles",
-        "book cover presentation",
-        "reader pane mount stability and persisted sidebar position/width",
-        "existing routes, component ownership, auth, upload, deletion, and reading behavior"
+        "Adaptive Catalogue and Split Studio macrostructures",
+        "Plus Jakarta Sans, Literata, and JetBrains Mono roles",
+        "existing routes and production data flow",
+        "offline downloads, upload, deletion, reading progress, and contextual chat behavior"
     ]
 }

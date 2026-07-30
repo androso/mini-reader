@@ -13,7 +13,7 @@ type Props = {
     label: string;
     onPress(): void;
     icon?: keyof typeof Feather.glyphMap;
-    tone?: "primary" | "secondary" | "danger";
+    tone?: "primary" | "secondary" | "quiet" | "danger";
     disabled?: boolean;
     loading?: boolean;
     error?: boolean;
@@ -46,6 +46,12 @@ export const ActionButton = ({
           : success
             ? "check"
             : icon;
+    const contentColor =
+        tone === "primary" || tone === "quiet"
+            ? color.darkInk
+            : tone === "danger"
+              ? color.coral
+              : color.ink;
     return (
         <Pressable
             accessibilityRole="button"
@@ -66,6 +72,7 @@ export const ActionButton = ({
                 compact && styles.compact,
                 tone === "primary" && styles.primary,
                 tone === "secondary" && styles.secondary,
+                tone === "quiet" && styles.quiet,
                 tone === "danger" && styles.danger,
                 hovered && !unavailable && styles.hovered,
                 focused && styles.focused,
@@ -77,17 +84,10 @@ export const ActionButton = ({
             ]}
         >
             {loading ? (
-                <ActivityIndicator
-                    size="small"
-                    color={tone === "primary" ? color.darkInk : color.ink}
-                />
+                <ActivityIndicator size="small" color={contentColor} />
             ) : (
                 stateIcon && (
-                    <Feather
-                        name={stateIcon}
-                        size={18}
-                        color={tone === "primary" ? color.darkInk : color.ink}
-                    />
+                    <Feather name={stateIcon} size={18} color={contentColor} />
                 )
             )}
             <Text
@@ -96,6 +96,7 @@ export const ActionButton = ({
                     styles.label,
                     tone === "primary" && styles.primaryLabel,
                     tone === "danger" && styles.dangerLabel,
+                    tone === "quiet" && styles.quietLabel,
                 ]}
             >
                 {loading ? "Working…" : label}
@@ -123,7 +124,14 @@ const styles = StyleSheet.create({
         borderColor: color.accent,
     },
     secondary: { backgroundColor: color.paper2 },
-    danger: { backgroundColor: color.paper, borderColor: color.coral },
+    quiet: {
+        backgroundColor: color.darkRaised,
+        borderColor: color.darkRaised,
+    },
+    danger: {
+        backgroundColor: color.transparent,
+        borderColor: color.coral,
+    },
     hovered: { transform: [{ translateY: -1 }] },
     focused: {
         borderColor: color.focus,
@@ -145,5 +153,6 @@ const styles = StyleSheet.create({
         fontSize: 15,
     },
     primaryLabel: { color: color.darkInk },
+    quietLabel: { color: color.darkInk },
     dangerLabel: { color: color.coral },
 });

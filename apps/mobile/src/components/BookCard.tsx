@@ -11,6 +11,7 @@ type Props = {
     download?: DownloadRecord;
     emphasized?: boolean;
     pendingDelete?: boolean;
+    unavailableReason?: string | null;
     onOpen(): void;
     onRetry(): void;
     onDownload(): void;
@@ -24,6 +25,7 @@ export const BookCard = ({
     download,
     emphasized = false,
     pendingDelete = false,
+    unavailableReason = null,
     onOpen,
     onRetry,
     onDownload,
@@ -35,9 +37,22 @@ export const BookCard = ({
     const [hovered, setHovered] = useState(false);
     const ready = book.processingStatus === "ready";
     const downloaded = download?.status === "complete";
+    const unavailable = Boolean(unavailableReason);
+    const openDisabled = unavailable || !ready;
+    const statusLabel = unavailable
+        ? unavailableReason!
+        : download?.status === "downloading"
+          ? "Downloading for offline use…"
+          : ready
+            ? downloaded
+                ? "Available offline"
+                : "Ready to read"
+            : book.processingStatus === "failed"
+              ? "Processing failed"
+              : "Preparing book";
     return (
         <View
-            accessibilityLabel={`${book.title}, ${book.fileType ?? "book"}, ${book.processingStatus}`}
+            accessibilityLabel={`${book.title}, ${book.fileType ?? "book"}, ${unavailable ? unavailableReason : book.processingStatus}`}
             style={[
                 styles.card,
                 emphasized && styles.emphasized,
@@ -47,9 +62,13 @@ export const BookCard = ({
         >
             <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={`Open ${book.title}`}
-                accessibilityState={{ disabled: !ready }}
-                disabled={!ready}
+                accessibilityLabel={
+                    unavailable
+                        ? `${book.title}. ${unavailableReason}`
+                        : `Open ${book.title}`
+                }
+                accessibilityState={{ disabled: openDisabled }}
+                disabled={openDisabled}
                 onPress={onOpen}
                 onFocus={() => setFocused(true)}
                 onBlur={() => setFocused(false)}
@@ -81,15 +100,17 @@ export const BookCard = ({
                 <View style={styles.statusRow}>
                     <Feather
                         name={
-                            ready
-                                ? "check-circle"
-                                : book.processingStatus === "failed"
-                                  ? "alert-circle"
-                                  : "clock"
+                            unavailable
+                                ? "alert-circle"
+                                : ready
+                                  ? "check-circle"
+                                  : book.processingStatus === "failed"
+                                    ? "alert-circle"
+                                    : "clock"
                         }
                         size={14}
                         color={
-                            book.processingStatus === "failed"
+                            unavailable || book.processingStatus === "failed"
                                 ? color.coral
                                 : color.darkInk2
                         }
@@ -97,37 +118,25 @@ export const BookCard = ({
                     <Text
                         style={[
                             styles.status,
-                            book.processingStatus === "failed" &&
+                            (unavailable ||
+                                book.processingStatus === "failed") &&
                                 styles.statusError,
                         ]}
                     >
-                        {ready
-                            ? downloaded
-                                ? "Available offline"
-                                : "Ready"
-                            : book.processingStatus === "failed"
-                              ? "Processing failed"
-                              : "Preparing book"}
+                        {statusLabel}
                     </Text>
                 </View>
-                {book.processingStatus === "failed" ? (
-                    <ActionButton
-                        label="Retry"
-                        icon="rotate-ccw"
-                        tone="secondary"
-                        compact
-                        onPress={onRetry}
-                    />
-                ) : ready ? (
+                {unavailable ? (
                     <View style={styles.actions}>
-                        <ActionButton
-                            label={downloaded ? "Remove" : "Download"}
-                            icon={downloaded ? "trash-2" : "download"}
-                            tone="secondary"
-                            compact
-                            onPress={downloaded ? onRemoveDownload : onDownload}
-                            loading={download?.status === "downloading"}
-                        />
+                        {download ? (
+                            <ActionButton
+                                label="Remove"
+                                icon="trash-2"
+                                tone="quiet"
+                                compact
+                                onPress={onRemoveDownload}
+                            />
+                        ) : null}
                         <ActionButton
                             label="Delete"
                             icon="trash"
@@ -135,6 +144,49 @@ export const BookCard = ({
                             compact
                             onPress={onDelete}
                         />
+                    </View>
+                ) : book.processingStatus === "failed" ? (
+                    <ActionButton
+                        label="Retry"
+                        icon="rotate-ccw"
+                        tone="quiet"
+                        compact
+                        onPress={onRetry}
+                    />
+                ) : ready ? (
+                    <View style={styles.actions}>
+                        <ActionButton
+                            label="Read & ask"
+                            icon="message-circle"
+                            compact
+                            onPress={onOpen}
+                        />
+                        <View style={styles.utilityActions}>
+                            <ActionButton
+                                label={downloaded ? "Remove" : "Save"}
+                                icon={downloaded ? "trash-2" : "download"}
+                                tone="quiet"
+                                compact
+                                style={styles.utilityButton}
+                                onPress={
+                                    downloaded ? onRemoveDownload : onDownload
+                                }
+                                loading={download?.status === "downloading"}
+                                accessibilityHint={
+                                    downloaded
+                                        ? "Remove the offline copy"
+                                        : "Make this book available offline"
+                                }
+                            />
+                            <ActionButton
+                                label="Delete"
+                                icon="trash"
+                                tone="danger"
+                                compact
+                                style={styles.utilityButton}
+                                onPress={onDelete}
+                            />
+                        </View>
                     </View>
                 ) : null}
             </View>
@@ -212,4 +264,6 @@ const styles = StyleSheet.create({
     },
     statusError: { color: color.coral },
     actions: { gap: space.xs },
+    utilityActions: { flexDirection: "row", gap: space.xs },
+    utilityButton: { flex: 1, minWidth: 0 },
 });

@@ -1,7 +1,9 @@
 import { useMemo, useRef, useState } from "react";
 import {
     ActivityIndicator,
+    Platform,
     RefreshControl,
+    Pressable,
     ScrollView,
     StyleSheet,
     Text,
@@ -10,20 +12,34 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 import * as DocumentPicker from "expo-document-picker";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PublicBook } from "@reader/contracts";
 import { ActionButton } from "@/components/ActionButton";
 import { BookCard } from "@/components/BookCard";
 import { apiFetch, apiJson } from "@/lib/api";
+import { buildBookUploadFormData } from "@/lib/bookUpload";
 import { downloadBook, removeDownload } from "@/lib/downloads";
 import { listDownloads } from "@/lib/database";
+import {
+    IOS_PDF_UNAVAILABLE_MESSAGE,
+    bookUnavailableReason,
+    documentTypesForPlatform,
+    isPdfDocument,
+} from "@/lib/bookCompatibility";
 import { booksQueryKey, useBooks } from "@/hooks/useBooks";
 import { color, radius, space, type } from "@/theme/tokens";
 
 type Filter = "all" | "epub" | "pdf";
+const FILTERS: ReadonlyArray<{ value: Filter; label: string }> = [
+    { value: "all", label: "All books" },
+    { value: "epub", label: "EPUB" },
+    { value: "pdf", label: "PDF" },
+];
 
 export default function Library() {
     const { width } = useWindowDimensions();
+    const insets = useSafeAreaInsets();
     const queryClient = useQueryClient();
     const books = useBooks();
     const downloads = useQuery({
@@ -42,22 +58,19 @@ export default function Library() {
     const upload = useMutation({
         mutationFn: async () => {
             const result = await DocumentPicker.getDocumentAsync({
-                type: ["application/epub+zip", "application/pdf"],
+                type: documentTypesForPlatform(Platform.OS),
                 copyToCacheDirectory: true,
                 multiple: false,
             });
             if (result.canceled) return;
             const asset = result.assets[0];
-            const form = new FormData();
-            form.append("file", {
-                uri: asset.uri,
-                name: asset.name,
-                type:
-                    asset.mimeType ??
-                    (asset.name.toLowerCase().endsWith(".pdf")
-                        ? "application/pdf"
-                        : "application/epub+zip"),
-            } as unknown as Blob);
+            if (
+                Platform.OS === "ios" &&
+                isPdfDocument(asset.name, asset.mimeType)
+            ) {
+                throw new Error(IOS_PDF_UNAVAILABLE_MESSAGE);
+            }
+            const form = await buildBookUploadFormData(asset);
             await apiJson("/api/books", { method: "POST", body: form });
         },
         onSuccess: () => {
@@ -133,19 +146,14 @@ export default function Library() {
     const recent = visibleBooks[0];
     const rest = recent ? visibleBooks.slice(1) : visibleBooks;
     const cardWidth: `${number}%` =
-        width >= 1000
-            ? "31.8%"
-            : width >= 680
-              ? "48.5%"
-              : width >= 360
-                ? "47.8%"
-                : "100%";
+        width >= 1000 ? "31.8%" : width >= 680 ? "48.5%" : "100%";
     const downloadFor = (bookId: string) =>
         downloads.data?.find((record) => record.book_id === bookId);
     const cardProps = (book: PublicBook) => ({
         book,
         download: downloadFor(book.id),
         pendingDelete: pendingDeletes.has(book.id),
+        unavailableReason: bookUnavailableReason(Platform.OS, book.fileType),
         onOpen: () =>
             router.push({
                 pathname: "/(app)/reader/[bookId]",
@@ -164,11 +172,13 @@ export default function Library() {
             ),
         onDelete: () => scheduleDelete(book),
     });
-
     return (
         <View style={styles.root}>
             <ScrollView
-                contentContainerStyle={styles.content}
+                contentContainerStyle={[
+                    styles.content,
+                    { paddingTop: insets.top + space.lg },
+                ]}
                 refreshControl={
                     <RefreshControl
                         refreshing={books.isRefetching}
@@ -178,15 +188,18 @@ export default function Library() {
                 }
             >
                 <View style={styles.header}>
-                    <View>
+                    <View style={styles.titleBlock}>
                         <Text style={styles.wordmark}>Mentarie</Text>
                         <Text style={styles.heading}>Your library</Text>
+                        <Text style={styles.subheading}>
+                            Read closely, then ask from the evidence.
+                        </Text>
                     </View>
                     <View style={styles.headerActions}>
                         <ActionButton
                             label="Settings"
                             icon="settings"
-                            tone="secondary"
+                            tone="quiet"
                             compact
                             onPress={() => router.push("/(app)/settings")}
                         />
@@ -200,27 +213,53 @@ export default function Library() {
                     </View>
                 </View>
                 <View accessibilityRole="tablist" style={styles.filters}>
-                    {(["all", "epub", "pdf"] as const).map((value) => (
-                        <ActionButton
-                            key={value}
-                            label={
-                                value === "all" ? "All" : value.toUpperCase()
-                            }
-                            tone={filter === value ? "primary" : "secondary"}
-                            compact
-                            onPress={() => setFilter(value)}
-                        />
-                    ))}
+                    {FILTERS.map(({ value, label }) => {
+                        const selected = filter === value;
+                        return (
+                            <Pressable
+                                key={value}
+                                accessibilityRole="tab"
+                                accessibilityState={{ selected }}
+                                onPress={() => setFilter(value)}
+                                style={({ pressed }) => [
+                                    styles.filter,
+                                    selected && styles.filterSelected,
+                                    pressed && styles.filterPressed,
+                                ]}
+                            >
+                                <Text
+                                    numberOfLines={1}
+                                    style={[
+                                        styles.filterText,
+                                        selected && styles.filterTextSelected,
+                                    ]}
+                                >
+                                    {label}
+                                </Text>
+                            </Pressable>
+                        );
+                    })}
                 </View>
-                <Text accessibilityLiveRegion="polite" style={styles.notice}>
-                    {notice || " "}
-                </Text>
+                {notice ? (
+                    <Text
+                        accessibilityLiveRegion="polite"
+                        style={styles.notice}
+                    >
+                        {notice}
+                    </Text>
+                ) : null}
                 {books.isLoading ? (
-                    <View style={styles.loading}>
-                        <ActivityIndicator color={color.accent} />
-                        <Text style={styles.loadingText}>
-                            Loading your library…
-                        </Text>
+                    <View
+                        accessibilityLabel="Loading your library"
+                        accessibilityRole="progressbar"
+                        style={styles.skeleton}
+                    >
+                        <View style={styles.skeletonCover} />
+                        <View style={styles.skeletonCopy}>
+                            <View style={styles.skeletonTitle} />
+                            <View style={styles.skeletonLine} />
+                            <View style={styles.skeletonLineShort} />
+                        </View>
                     </View>
                 ) : visibleBooks.length === 0 ? (
                     <View style={styles.empty}>
@@ -229,8 +268,9 @@ export default function Library() {
                             No books here yet.
                         </Text>
                         <Text style={styles.emptyCopy}>
-                            Upload an EPUB or PDF to read, save it offline, and
-                            ask questions grounded in its text.
+                            {Platform.OS === "ios"
+                                ? "Upload an EPUB to read, save it offline, and ask questions grounded in its text."
+                                : "Upload an EPUB or PDF to read, save it offline, and ask questions grounded in its text."}
                         </Text>
                         <ActionButton
                             label="Upload book"
@@ -254,6 +294,7 @@ export default function Library() {
                                     <BookCard
                                         key={book.id}
                                         {...cardProps(book)}
+                                        emphasized={width < 680}
                                         style={{ width: cardWidth }}
                                     />
                                 ))}
@@ -263,7 +304,12 @@ export default function Library() {
                 )}
             </ScrollView>
             {pendingDeletes.size > 0 && (
-                <View style={styles.undo}>
+                <View
+                    style={[
+                        styles.undo,
+                        { bottom: Math.max(insets.bottom, space.lg) },
+                    ]}
+                >
                     <Text style={styles.undoText}>
                         Book queued for deletion.
                     </Text>
@@ -284,7 +330,6 @@ const styles = StyleSheet.create({
     root: { flex: 1, backgroundColor: color.darkPaper },
     content: {
         paddingHorizontal: space.md,
-        paddingTop: space.xl,
         paddingBottom: 120,
         gap: space.lg,
         maxWidth: 1180,
@@ -298,6 +343,7 @@ const styles = StyleSheet.create({
         justifyContent: "space-between",
         flexWrap: "wrap",
     },
+    titleBlock: { flex: 1, minWidth: 240, gap: space.xxs },
     wordmark: {
         color: color.accentSoft,
         fontFamily: type.semibold,
@@ -309,6 +355,13 @@ const styles = StyleSheet.create({
         fontSize: 34,
         letterSpacing: -0.8,
     },
+    subheading: {
+        maxWidth: 390,
+        color: color.darkInk2,
+        fontFamily: type.body,
+        fontSize: 15,
+        lineHeight: 22,
+    },
     headerActions: {
         flexDirection: "row",
         flexWrap: "wrap",
@@ -319,22 +372,64 @@ const styles = StyleSheet.create({
         gap: space.xs,
         flexWrap: "wrap",
     },
+    filter: {
+        minHeight: 44,
+        paddingHorizontal: space.md,
+        borderRadius: radius.pill,
+        backgroundColor: color.darkRaised,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    filterSelected: { backgroundColor: color.accent },
+    filterPressed: { opacity: 0.78 },
+    filterText: {
+        color: color.darkInk,
+        fontFamily: type.semibold,
+        fontSize: 14,
+    },
+    filterTextSelected: { color: color.darkInk },
     notice: {
         minHeight: 20,
         color: color.darkInk2,
         fontFamily: type.body,
         fontSize: 13,
     },
-    loading: {
-        minHeight: 280,
-        alignItems: "center",
-        justifyContent: "center",
-        gap: space.sm,
+    skeleton: {
+        minHeight: 222,
+        padding: space.md,
+        borderRadius: radius.lg,
+        backgroundColor: color.darkRaised,
+        flexDirection: "row",
+        gap: space.md,
     },
-    loadingText: {
-        color: color.darkInk2,
-        fontFamily: type.body,
-        fontSize: 15,
+    skeletonCover: {
+        width: 130,
+        minHeight: 190,
+        borderRadius: radius.md,
+        backgroundColor: color.ink2,
+        opacity: 0.35,
+    },
+    skeletonCopy: { flex: 1, paddingTop: space.sm, gap: space.sm },
+    skeletonTitle: {
+        width: "82%",
+        height: 24,
+        borderRadius: radius.sm,
+        backgroundColor: color.ink2,
+        opacity: 0.42,
+    },
+    skeletonLine: {
+        width: "64%",
+        height: 14,
+        borderRadius: radius.sm,
+        backgroundColor: color.ink2,
+        opacity: 0.28,
+    },
+    skeletonLineShort: {
+        width: "44%",
+        height: 14,
+        borderRadius: radius.sm,
+        backgroundColor: color.ink2,
+        opacity: 0.22,
     },
     empty: {
         alignItems: "flex-start",
@@ -385,7 +480,6 @@ const styles = StyleSheet.create({
         position: "absolute",
         left: space.md,
         right: space.md,
-        bottom: space.lg,
         minHeight: 64,
         padding: space.sm,
         paddingLeft: space.md,

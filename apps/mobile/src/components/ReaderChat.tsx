@@ -16,6 +16,7 @@ import {
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useNetInfo } from "@react-native-community/netinfo";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
     ChatMessage,
@@ -25,6 +26,7 @@ import type {
 } from "@reader/contracts";
 import { apiFetch, apiJson } from "@/lib/api";
 import { chatModelLabel } from "@/lib/chatModelLabel";
+import { chatOverlayBottom } from "@/lib/keyboardInset";
 import { createSseParserState, pushSseChunk } from "@/lib/sse";
 import { ActionButton } from "./ActionButton";
 import { allowedUrlsFromSources, ChatMarkdown } from "./ChatMarkdown";
@@ -79,6 +81,7 @@ export const ReaderChat = ({
 }) => {
     const network = useNetInfo();
     const queryClient = useQueryClient();
+    const insets = useSafeAreaInsets();
     const { height: windowHeight } = useWindowDimensions();
     const messageScroll = useRef<ScrollView>(null);
     const [expanded, setExpanded] = useState(isTablet);
@@ -89,24 +92,27 @@ export const ReaderChat = ({
     const [streaming, setStreaming] = useState(false);
     const [error, setError] = useState("");
     const [modelPickerOpen, setModelPickerOpen] = useState(false);
-    const [androidKeyboardHeight, setAndroidKeyboardHeight] = useState(0);
+    const [keyboardHeight, setKeyboardHeight] = useState(0);
 
     useEffect(() => {
         if (isTablet) setExpanded(true);
     }, [isTablet]);
 
     useEffect(() => {
-        // Edge-to-edge Android ignores adjustResize for layout, so lift only the
-        // chat overlay instead of resizing the WebView reader shell.
-        if (Platform.OS !== "android" || isTablet) {
-            setAndroidKeyboardHeight(0);
+        // Lift only the chat overlay instead of resizing the WebView reader shell.
+        if (isTablet) {
+            setKeyboardHeight(0);
             return;
         }
-        const show = Keyboard.addListener("keyboardDidShow", (event) => {
-            setAndroidKeyboardHeight(event.endCoordinates.height);
+        const showEvent =
+            Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+        const hideEvent =
+            Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+        const show = Keyboard.addListener(showEvent, (event) => {
+            setKeyboardHeight(event.endCoordinates.height);
         });
-        const hide = Keyboard.addListener("keyboardDidHide", () => {
-            setAndroidKeyboardHeight(0);
+        const hide = Keyboard.addListener(hideEvent, () => {
+            setKeyboardHeight(0);
         });
         return () => {
             show.remove();
@@ -251,21 +257,37 @@ export const ReaderChat = ({
         () => provider.data?.models ?? ["gpt-4o-mini"],
         [provider.data?.models]
     );
+    const suggestedPrompts = useMemo(
+        () =>
+            highlightContext
+                ? [
+                      "Explain this passage",
+                      "What supports this claim?",
+                      "Connect this to the chapter",
+                  ]
+                : [
+                      "Summarize the core argument",
+                      "List the key evidence",
+                      "What should I question?",
+                  ],
+        [highlightContext]
+    );
     const panelStyle = useMemo<StyleProp<ViewStyle>>(() => {
         if (isTablet) return styles.tabletPanel;
 
-        const bottom =
-            androidKeyboardHeight > 0
-                ? androidKeyboardHeight + space.xs
-                : space.md;
-        const keyboardOpen = androidKeyboardHeight > 0;
+        const bottom = chatOverlayBottom({
+            keyboardHeight,
+            safeBottom: insets.bottom,
+            restingGap: space.md,
+            keyboardGap: space.xs,
+        });
+        const keyboardOpen = keyboardHeight > 0;
 
         if (expanded) {
             // Lift with the IME, but keep a compact sheet so the panel does not
             // stretch edge-to-edge (and briefly overflow) while Gboard opens.
             if (keyboardOpen) {
-                const available =
-                    windowHeight - androidKeyboardHeight - space.md;
+                const available = windowHeight - keyboardHeight - space.md;
                 return {
                     position: "absolute",
                     left: space.md,
@@ -279,7 +301,7 @@ export const ReaderChat = ({
                     borderWidth: 1,
                 };
             }
-            return styles.expandedPanel;
+            return [styles.expandedPanel, { bottom }];
         }
 
         return [
@@ -287,7 +309,7 @@ export const ReaderChat = ({
             { bottom },
             keyboardOpen && styles.composerPanelRaised,
         ];
-    }, [androidKeyboardHeight, expanded, isTablet, windowHeight]);
+    }, [expanded, insets.bottom, isTablet, keyboardHeight, windowHeight]);
 
     return (
         <View pointerEvents="box-none" style={[styles.panel, panelStyle]}>
@@ -296,18 +318,18 @@ export const ReaderChat = ({
                     <ActionButton
                         label="History"
                         icon="clock"
-                        tone="secondary"
+                        tone="quiet"
                         compact
                         onPress={openHistory}
                     />
                     <Text numberOfLines={1} style={styles.toolbarTitle}>
-                        {historyOpen ? "Previous chats" : "Chat"}
+                        {historyOpen ? "Previous chats" : "Ask this book"}
                     </Text>
                     {!isTablet && (
                         <ActionButton
                             label="Close"
                             icon="x"
-                            tone="secondary"
+                            tone="quiet"
                             compact
                             onPress={() => {
                                 setExpanded(false);
@@ -396,6 +418,33 @@ export const ReaderChat = ({
                                         evidence. Select EPUB text to add a
                                         specific passage.
                                     </Text>
+                                    <View style={styles.promptList}>
+                                        {suggestedPrompts.map((prompt) => (
+                                            <Pressable
+                                                key={prompt}
+                                                accessibilityRole="button"
+                                                accessibilityLabel={prompt}
+                                                onPress={() => setInput(prompt)}
+                                                style={({ pressed }) => [
+                                                    styles.prompt,
+                                                    pressed &&
+                                                        styles.promptPressed,
+                                                ]}
+                                            >
+                                                <Text
+                                                    numberOfLines={1}
+                                                    style={styles.promptText}
+                                                >
+                                                    {prompt}
+                                                </Text>
+                                                <Feather
+                                                    name="arrow-up-right"
+                                                    size={16}
+                                                    color={color.accentSoft}
+                                                />
+                                            </Pressable>
+                                        ))}
+                                    </View>
                                 </View>
                             )}
                             {messages.map((message, index) => (
@@ -461,95 +510,120 @@ export const ReaderChat = ({
                 <View style={styles.composerArea}>
                     {highlightContext && (
                         <View
-                            style={styles.contextChip}
+                            style={styles.contextCard}
                             accessibilityLiveRegion="polite"
-                            accessibilityLabel="Paragraph context added to the next question"
+                            accessibilityLabel="Selected passage added to the next question"
                         >
-                            <Feather
-                                name="bookmark"
-                                size={14}
-                                color={color.ink}
-                            />
-                            <Text numberOfLines={1} style={styles.contextText}>
-                                1 context added
+                            <View style={styles.contextHeading}>
+                                <Feather
+                                    name="bookmark"
+                                    size={15}
+                                    color={color.ink}
+                                />
+                                <Text style={styles.contextLabel}>
+                                    Selected passage
+                                </Text>
+                                <Pressable
+                                    accessibilityRole="button"
+                                    accessibilityLabel="Remove selected passage"
+                                    hitSlop={12}
+                                    onPress={onClearHighlight}
+                                    style={styles.contextRemove}
+                                >
+                                    <Feather
+                                        name="x"
+                                        size={17}
+                                        color={color.ink}
+                                    />
+                                </Pressable>
+                            </View>
+                            <Text numberOfLines={2} style={styles.contextText}>
+                                “{highlightContext.text}”
                             </Text>
-                            <Pressable
-                                accessibilityRole="button"
-                                accessibilityLabel="Remove selected context"
-                                hitSlop={12}
-                                onPress={onClearHighlight}
-                            >
-                                <Feather name="x" size={16} color={color.ink} />
-                            </Pressable>
                         </View>
                     )}
                     <View style={styles.composer}>
-                        <Pressable
-                            accessibilityRole="button"
-                            accessibilityLabel={`Model: ${chatModelLabel(selectedModel)}`}
-                            onPress={() => setModelPickerOpen(true)}
-                            style={({ pressed }) => [
-                                styles.modelButton,
-                                pressed && styles.pressed,
-                            ]}
-                        >
-                            <Text numberOfLines={1} style={styles.modelLabel}>
-                                {chatModelLabel(selectedModel)}
-                            </Text>
-                            <Feather
-                                name="chevron-down"
-                                size={15}
-                                color={color.darkInk2}
-                            />
-                        </Pressable>
-                        <TextInput
-                            value={input}
-                            onChangeText={setInput}
-                            editable={!streaming && online}
-                            multiline
-                            maxLength={8000}
-                            placeholder={
-                                online
-                                    ? "Ask about this book"
-                                    : "Chat needs a connection"
-                            }
-                            placeholderTextColor={color.darkInk2}
-                            accessibilityLabel="Ask about this book"
-                            style={styles.input}
-                            onFocus={() => {
-                                if (!isTablet && messages.length > 0)
-                                    setExpanded(true);
-                            }}
-                        />
-                        <Pressable
-                            accessibilityRole="button"
-                            accessibilityLabel="Ask"
-                            accessibilityState={{
-                                disabled: !input.trim() || streaming || !online,
-                                busy: streaming,
-                            }}
-                            disabled={!input.trim() || streaming || !online}
-                            onPress={() => void submit()}
-                            style={({ pressed }) => [
-                                styles.send,
-                                pressed && styles.pressed,
-                                (!input.trim() || streaming || !online) &&
-                                    styles.disabled,
-                            ]}
-                        >
-                            {streaming ? (
-                                <ActivityIndicator
-                                    size="small"
-                                    color={color.darkInk}
-                                />
-                            ) : (
+                        <View style={styles.composerMeta}>
+                            <Pressable
+                                accessibilityRole="button"
+                                accessibilityLabel={`Model: ${chatModelLabel(selectedModel)}`}
+                                onPress={() => setModelPickerOpen(true)}
+                                style={({ pressed }) => [
+                                    styles.modelButton,
+                                    pressed && styles.pressed,
+                                ]}
+                            >
                                 <Feather
-                                    name="arrow-up"
-                                    size={20}
-                                    color={color.darkInk}
+                                    name="cpu"
+                                    size={14}
+                                    color={color.accentSoft}
                                 />
-                            )}
-                        </Pressable>
+                                <Text
+                                    numberOfLines={1}
+                                    style={styles.modelLabel}
+                                >
+                                    {chatModelLabel(selectedModel)}
+                                </Text>
+                                <Feather
+                                    name="chevron-down"
+                                    size={15}
+                                    color={color.darkInk2}
+                                />
+                            </Pressable>
+                            <Text style={styles.groundingLabel}>
+                                {online ? "Grounded in this book" : "Offline"}
+                            </Text>
+                        </View>
+                        <View style={styles.askRow}>
+                            <TextInput
+                                value={input}
+                                onChangeText={setInput}
+                                editable={!streaming && online}
+                                multiline
+                                maxLength={8000}
+                                placeholder={
+                                    online
+                                        ? "Ask a question"
+                                        : "Chat needs a connection"
+                                }
+                                placeholderTextColor={color.darkInk2}
+                                accessibilityLabel="Ask about this book"
+                                style={styles.input}
+                                onFocus={() => {
+                                    if (!isTablet) setExpanded(true);
+                                }}
+                            />
+                            <Pressable
+                                accessibilityRole="button"
+                                accessibilityLabel="Ask"
+                                accessibilityState={{
+                                    disabled:
+                                        !input.trim() || streaming || !online,
+                                    busy: streaming,
+                                }}
+                                disabled={!input.trim() || streaming || !online}
+                                onPress={() => void submit()}
+                                style={({ pressed }) => [
+                                    styles.send,
+                                    pressed && styles.pressed,
+                                    (!input.trim() || streaming || !online) &&
+                                        styles.disabled,
+                                ]}
+                            >
+                                {streaming ? (
+                                    <ActivityIndicator
+                                        size="small"
+                                        color={color.darkInk}
+                                    />
+                                ) : (
+                                    <Feather
+                                        name="arrow-up"
+                                        size={20}
+                                        color={color.darkInk}
+                                    />
+                                )}
+                            </Pressable>
+                        </View>
                     </View>
                     <Text accessibilityLiveRegion="polite" style={styles.error}>
                         {error ||
@@ -687,6 +761,23 @@ const styles = StyleSheet.create({
         fontSize: 14,
         lineHeight: 21,
     },
+    promptList: { marginTop: space.xs },
+    prompt: {
+        minHeight: 44,
+        borderTopWidth: 1,
+        borderTopColor: color.ink2,
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: space.sm,
+    },
+    promptPressed: { opacity: 0.68 },
+    promptText: {
+        flex: 1,
+        color: color.darkInk,
+        fontFamily: type.medium,
+        fontSize: 14,
+    },
     messageRow: { alignItems: "flex-start", gap: space.xs },
     messageRowUser: { alignItems: "flex-end" },
     messageAuthor: {
@@ -719,37 +810,57 @@ const styles = StyleSheet.create({
         paddingBottom: space.xs,
         gap: space.xs,
     },
-    contextChip: {
-        alignSelf: "flex-start",
-        minHeight: 36,
+    contextCard: {
         maxWidth: "100%",
-        paddingHorizontal: space.sm,
-        borderRadius: radius.pill,
+        padding: space.sm,
+        borderRadius: radius.md,
         backgroundColor: color.accentSoft,
+        gap: space.xxs,
+    },
+    contextHeading: {
+        minHeight: 28,
         flexDirection: "row",
         alignItems: "center",
         gap: space.xs,
     },
-    contextText: {
-        flexShrink: 1,
+    contextLabel: {
+        flex: 1,
         color: color.ink,
-        fontFamily: type.medium,
+        fontFamily: type.semibold,
         fontSize: 12,
     },
+    contextRemove: {
+        width: 32,
+        height: 32,
+        alignItems: "center",
+        justifyContent: "center",
+        borderRadius: radius.pill,
+    },
+    contextText: {
+        color: color.ink,
+        fontFamily: type.body,
+        fontSize: 13,
+        lineHeight: 19,
+    },
     composer: {
-        minHeight: 58,
+        minHeight: 96,
+        padding: space.xs,
+        borderWidth: 1,
+        borderColor: color.darkRaised,
         borderRadius: radius.lg,
         backgroundColor: color.darkRaised,
-        borderWidth: 1,
-        borderColor: color.rule,
+        gap: space.xxs,
+    },
+    composerMeta: {
+        minHeight: 36,
         flexDirection: "row",
-        alignItems: "flex-end",
+        alignItems: "center",
+        justifyContent: "space-between",
         gap: space.xs,
-        padding: space.xs,
     },
     modelButton: {
         minHeight: 44,
-        maxWidth: 105,
+        maxWidth: 180,
         paddingHorizontal: space.xs,
         flexDirection: "row",
         alignItems: "center",
@@ -757,9 +868,22 @@ const styles = StyleSheet.create({
     },
     modelLabel: {
         flexShrink: 1,
-        color: color.darkInk2,
+        color: color.darkInk,
         fontFamily: type.mono,
-        fontSize: 10,
+        fontSize: 11,
+    },
+    groundingLabel: {
+        flexShrink: 1,
+        color: color.darkInk2,
+        textAlign: "right",
+        fontFamily: type.body,
+        fontSize: 11,
+    },
+    askRow: {
+        minHeight: 48,
+        flexDirection: "row",
+        alignItems: "flex-end",
+        gap: space.xs,
     },
     input: {
         flex: 1,

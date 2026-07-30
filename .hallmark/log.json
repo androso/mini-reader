@@ -1,5 +1,16 @@
 [
     {
+        "date": "2026-07-30",
+        "scope": "apps/mobile",
+        "macrostructure": "Adaptive Catalogue / Split Studio",
+        "theme": "custom",
+        "theme_axes": "light-dark / geometric-sans / chromatic-teal ~195°",
+        "vibe": "night sea, calm, research-focused",
+        "enrichment": "none",
+        "variation": "evidence-first library hierarchy; progressive contextual question prompts; structured model and grounding composer",
+        "brief": "Android refinement for students and researchers asking evidence-grounded questions about books"
+    },
+    {
         "date": "2026-07-28",
         "scope": "apps/mobile",
         "macrostructure": "Adaptive Catalogue / Split Studio",
