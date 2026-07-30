@@ -303,6 +303,29 @@ test("getOwnedReaderManifest returns ready manifest with cover and toc fallback"
     assert.deepEqual(calls.resources, [bookId]);
 });
 
+test("getOwnedReaderManifest falls back to the first image resource", async () => {
+    const { dependencies } = createHarness({
+        book: ownedBook({
+            readerPackageStatus: "ready",
+            readerPackageGeneratedAt: new Date("2026-02-01T00:00:00.000Z"),
+        }),
+        resources: [
+            {
+                id: "inline-image",
+                mediaType: "image/png",
+                size: 4,
+                isCover: false,
+            },
+        ],
+    });
+
+    const result = await getOwnedReaderManifest(bookId, userId, dependencies);
+    assert.equal(
+        result.kind === "ready" ? result.manifest.coverResourceId : null,
+        "inline-image"
+    );
+});
+
 test("getOwnedReaderChapter returns null when the chapter is missing", async () => {
     const { calls, dependencies } = createHarness({ chapter: null });
 

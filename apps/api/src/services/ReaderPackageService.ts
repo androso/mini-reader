@@ -383,6 +383,11 @@ export const getOwnedReaderManifest = async (
 
     const chapters = await dependencies.repository.listChapters(bookId);
     const resources = await dependencies.repository.listResources(bookId);
+    const coverResource =
+        resources.find((resource) => resource.isCover) ??
+        resources.find((resource) =>
+            resource.mediaType.toLowerCase().startsWith("image/")
+        );
     return {
         kind: "ready" as const,
         manifest: {
@@ -409,8 +414,7 @@ export const getOwnedReaderManifest = async (
             resources: resources.map(
                 ({ isCover: _isCover, ...resource }) => resource
             ),
-            coverResourceId:
-                resources.find((resource) => resource.isCover)?.id ?? null,
+            coverResourceId: coverResource?.id ?? null,
             generatedAt:
                 book.readerPackageGeneratedAt?.toISOString() ??
                 new Date(0).toISOString(),

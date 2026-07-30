@@ -1,9 +1,20 @@
-import type { PublicBook } from "@reader/contracts";
+import type { EpubReaderManifest, PublicBook } from "@reader/contracts";
 import { Feather } from "@expo/vector-icons";
-import { Pressable, StyleSheet, Text, View, ViewStyle } from "react-native";
-import { useState } from "react";
+import {
+    ActivityIndicator,
+    Image,
+    Pressable,
+    StyleSheet,
+    Text,
+    View,
+    ViewStyle,
+} from "react-native";
+import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { ActionButton } from "./ActionButton";
 import type { DownloadRecord } from "@/lib/database";
+import { apiFetch } from "@/lib/api";
+import { resourceUri } from "@/lib/downloads";
 import { color, radius, space, type } from "@/theme/tokens";
 
 type Props = {
@@ -19,6 +30,9 @@ type Props = {
     onDelete(): void;
     style?: ViewStyle;
 };
+type CoverManifestState =
+    | { status: "processing" | "unavailable" }
+    | { status: "ready"; manifest: EpubReaderManifest };
 
 export const BookCard = ({
     book,
@@ -35,10 +49,60 @@ export const BookCard = ({
 }: Props) => {
     const [focused, setFocused] = useState(false);
     const [hovered, setHovered] = useState(false);
+    const [coverUri, setCoverUri] = useState<string | null>(null);
+    const [coverFailed, setCoverFailed] = useState(false);
     const ready = book.processingStatus === "ready";
     const downloaded = download?.status === "complete";
     const unavailable = Boolean(unavailableReason);
     const openDisabled = unavailable || !ready;
+    const coverManifest = useQuery({
+        queryKey: ["book-cover-manifest", book.id],
+        queryFn: async (): Promise<CoverManifestState> => {
+            const response = await apiFetch(
+                `/api/books/${book.id}/reader-manifest`
+            );
+            if (response.status === 202) return { status: "processing" };
+            if (response.status === 409) return { status: "unavailable" };
+            if (!response.ok) {
+                throw new Error("The book cover could not be loaded.");
+            }
+            return {
+                status: "ready",
+                manifest: (await response.json()) as EpubReaderManifest,
+            };
+        },
+        enabled: ready && book.fileType === "epub",
+        retry: false,
+        refetchInterval: (query) =>
+            query.state.data?.status === "processing" ? 3000 : false,
+    });
+    const coverResourceId =
+        coverManifest.data?.status === "ready"
+            ? coverManifest.data.manifest.coverResourceId
+            : null;
+
+    useEffect(() => {
+        let cancelled = false;
+        setCoverUri(null);
+        setCoverFailed(false);
+        if (!coverResourceId) return;
+        void resourceUri(book.id, coverResourceId)
+            .then((uri) => {
+                if (!cancelled) setCoverUri(uri);
+            })
+            .catch(() => {
+                if (!cancelled) setCoverFailed(true);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [book.id, coverResourceId]);
+
+    const showFallback = !coverUri || coverFailed;
+    const coverLoading =
+        ready &&
+        book.fileType === "epub" &&
+        (coverManifest.isPending || Boolean(coverResourceId && !coverUri));
     const statusLabel = unavailable
         ? unavailableReason!
         : download?.status === "downloading"
@@ -82,16 +146,33 @@ export const BookCard = ({
                     pressed && styles.pressed,
                 ]}
             >
-                <Text style={styles.coverLetter}>
-                    {book.title.trim().slice(0, 1).toUpperCase() || "M"}
-                </Text>
-                <View style={styles.coverRule} />
-                <Text numberOfLines={4} style={styles.coverTitle}>
-                    {book.title}
-                </Text>
-                <Text style={styles.coverType}>
-                    {(book.fileType ?? "BOOK").toUpperCase()}
-                </Text>
+                {!showFallback ? (
+                    <Image
+                        accessibilityLabel={`${book.title} cover`}
+                        onError={() => setCoverFailed(true)}
+                        resizeMode="cover"
+                        source={{ uri: coverUri }}
+                        style={styles.coverImage}
+                    />
+                ) : (
+                    <>
+                        <Text style={styles.coverLetter}>
+                            {book.title.trim().slice(0, 1).toUpperCase() || "M"}
+                        </Text>
+                        <View style={styles.coverRule} />
+                        <Text numberOfLines={4} style={styles.coverTitle}>
+                            {book.title}
+                        </Text>
+                        <Text style={styles.coverType}>
+                            {(book.fileType ?? "BOOK").toUpperCase()}
+                        </Text>
+                    </>
+                )}
+                {coverLoading ? (
+                    <View style={styles.coverLoading}>
+                        <ActivityIndicator color={color.darkInk} size="small" />
+                    </View>
+                ) : null}
             </Pressable>
             <View style={styles.meta}>
                 <Text numberOfLines={2} style={styles.title}>
@@ -222,6 +303,17 @@ const styles = StyleSheet.create({
         overflow: "hidden",
     },
     coverEmphasized: { width: 130, minHeight: 190 },
+    coverImage: {
+        ...StyleSheet.absoluteFill,
+        width: undefined,
+        height: undefined,
+    },
+    coverLoading: {
+        ...StyleSheet.absoluteFill,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: color.paper2,
+    },
     focused: { borderColor: color.focus },
     hovered: { transform: [{ translateY: -2 }] },
     pressed: { transform: [{ translateY: 1 }] },
