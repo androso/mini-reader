@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import JSZip from "jszip";
 import { buildReaderPackage } from "../src/readerPackage";
+import { extractEpubCoverBuffer } from "../src/server";
 
 const fixture = async () => {
     const zip = new JSZip();
@@ -51,4 +52,24 @@ test("reader packages are deterministic, sanitized, and preserve nested resource
         /script|onload/i
     );
     assert.equal(first.toc[0]?.chapterId, "chapter");
+});
+
+test("extracts an EPUB 2 metadata cover outside the spine", async () => {
+    const zip = new JSZip();
+    zip.file(
+        "META-INF/container.xml",
+        `<?xml version="1.0"?><container xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="content.opf"/></rootfiles></container>`
+    );
+    zip.file(
+        "content.opf",
+        `<package version="2.0"><metadata><title>Legacy</title><meta name="cover" content="cover-art"/></metadata><manifest><item id="chapter" href="chapter.xhtml" media-type="application/xhtml+xml"/><item id="cover-art" href="images/art.jpg" media-type="image/jpeg"/></manifest><spine><itemref idref="chapter"/></spine></package>`
+    );
+    zip.file("chapter.xhtml", "<html><body><p>Text</p></body></html>");
+    zip.file("images/art.jpg", Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+
+    const cover = await extractEpubCoverBuffer(
+        await zip.generateAsync({ type: "nodebuffer" })
+    );
+    assert.equal(cover?.mediaType, "image/jpeg");
+    assert.deepEqual(cover?.bytes, Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
 });

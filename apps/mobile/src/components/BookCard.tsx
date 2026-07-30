@@ -1,4 +1,4 @@
-import type { EpubReaderManifest, PublicBook } from "@reader/contracts";
+import type { PublicBook } from "@reader/contracts";
 import { Feather } from "@expo/vector-icons";
 import {
     ActivityIndicator,
@@ -9,12 +9,11 @@ import {
     View,
     ViewStyle,
 } from "react-native";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ActionButton } from "./ActionButton";
 import type { DownloadRecord } from "@/lib/database";
-import { apiFetch } from "@/lib/api";
-import { resourceUri } from "@/lib/downloads";
+import { bookCoverUri } from "@/lib/downloads";
 import { color, radius, space, type } from "@/theme/tokens";
 
 type Props = {
@@ -30,10 +29,6 @@ type Props = {
     onDelete(): void;
     style?: ViewStyle;
 };
-type CoverManifestState =
-    | { status: "processing" | "unavailable" }
-    | { status: "ready"; manifest: EpubReaderManifest };
-
 export const BookCard = ({
     book,
     download,
@@ -49,60 +44,21 @@ export const BookCard = ({
 }: Props) => {
     const [focused, setFocused] = useState(false);
     const [hovered, setHovered] = useState(false);
-    const [coverUri, setCoverUri] = useState<string | null>(null);
     const [coverFailed, setCoverFailed] = useState(false);
     const ready = book.processingStatus === "ready";
     const downloaded = download?.status === "complete";
     const unavailable = Boolean(unavailableReason);
     const openDisabled = unavailable || !ready;
-    const coverManifest = useQuery({
-        queryKey: ["book-cover-manifest", book.id],
-        queryFn: async (): Promise<CoverManifestState> => {
-            const response = await apiFetch(
-                `/api/books/${book.id}/reader-manifest`
-            );
-            if (response.status === 202) return { status: "processing" };
-            if (response.status === 409) return { status: "unavailable" };
-            if (!response.ok) {
-                throw new Error("The book cover could not be loaded.");
-            }
-            return {
-                status: "ready",
-                manifest: (await response.json()) as EpubReaderManifest,
-            };
-        },
-        enabled: ready && book.fileType === "epub",
+    const cover = useQuery({
+        queryKey: ["book-cover", book.id],
+        queryFn: () => bookCoverUri(book.id),
+        enabled: book.fileType === "epub",
         retry: false,
-        refetchInterval: (query) =>
-            query.state.data?.status === "processing" ? 3000 : false,
     });
-    const coverResourceId =
-        coverManifest.data?.status === "ready"
-            ? coverManifest.data.manifest.coverResourceId
-            : null;
-
-    useEffect(() => {
-        let cancelled = false;
-        setCoverUri(null);
-        setCoverFailed(false);
-        if (!coverResourceId) return;
-        void resourceUri(book.id, coverResourceId)
-            .then((uri) => {
-                if (!cancelled) setCoverUri(uri);
-            })
-            .catch(() => {
-                if (!cancelled) setCoverFailed(true);
-            });
-        return () => {
-            cancelled = true;
-        };
-    }, [book.id, coverResourceId]);
-
+    const coverUri = cover.data ?? null;
     const showFallback = !coverUri || coverFailed;
-    const coverLoading =
-        ready &&
-        book.fileType === "epub" &&
-        (coverManifest.isPending || Boolean(coverResourceId && !coverUri));
+    const coverLoading = book.fileType === "epub" && cover.isPending;
+
     const statusLabel = unavailable
         ? unavailableReason!
         : download?.status === "downloading"

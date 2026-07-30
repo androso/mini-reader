@@ -223,6 +223,45 @@ export const processEpubFile = async (
         }
     });
 
+    const manifestCover = Object.values(manifest).find((item) =>
+        item.properties?.split(/\s+/).includes("cover-image")
+    );
+    const legacyCoverId = Array.from(opfDoc.querySelectorAll("metadata meta"))
+        .find(
+            (meta) =>
+                meta.getAttribute("name")?.trim().toLowerCase() === "cover"
+        )
+        ?.getAttribute("content");
+    const legacyCover = legacyCoverId
+        ? manifest[legacyCoverId.trim()]
+        : undefined;
+    const guideCoverHref = Array.from(
+        opfDoc.querySelectorAll("guide reference")
+    )
+        .find(
+            (reference) =>
+                reference.getAttribute("type")?.trim().toLowerCase() === "cover"
+        )
+        ?.getAttribute("href");
+    const guideCover = guideCoverHref
+        ? Object.values(manifest).find(
+              (item) =>
+                  cleanHref(item.href).split("#")[0] ===
+                  cleanHref(guideCoverHref).split("#")[0]
+          )
+        : undefined;
+    const coverItem = manifestCover ?? legacyCover ?? guideCover;
+    const coverReference = coverItem
+        ? {
+              href: coverItem.href,
+              kind: coverItem.mediaType.startsWith("image/")
+                  ? ("image" as const)
+                  : ("document" as const),
+          }
+        : guideCoverHref
+          ? { href: guideCoverHref, kind: "document" as const }
+          : null;
+
     const basePath = getBasePath(opfPath);
     let tocFile: JSZip.JSZipObject | null = null;
 
@@ -254,6 +293,7 @@ export const processEpubFile = async (
             manifest,
             basePath,
             toc: await processToc(tocFile, manifest, basePath, zipData),
+            coverReference,
         },
         zip,
     ];

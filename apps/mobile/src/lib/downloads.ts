@@ -211,6 +211,23 @@ export const resourceUri = async (bookId: string, resourceId: string) => {
     return destination;
 };
 
+export const bookCoverUri = async (bookId: string) => {
+    const root = readerResourceCacheRoot(bookId);
+    await ensureDirectory(root);
+    const destination = `${root}cover`;
+    const existing = await FileSystem.getInfoAsync(destination);
+    if (!existing.exists) {
+        const response = await apiFetch(`/api/books/${bookId}/cover`);
+        if (!response.ok) throw new Error("Book cover could not be loaded");
+        await FileSystem.downloadAsync(
+            apiUrl(`/api/books/${bookId}/cover`),
+            destination,
+            { headers: authorizedHeaders() }
+        );
+    }
+    return destination;
+};
+
 export const offlinePdfUri = async (bookId: string) => {
     const record = await getDownload(bookId);
     return record?.status === "complete" && record.file_type === "pdf"

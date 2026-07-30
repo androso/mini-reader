@@ -24,6 +24,10 @@ export interface EpubContent {
     manifest: Record<string, ManifestItem>;
     basePath: string;
     toc: TocEntry[];
+    coverReference?: {
+        href: string;
+        kind: "image" | "document";
+    } | null;
 }
 
 export interface TextBlock {

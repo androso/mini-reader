@@ -204,6 +204,26 @@ test(
                             status: "processing",
                         });
 
+                        const cover = await fetch(
+                            `${baseUrl}/api/books/${EPUB_ID}/cover`,
+                            { headers: { Cookie: cookie } }
+                        );
+                        assert.equal(cover.status, 200);
+                        assert.equal(
+                            cover.headers.get("content-type"),
+                            "image/svg+xml"
+                        );
+                        assert.ok(
+                            Buffer.from(await cover.arrayBuffer()).byteLength >
+                                0
+                        );
+
+                        const pdfCover = await fetch(
+                            `${baseUrl}/api/books/${PDF_ID}/cover`,
+                            { headers: { Cookie: cookie } }
+                        );
+                        assert.equal(pdfCover.status, 404);
+
                         await generateAndPersistReaderPackage(EPUB_ID, USER_ID);
 
                         const ready = await fetch(

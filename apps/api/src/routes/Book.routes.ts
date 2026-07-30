@@ -7,11 +7,12 @@ import {
     getFile,
     uploadFile,
 } from "@reader/providers";
+import { extractEpubCoverBuffer } from "@reader/epub/dist/server";
 import { authenticate } from "../middleware/auth";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { db } from "../db";
 import { Books } from "../db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import {
     BookProcessingQueueUnavailableError,
     handleBookProcessingEnqueue,
@@ -571,6 +572,39 @@ router.post(
             return;
         }
         res.status(202).json({ status: "processing" });
+    })
+);
+
+router.get(
+    "/:bookId/cover",
+    authenticate,
+    asyncHandler(async (req, res) => {
+        const [book] = await db
+            .select({
+                fileKey: Books.fileKey,
+                fileType: Books.fileType,
+            })
+            .from(Books)
+            .where(
+                and(
+                    eq(Books.id, req.params.bookId),
+                    eq(Books.userId, req.user.id)
+                )
+            );
+        if (!book || book.fileType !== "epub") {
+            res.status(404).json({ error: "EPUB cover was not found" });
+            return;
+        }
+
+        const cover = await extractEpubCoverBuffer(await getFile(book.fileKey));
+        if (!cover) {
+            res.status(404).json({ error: "EPUB cover was not found" });
+            return;
+        }
+        res.setHeader("Content-Type", cover.mediaType);
+        res.setHeader("Cache-Control", "private, max-age=86400");
+        res.setHeader("X-Content-Type-Options", "nosniff");
+        res.status(200).send(cover.bytes);
     })
 );
 

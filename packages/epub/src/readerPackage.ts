@@ -52,14 +52,91 @@ export const buildReaderPackage = async (
     const chapters: ReaderPackageChapter[] = [];
     const hrefToChapter = new Map<string, string>();
 
-    const coverManifestEntry = Object.entries(content.manifest).find(
+    const resolveManifestCover = (href: string) => {
+        const entry = findExactManifestEntryByHref(content.manifest, href);
+        const manifestHref = entry
+            ? normalizeEpubPackagePath(entry.item.href)
+            : null;
+        const mediaType = entry
+            ? normalizeImageMediaType(entry.item.mediaType, entry.item.href)
+            : null;
+        return entry && manifestHref && mediaType
+            ? {
+                  manifestHref,
+                  mediaType,
+                  zipPath: `${content.basePath}${manifestHref}`.replace(
+                      /\/{2,}/g,
+                      "/"
+                  ),
+              }
+            : null;
+    };
+    const manifestCoverEntry = Object.entries(content.manifest).find(
         ([id, item]) =>
             item.properties?.split(/\s+/).includes("cover-image") ||
             /^cover(?:-image)?$/i.test(id)
     );
-    const coverHref = coverManifestEntry
-        ? normalizeEpubPackagePath(coverManifestEntry[1].href)
-        : null;
+    let coverResolved =
+        content.coverReference?.kind === "image"
+            ? resolveManifestCover(content.coverReference.href)
+            : null;
+    if (content.coverReference?.kind === "document") {
+        const documentHref = normalizeEpubPackagePath(
+            content.coverReference.href.split("#")[0]
+        );
+        const documentFile = documentHref
+            ? zip.file(`${content.basePath}${documentHref}`)
+            : null;
+        if (documentFile) {
+            const coverDom = new JSDOM(await documentFile.async("text"));
+            try {
+                const image =
+                    coverDom.window.document.querySelector("img, image");
+                const imageHref =
+                    image?.getAttribute("src") ??
+                    image?.getAttribute("href") ??
+                    image?.getAttribute("xlink:href");
+                if (imageHref) {
+                    coverResolved = resolveEpubImageResource(
+                        content,
+                        documentHref!,
+                        imageHref
+                    );
+                }
+            } finally {
+                coverDom.window.close();
+            }
+        }
+    }
+    if (!coverResolved && manifestCoverEntry) {
+        coverResolved = resolveManifestCover(manifestCoverEntry[1].href);
+    }
+    const coverHref = coverResolved?.manifestHref ?? null;
+
+    if (coverResolved) {
+        const archiveResource = zip.file(coverResolved.zipPath);
+        if (archiveResource) {
+            let bytes = await archiveResource.async("uint8array");
+            if (coverResolved.mediaType === "image/svg+xml") {
+                const svgDom = new JSDOM(Buffer.from(bytes).toString("utf8"));
+                try {
+                    const sanitized = sanitizeEpubSvg(
+                        svgDom.window.document.documentElement.outerHTML,
+                        svgDom.window.document
+                    );
+                    if (sanitized) bytes = Buffer.from(sanitized, "utf8");
+                } finally {
+                    svgDom.window.close();
+                }
+            }
+            resources.set(resourceId(coverResolved.manifestHref), {
+                id: resourceId(coverResolved.manifestHref),
+                mediaType: coverResolved.mediaType,
+                bytes,
+                isCover: true,
+            });
+        }
+    }
 
     for (const [order, chapterId] of content.spine.entries()) {
         const manifestItem = content.manifest[chapterId];
