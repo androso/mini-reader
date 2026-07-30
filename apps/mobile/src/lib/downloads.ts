@@ -18,6 +18,25 @@ const ensureDirectory = async (uri: string) => {
 
 const safeName = (value: string) => encodeURIComponent(value);
 
+export const readerResourceCacheRoot = (bookId: string) =>
+    `${FileSystem.cacheDirectory}reader-resources/${safeName(bookId)}/`;
+
+export const offlineEpubRoot = async (bookId: string) => {
+    const record = await getDownload(bookId);
+    return record?.status === "complete" && record.file_type === "epub"
+        ? record.root_uri
+        : null;
+};
+
+export const writeChapterHtmlDocument = async (
+    htmlFileUri: string,
+    html: string
+) => {
+    const directory = htmlFileUri.slice(0, htmlFileUri.lastIndexOf("/") + 1);
+    await ensureDirectory(directory);
+    await FileSystem.writeAsStringAsync(htmlFileUri, html);
+};
+
 export const bookRoot = (bookId: string) =>
     `${privateRoot}books/${safeName(bookId)}/`;
 
@@ -172,9 +191,7 @@ export const resourceUri = async (bookId: string, resourceId: string) => {
     if (record?.status === "complete" && record.file_type === "epub") {
         return `${record.root_uri}resources/${safeName(resourceId)}`;
     }
-    const root = `${FileSystem.cacheDirectory}reader-resources/${safeName(
-        bookId
-    )}/`;
+    const root = readerResourceCacheRoot(bookId);
     await ensureDirectory(root);
     const destination = `${root}${safeName(resourceId)}`;
     const existing = await FileSystem.getInfoAsync(destination);

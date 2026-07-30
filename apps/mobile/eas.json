@@ -15,6 +15,13 @@
             "env": {
                 "EXPO_PUBLIC_API_URL": "https://reader.mentarie.com"
             }
+        },
+        "production": {
+            "distribution": "store",
+            "channel": "production",
+            "env": {
+                "EXPO_PUBLIC_API_URL": "https://reader.mentarie.com"
+            }
         }
     }
 }

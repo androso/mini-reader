@@ -1,15 +1,26 @@
 import { router } from "expo-router";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ActionButton } from "@/components/ActionButton";
 import { useReadingTheme } from "@/providers/ReadingThemeProvider";
 import { useSession } from "@/providers/SessionProvider";
 import { color, radius, space, type } from "@/theme/tokens";
 
 export default function Settings() {
+    const insets = useSafeAreaInsets();
     const { session, signOut } = useSession();
     const { preference, setPreference } = useReadingTheme();
     return (
-        <ScrollView style={styles.root} contentContainerStyle={styles.content}>
+        <ScrollView
+            style={styles.root}
+            contentContainerStyle={[
+                styles.content,
+                {
+                    paddingTop: insets.top + space.lg,
+                    paddingBottom: space.lg + insets.bottom,
+                },
+            ]}
+        >
             <ActionButton
                 label="Library"
                 icon="arrow-left"
@@ -57,8 +68,7 @@ export default function Settings() {
 const styles = StyleSheet.create({
     root: { flex: 1, backgroundColor: color.darkPaper },
     content: {
-        padding: space.lg,
-        paddingTop: space.xl,
+        paddingHorizontal: space.lg,
         gap: space.lg,
         maxWidth: 760,
         width: "100%",

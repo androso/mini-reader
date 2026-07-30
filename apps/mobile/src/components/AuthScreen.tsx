@@ -9,6 +9,8 @@ import {
     View,
 } from "react-native";
 import { Link } from "expo-router";
+import { StatusBar } from "expo-status-bar";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ActionButton } from "./ActionButton";
 import { FormField } from "./FormField";
 import { ApiError } from "@/lib/api";
@@ -32,6 +34,7 @@ const usernameError = (username: string) =>
 
 export const AuthScreen = ({ mode }: Props) => {
     const { width } = useWindowDimensions();
+    const insets = useSafeAreaInsets();
     const { signIn, signUp } = useSession();
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
@@ -71,12 +74,17 @@ export const AuthScreen = ({ mode }: Props) => {
     return (
         <KeyboardAvoidingView
             style={styles.root}
-            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
         >
+            <StatusBar style="dark" />
             <ScrollView
                 contentContainerStyle={[
                     styles.scroll,
                     width >= 768 && styles.scrollTablet,
+                    {
+                        paddingTop: insets.top + space.lg,
+                        paddingBottom: insets.bottom + space.lg,
+                    },
                 ]}
                 keyboardShouldPersistTaps="handled"
             >

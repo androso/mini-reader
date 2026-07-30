@@ -2,7 +2,16 @@ import { useEffect, useMemo, useState } from "react";
 import { Keyboard, Linking, StyleSheet, View } from "react-native";
 import { WebView, type WebViewMessageEvent } from "react-native-webview";
 import type { EpubReaderChapter, HighlightContext } from "@reader/contracts";
-import { resourceUri } from "@/lib/downloads";
+import {
+    offlineEpubRoot,
+    readerResourceCacheRoot,
+    resourceUri,
+    writeChapterHtmlDocument,
+} from "@/lib/downloads";
+import {
+    chapterRenderDirectory,
+    rewriteChapterResourceSrcs,
+} from "@/lib/epubWebView";
 import {
     readerHighlightContextFromMessage,
     type ReaderBridgeMessage,
@@ -527,7 +536,10 @@ export const EpubChapterView = ({
     onSelection(context: HighlightContext): void;
     onNavigate(direction: "previous" | "next"): void;
 }) => {
-    const [html, setHtml] = useState<string | null>(null);
+    const [document, setDocument] = useState<{
+        htmlFileUri: string;
+        readAccessUri: string;
+    } | null>(null);
     const resourceIds = useMemo(
         () =>
             Array.from(
@@ -546,26 +558,40 @@ export const EpubChapterView = ({
     );
     useEffect(() => {
         let cancelled = false;
-        void Promise.all(
-            resourceIds.map(async (id) => [id, await resourceUri(bookId, id)])
-        ).then((entries) => {
+        setDocument(null);
+        void (async () => {
+            // Ensure remote resources exist under the shared render directory before
+            // writing HTML. WKWebView only honors allowingReadAccessToURL for file URIs.
+            await Promise.all(resourceIds.map((id) => resourceUri(bookId, id)));
             if (cancelled) return;
-            const uriById = new Map<string, string>(
-                entries as Array<[string, string]>
+            const render = chapterRenderDirectory({
+                offlineRootUri: await offlineEpubRoot(bookId),
+                cacheRootUri: readerResourceCacheRoot(bookId),
+            });
+            const resourceSrcById = new Map(
+                resourceIds.map((id) => [id, render.resourceSrc(id)] as const)
             );
             const blocks = chapter.blocks.map((block) => {
-                let content = block.html;
-                for (const [id, uri] of uriById) {
-                    content = content.replace(
-                        new RegExp(`data-reader-resource-id="${id}"`, "g"),
-                        `src="${uri}" data-reader-resource-id="${id}"`
-                    );
-                }
+                const content = rewriteChapterResourceSrcs(
+                    block.html,
+                    resourceSrcById
+                );
                 return `<section data-block-id="${block.id}" id="${block.id}">${content}</section>`;
             });
-            setHtml(
-                createDocument(chapter, blocks, isDark, swipeActionsEnabled)
+            const html = createDocument(
+                chapter,
+                blocks,
+                isDark,
+                swipeActionsEnabled
             );
+            await writeChapterHtmlDocument(render.htmlFileUri, html);
+            if (cancelled) return;
+            setDocument({
+                htmlFileUri: render.htmlFileUri,
+                readAccessUri: render.readAccessUri,
+            });
+        })().catch(() => {
+            if (!cancelled) setDocument(null);
         });
         return () => {
             cancelled = true;
@@ -593,14 +619,14 @@ export const EpubChapterView = ({
             // Ignore messages that do not conform to the app-controlled bridge.
         }
     };
-    if (!html) return <View style={styles.loading} />;
+    if (!document) return <View style={styles.loading} />;
     return (
         <WebView
-            source={{ html }}
+            source={{ uri: document.htmlFileUri }}
             style={styles.webview}
             originWhitelist={["about:blank", "file://*"]}
             allowFileAccess
-            allowingReadAccessToURL="file://"
+            allowingReadAccessToURL={document.readAccessUri}
             javaScriptEnabled
             domStorageEnabled={false}
             setSupportMultipleWindows={false}
