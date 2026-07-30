@@ -13,6 +13,7 @@ import {
 import { Feather } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useNetInfo } from "@react-native-community/netinfo";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
     EpubReaderChapter,
@@ -92,6 +93,7 @@ const loadChapter = async (
 export default function Reader() {
     const { bookId } = useLocalSearchParams<{ bookId: string }>();
     const { width } = useWindowDimensions();
+    const insets = useSafeAreaInsets();
     const isTablet = width >= 768;
     const network = useNetInfo();
     const online = network.isConnected !== false;
@@ -274,6 +276,7 @@ export default function Reader() {
                 chapter={chapter.data}
                 isDark={isDark}
                 restoreBlockId={restoreBlock}
+                swipeActionsEnabled={!isTablet}
                 onVisibleBlock={(blockId) => {
                     setRestoreBlock(blockId);
                     persistProgress(blockId, chapter.data.id);
@@ -289,6 +292,7 @@ export default function Reader() {
         chapter.data,
         initialPdfPage,
         isDark,
+        isTablet,
         manifest,
         online,
         pdfUri,
@@ -302,7 +306,15 @@ export default function Reader() {
                 enabled={!isTablet}
                 style={[styles.readerPane, isTablet && styles.readerTablet]}
             >
-                <View style={styles.header}>
+                <View
+                    style={[
+                        styles.header,
+                        {
+                            paddingTop: insets.top,
+                            minHeight: 64 + insets.top,
+                        },
+                    ]}
+                >
                     <Pressable
                         accessibilityRole="button"
                         accessibilityLabel="Back to library"
@@ -349,7 +361,12 @@ export default function Reader() {
                 </View>
                 <View style={styles.viewer}>{readerContent}</View>
                 {tocOpen && readyManifest && (
-                    <View style={styles.toc}>
+                    <View
+                        style={[
+                            styles.toc,
+                            { top: 64 + insets.top + space.xs },
+                        ]}
+                    >
                         <View style={styles.tocHeader}>
                             <Text style={styles.tocTitle}>
                                 Table of contents

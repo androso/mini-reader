@@ -460,7 +460,11 @@ export const ReaderChat = ({
             {!historyOpen && (
                 <View style={styles.composerArea}>
                     {highlightContext && (
-                        <View style={styles.contextChip}>
+                        <View
+                            style={styles.contextChip}
+                            accessibilityLiveRegion="polite"
+                            accessibilityLabel="Paragraph context added to the next question"
+                        >
                             <Feather
                                 name="bookmark"
                                 size={14}

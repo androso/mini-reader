@@ -12,6 +12,7 @@
         "src/lib/chatModelLabel.ts",
         "src/lib/chatSources.ts",
         "src/lib/chatMarkdown.ts",
+        "src/lib/readerBridge.ts",
         "test/**/*.ts"
     ]
 }
