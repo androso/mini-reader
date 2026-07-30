@@ -8,9 +8,14 @@ import {
     getCachedSession,
     getOfflineBook,
     getOfflineProgress,
+    getStorageEstimate,
     listOfflineBooks,
+    listOfflineProgress,
+    markProgressSynced,
     putOfflineProgress,
     removeOfflineBook,
+    removeOfflineProgress,
+    requestPersistentStorage,
     storeOfflineBook,
 } from "../src/lib/offlineStore";
 import type { Book } from "../src/types/bookTypes";
@@ -110,4 +115,139 @@ test("a quota failure replacing a download preserves the prior record", async ()
     const preserved = await getOfflineBook(epubBook.id);
     assert.ok(preserved);
     assert.deepEqual(await bytes(preserved.blob), [1, 2, 3]);
+});
+
+test("unsupported file types are rejected before IndexedDB writes", async () => {
+    await assert.rejects(
+        storeOfflineBook(
+            { ...epubBook, fileType: null },
+            new Blob([new Uint8Array([1])])
+        ),
+        /Only EPUB and PDF books can be stored offline\./
+    );
+    assert.deepEqual(await listOfflineBooks(), []);
+});
+
+test("IndexedDB read and delete failures propagate to callers", async () => {
+    await storeOfflineBook(epubBook, new Blob([new Uint8Array([1, 2, 3])]));
+    await putOfflineProgress({
+        bookId: epubBook.id,
+        progressPosition: "1",
+        progressChapter: "c1",
+        dirty: true,
+    });
+
+    const originalGet = IDBObjectStore.prototype.get;
+    const originalDelete = IDBObjectStore.prototype.delete;
+
+    IDBObjectStore.prototype.get = function () {
+        throw new DOMException("get failed", "UnknownError");
+    };
+    try {
+        await assert.rejects(
+            getOfflineBook(epubBook.id),
+            (error: unknown) =>
+                error instanceof DOMException && error.name === "UnknownError"
+        );
+    } finally {
+        IDBObjectStore.prototype.get = originalGet;
+    }
+
+    IDBObjectStore.prototype.delete = function () {
+        throw new DOMException("delete failed", "UnknownError");
+    };
+    try {
+        await assert.rejects(
+            removeOfflineBook(epubBook.id),
+            (error: unknown) =>
+                error instanceof DOMException && error.name === "UnknownError"
+        );
+        await assert.rejects(
+            removeOfflineProgress(epubBook.id),
+            (error: unknown) =>
+                error instanceof DOMException && error.name === "UnknownError"
+        );
+    } finally {
+        IDBObjectStore.prototype.delete = originalDelete;
+    }
+
+    assert.ok(await getOfflineBook(epubBook.id));
+    assert.ok(await getOfflineProgress(epubBook.id));
+});
+
+test("markProgressSynced clears dirty only for the matching revision", async () => {
+    const first = await putOfflineProgress({
+        bookId: epubBook.id,
+        progressPosition: "1",
+        progressChapter: "c1",
+        dirty: true,
+    });
+    await markProgressSynced(epubBook.id, first.revision - 1);
+    assert.equal((await getOfflineProgress(epubBook.id))?.dirty, true);
+
+    await markProgressSynced(epubBook.id, first.revision);
+    assert.equal((await getOfflineProgress(epubBook.id))?.dirty, false);
+
+    const second = await putOfflineProgress({
+        bookId: epubBook.id,
+        progressPosition: "2",
+        progressChapter: "c2",
+        dirty: true,
+    });
+    assert.equal(second.revision, first.revision + 1);
+    assert.deepEqual(
+        (await listOfflineProgress()).map((record) => record.bookId),
+        [epubBook.id]
+    );
+
+    await removeOfflineProgress(epubBook.id);
+    assert.equal(await getOfflineProgress(epubBook.id), undefined);
+});
+
+test("storage helpers fall back when navigator.storage is unavailable", async () => {
+    const originalStorage = Object.getOwnPropertyDescriptor(
+        globalThis.navigator,
+        "storage"
+    );
+
+    Object.defineProperty(globalThis.navigator, "storage", {
+        configurable: true,
+        value: undefined,
+    });
+    try {
+        assert.equal(await requestPersistentStorage(), false);
+        assert.deepEqual(await getStorageEstimate(), {});
+    } finally {
+        if (originalStorage) {
+            Object.defineProperty(
+                globalThis.navigator,
+                "storage",
+                originalStorage
+            );
+        } else {
+            Reflect.deleteProperty(globalThis.navigator, "storage");
+        }
+    }
+
+    Object.defineProperty(globalThis.navigator, "storage", {
+        configurable: true,
+        value: {
+            persist: async () => true,
+            estimate: async () => ({ quota: 10, usage: 2 }),
+        },
+    });
+    try {
+        assert.equal(await requestPersistentStorage(), true);
+        assert.deepEqual(await getStorageEstimate(), { quota: 10, usage: 2 });
+    } finally {
+        if (originalStorage) {
+            Object.defineProperty(
+                globalThis.navigator,
+                "storage",
+                originalStorage
+            );
+        } else {
+            Reflect.deleteProperty(globalThis.navigator, "storage");
+        }
+    }
 });

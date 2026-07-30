@@ -1,18 +1,27 @@
 {
     "extends": "../../tsconfig.base.json",
     "compilerOptions": {
+        "module": "ES2022",
+        "moduleResolution": "node",
         "rootDir": ".",
         "outDir": "../../.tmp/apps-mobile-test",
         "typeRoots": ["../api/node_modules/@types"],
-        "types": ["node"]
+        "types": ["node"],
+        "sourceMap": true,
+        "inlineSources": true
     },
     "include": [
-        "src/lib/sse.ts",
-        "src/lib/downloadState.ts",
+        "src/lib/api.ts",
+        "src/lib/bookCompatibility.ts",
+        "src/lib/bookUpload.ts",
+        "src/lib/chatMarkdown.ts",
         "src/lib/chatModelLabel.ts",
         "src/lib/chatSources.ts",
-        "src/lib/chatMarkdown.ts",
+        "src/lib/downloadState.ts",
+        "src/lib/epubWebView.ts",
+        "src/lib/keyboardInset.ts",
         "src/lib/readerBridge.ts",
+        "src/lib/sse.ts",
         "test/**/*.ts"
     ]
 }

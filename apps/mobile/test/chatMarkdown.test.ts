@@ -4,7 +4,7 @@ import {
     flattenInlineText,
     parseInline,
     parseMarkdownBlocks,
-} from "../src/lib/chatMarkdown";
+} from "../src/lib/chatMarkdown.js";
 
 test("parses bold, italic, and nested emphasis", () => {
     const nodes = parseInline(

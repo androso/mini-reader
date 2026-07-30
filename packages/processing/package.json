@@ -14,7 +14,9 @@
         "prebuild": "pnpm --filter @reader/epub --filter @reader/providers build",
         "build": "tsc -p tsconfig.json",
         "pretest": "pnpm --filter @reader/epub --filter @reader/providers build",
-        "test": "tsc -p tsconfig.test.json && NODE_PATH=../../apps/api/node_modules:../../packages/epub/node_modules:./node_modules node --test ../../.tmp/packages-processing-test/test/processing.test.js"
+        "test": "tsc -p tsconfig.test.json && NODE_PATH=../../apps/api/node_modules:../../packages/epub/node_modules:./node_modules node --test ../../.tmp/packages-processing-test/test/processing.test.js",
+        "pretest:coverage": "pnpm --filter @reader/epub --filter @reader/providers build",
+        "test:coverage": "tsc -p tsconfig.test.json && NODE_PATH=../../apps/api/node_modules:../../packages/epub/node_modules:./node_modules c8 --all --allowExternal --src=../../.tmp/packages-processing-test/src --include='**/packages-processing-test/src/**/*.js' --exclude='**/test/**' --reporter=text --reporter=lcov --reports-dir=../../coverage/processing --check-coverage --lines=90 --functions=90 --branches=80 node --test ../../.tmp/packages-processing-test/test/processing.test.js"
     },
     "dependencies": {
         "@reader/epub": "workspace:*",
@@ -24,6 +26,7 @@
     "devDependencies": {
         "@types/node": "^22.10.2",
         "jszip": "^3.10.1",
-        "typescript": "^5.7.2"
+        "typescript": "^5.7.2",
+        "c8": "11.0.0"
     }
 }

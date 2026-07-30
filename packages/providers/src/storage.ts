@@ -13,23 +13,44 @@ export interface StorageProvider {
     deleteFile(key: string): Promise<unknown>;
 }
 
+export interface ObjectStorageProviderOptions {
+    storageDriver?: "local" | "s3";
+    localStorageDir?: string;
+    s3Client?: Pick<S3Client, "send">;
+    bucketName?: string;
+}
+
 export class ObjectStorageProvider implements StorageProvider {
-    private readonly s3Client: S3Client;
-    private readonly storageDriver: string;
+    private readonly s3Client: Pick<S3Client, "send">;
+    private readonly storageDriver: "local" | "s3";
     private readonly localStorageDir: string;
+    private readonly bucketName: string | undefined;
 
-    constructor() {
-        const endpoint = process.env.S3_ENDPOINT;
-        this.s3Client = new S3Client({
-            ...(endpoint ? { endpoint } : {}),
-            region: process.env.S3_REGION || "us-east-1",
-        });
-        this.storageDriver = process.env.STORAGE_DRIVER || "s3";
+    constructor(options: ObjectStorageProviderOptions = {}) {
+        this.storageDriver =
+            options.storageDriver ??
+            ((process.env.STORAGE_DRIVER as "local" | "s3" | undefined) ||
+                "s3");
+        this.bucketName = options.bucketName ?? process.env.S3_BUCKET_NAME;
 
-        const platformRoot = path.resolve(__dirname, "../../..");
-        this.localStorageDir = process.env.LOCAL_STORAGE_DIR
-            ? path.resolve(platformRoot, process.env.LOCAL_STORAGE_DIR)
-            : path.resolve(platformRoot, ".local-storage");
+        if (options.s3Client) {
+            this.s3Client = options.s3Client;
+        } else {
+            const endpoint = process.env.S3_ENDPOINT;
+            this.s3Client = new S3Client({
+                ...(endpoint ? { endpoint } : {}),
+                region: process.env.S3_REGION || "us-east-1",
+            });
+        }
+
+        if (options.localStorageDir) {
+            this.localStorageDir = options.localStorageDir;
+        } else {
+            const platformRoot = path.resolve(__dirname, "../../..");
+            this.localStorageDir = process.env.LOCAL_STORAGE_DIR
+                ? path.resolve(platformRoot, process.env.LOCAL_STORAGE_DIR)
+                : path.resolve(platformRoot, ".local-storage");
+        }
     }
 
     private localFilePath(key: string) {
@@ -53,7 +74,7 @@ export class ObjectStorageProvider implements StorageProvider {
 
         return this.s3Client.send(
             new PutObjectCommand({
-                Bucket: process.env.S3_BUCKET_NAME,
+                Bucket: this.bucketName,
                 Key: key,
                 Body: file,
             })
@@ -67,7 +88,7 @@ export class ObjectStorageProvider implements StorageProvider {
 
         const response = await this.s3Client.send(
             new GetObjectCommand({
-                Bucket: process.env.S3_BUCKET_NAME,
+                Bucket: this.bucketName,
                 Key: key,
             })
         );
@@ -91,7 +112,7 @@ export class ObjectStorageProvider implements StorageProvider {
 
         return this.s3Client.send(
             new DeleteObjectCommand({
-                Bucket: process.env.S3_BUCKET_NAME,
+                Bucket: this.bucketName,
                 Key: key,
             })
         );

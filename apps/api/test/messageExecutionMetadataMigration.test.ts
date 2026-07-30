@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
-import { Client } from "pg";
+import { integrationTestOptions, withTestDatabase } from "./support/postgres";
 
 const migrationRoot = existsSync(
     "migrations/0016_message_execution_metadata.sql"
@@ -32,13 +31,6 @@ const journal = JSON.parse(
         breakpoints: boolean;
     }>;
 };
-const migrationTestDatabaseUrl =
-    process.env.MESSAGE_EXECUTION_METADATA_MIGRATION_TEST_DATABASE_URL ??
-    process.env.MESSAGE_COMPLETION_MIGRATION_TEST_DATABASE_URL ??
-    process.env.PROGRESS_MIGRATION_TEST_DATABASE_URL;
-
-const quoteIdentifier = (identifier: string) =>
-    `"${identifier.replace(/"/g, '""')}"`;
 
 test("0016 adds one nullable private JSONB column", () => {
     assert.match(
@@ -69,32 +61,12 @@ test("0016 adds one nullable private JSONB column", () => {
 
 test(
     "0016 preserves legacy rows and round-trips compact metadata in PostgreSQL",
-    {
-        skip: migrationTestDatabaseUrl
-            ? false
-            : "requires MESSAGE_EXECUTION_METADATA_MIGRATION_TEST_DATABASE_URL or a compatible migration test URL",
-    },
+    integrationTestOptions,
     async () => {
-        assert.ok(migrationTestDatabaseUrl);
-        const adminUrl = new URL(migrationTestDatabaseUrl);
-        const databaseName = `reader_message_metadata_${randomUUID().replace(/-/g, "")}`;
-        const testUrl = new URL(adminUrl);
-        testUrl.pathname = `/${databaseName}`;
-        const admin = new Client({ connectionString: adminUrl.toString() });
-        let databaseCreated = false;
-
-        await admin.connect();
-        try {
-            await admin.query(
-                `CREATE DATABASE ${quoteIdentifier(databaseName)}`
-            );
-            databaseCreated = true;
-            const database = new Client({
-                connectionString: testUrl.toString(),
-            });
-            await database.connect();
-
-            try {
+        await withTestDatabase(
+            "reader_message_metadata",
+            { migrate: false },
+            async ({ client: database }) => {
                 await database.query(`
                     CREATE TABLE "messages" (
                         "id" uuid PRIMARY KEY,
@@ -154,20 +126,7 @@ test(
                 assert.deepEqual(column.rows, [
                     { data_type: "jsonb", is_nullable: "YES" },
                 ]);
-            } finally {
-                await database.end();
             }
-        } finally {
-            if (databaseCreated) {
-                await admin.query(
-                    `SELECT pg_terminate_backend("pid") FROM "pg_stat_activity" WHERE "datname" = $1`,
-                    [databaseName]
-                );
-                await admin.query(
-                    `DROP DATABASE ${quoteIdentifier(databaseName)}`
-                );
-            }
-            await admin.end();
-        }
+        );
     }
 );

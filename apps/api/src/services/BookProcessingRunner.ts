@@ -1,4 +1,5 @@
 import { createLogger } from "@reader/providers";
+import type { Pool } from "pg";
 import { pool } from "../db";
 import {
     processUploadedBook,
@@ -7,6 +8,18 @@ import {
 import { processNextReaderPackageJob } from "./ReaderPackageService";
 
 const log = createLogger("BookProcessingRunner");
+
+export type BookProcessingWorkDependencies = {
+    pool: Pool;
+    processUploadedBook: typeof processUploadedBook;
+    processNextReaderPackageJob: typeof processNextReaderPackageJob;
+};
+
+const defaultBookProcessingWorkDependencies: BookProcessingWorkDependencies = {
+    pool,
+    processUploadedBook,
+    processNextReaderPackageJob,
+};
 
 interface ClaimedBookProcessingJob extends ProcessUploadedBookPayload {
     id: string;
@@ -54,14 +67,14 @@ export const getRetryDelaySeconds = (
 export const getStaleLockSeconds = (staleLockMs: number) =>
     Math.ceil(staleLockMs / 1000);
 
-const reclaimStaleProcessingJobs = async () => {
+const reclaimStaleProcessingJobs = async (dbPool: Pool) => {
     const staleLockMs = parsePositiveIntegerEnv(
         "BOOK_PROCESSING_STALE_LOCK_MS",
         15 * 60 * 1000
     );
     const staleLockSeconds = getStaleLockSeconds(staleLockMs);
 
-    const failed = await pool.query<{ id: string }>(
+    const failed = await dbPool.query<{ id: string }>(
         `
             WITH stale_jobs AS (
                 UPDATE book_processing_jobs
@@ -87,7 +100,7 @@ const reclaimStaleProcessingJobs = async () => {
         [staleLockSeconds, STALE_LOCK_ERROR]
     );
 
-    const retrying = await pool.query<{ id: string }>(
+    const retrying = await dbPool.query<{ id: string }>(
         `
             UPDATE book_processing_jobs
             SET
@@ -114,8 +127,10 @@ const reclaimStaleProcessingJobs = async () => {
     }
 };
 
-const claimNextJob = async (): Promise<ClaimedBookProcessingJob | null> => {
-    const client = await pool.connect();
+const claimNextJob = async (
+    dbPool: Pool
+): Promise<ClaimedBookProcessingJob | null> => {
+    const client = await dbPool.connect();
     try {
         await client.query("BEGIN");
         const result = await client.query<{
@@ -183,8 +198,8 @@ const claimNextJob = async (): Promise<ClaimedBookProcessingJob | null> => {
     }
 };
 
-const markJobCompleted = async (jobId: string) => {
-    await pool.query(
+const markJobCompleted = async (dbPool: Pool, jobId: string) => {
+    await dbPool.query(
         `
             UPDATE book_processing_jobs
             SET
@@ -200,6 +215,7 @@ const markJobCompleted = async (jobId: string) => {
 };
 
 const markJobRetrying = async (
+    dbPool: Pool,
     job: ClaimedBookProcessingJob,
     error: string
 ) => {
@@ -209,7 +225,7 @@ const markJobRetrying = async (
     );
     const delaySeconds = getRetryDelaySeconds(job.attemptsMade, baseDelayMs);
 
-    await pool.query(
+    await dbPool.query(
         `
             UPDATE book_processing_jobs
             SET
@@ -224,8 +240,8 @@ const markJobRetrying = async (
     );
 };
 
-const markJobFailed = async (jobId: string, error: string) => {
-    await pool.query(
+const markJobFailed = async (dbPool: Pool, jobId: string, error: string) => {
+    await dbPool.query(
         `
             UPDATE book_processing_jobs
             SET
@@ -237,6 +253,53 @@ const markJobFailed = async (jobId: string, error: string) => {
         `,
         [jobId, error]
     );
+};
+
+export const processNextBookProcessingWork = async (
+    dependencies: BookProcessingWorkDependencies = defaultBookProcessingWorkDependencies
+): Promise<"book" | "reader-package" | "idle"> => {
+    await reclaimStaleProcessingJobs(dependencies.pool);
+    const job = await claimNextJob(dependencies.pool);
+    if (!job) {
+        const processed = await dependencies.processNextReaderPackageJob();
+        return processed ? "reader-package" : "idle";
+    }
+
+    const isFinalAttempt = shouldMarkBookFailed(
+        job.attemptsMade,
+        job.maxAttempts
+    );
+    log.info("Processing Postgres book job", {
+        jobId: job.id,
+        bookId: job.bookId,
+        attemptsMade: job.attemptsMade,
+        maxAttempts: job.maxAttempts,
+        isFinalAttempt,
+    });
+
+    try {
+        await dependencies.processUploadedBook(job, {
+            markFailedOnError: isFinalAttempt,
+        });
+        await markJobCompleted(dependencies.pool, job.id);
+    } catch (error) {
+        const message = getErrorMessage(error);
+        if (isFinalAttempt) {
+            await markJobFailed(dependencies.pool, job.id, message);
+        } else {
+            await markJobRetrying(dependencies.pool, job, message);
+        }
+        log.error("Postgres book job failed", {
+            jobId: job.id,
+            bookId: job.bookId,
+            attemptsMade: job.attemptsMade,
+            maxAttempts: job.maxAttempts,
+            isFinalAttempt,
+            error: message,
+        });
+    }
+
+    return "book";
 };
 
 class BookProcessingRunner {
@@ -288,46 +351,7 @@ class BookProcessingRunner {
 
         this.isTicking = true;
         try {
-            await reclaimStaleProcessingJobs();
-            const job = await claimNextJob();
-            if (!job) {
-                await processNextReaderPackageJob();
-                return;
-            }
-
-            const isFinalAttempt = shouldMarkBookFailed(
-                job.attemptsMade,
-                job.maxAttempts
-            );
-            log.info("Processing Postgres book job", {
-                jobId: job.id,
-                bookId: job.bookId,
-                attemptsMade: job.attemptsMade,
-                maxAttempts: job.maxAttempts,
-                isFinalAttempt,
-            });
-
-            try {
-                await processUploadedBook(job, {
-                    markFailedOnError: isFinalAttempt,
-                });
-                await markJobCompleted(job.id);
-            } catch (error) {
-                const message = getErrorMessage(error);
-                if (isFinalAttempt) {
-                    await markJobFailed(job.id, message);
-                } else {
-                    await markJobRetrying(job, message);
-                }
-                log.error("Postgres book job failed", {
-                    jobId: job.id,
-                    bookId: job.bookId,
-                    attemptsMade: job.attemptsMade,
-                    maxAttempts: job.maxAttempts,
-                    isFinalAttempt,
-                    error: message,
-                });
-            }
+            await processNextBookProcessingWork();
         } catch (error) {
             log.error("Book processing runner tick failed", {
                 error: getErrorMessage(error),

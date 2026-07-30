@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createSseParserState, pushSseChunk } from "../src/lib/sse";
+import { createSseParserState, pushSseChunk } from "../src/lib/sse.js";
 
 test("parses SSE events split across arbitrary chunks", () => {
     const state = createSseParserState();

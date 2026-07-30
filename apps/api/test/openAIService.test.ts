@@ -131,3 +131,47 @@ test("stream generation sends the usage-enabled request to the configured client
         restoreEnv("LANGFUSE_SECRET_KEY", previousSecretKey);
     }
 });
+
+test("generateResponse returns the completion content from the configured client", async () => {
+    const calls: unknown[] = [];
+    const fakeClient = {
+        chat: {
+            completions: {
+                create: async (request: unknown) => {
+                    calls.push(request);
+                    return {
+                        choices: [{ message: { content: "grounded answer" } }],
+                    };
+                },
+            },
+        },
+    } as unknown as OpenAI;
+
+    const service = new PlatformChatService(fakeClient);
+    const answer = await service.generateResponse("ctx", "what?");
+    assert.equal(answer, "grounded answer");
+    assert.equal(calls.length, 1);
+    const request = calls[0] as {
+        model: string;
+        messages: Array<{ role: string; content: string }>;
+    };
+    assert.equal(request.model, "gpt-4o-mini-2024-07-18");
+    assert.equal(request.messages[0]?.role, "system");
+    assert.match(request.messages[1]?.content ?? "", /Context:\nctx/);
+    assert.match(request.messages[1]?.content ?? "", /Question: what\?/);
+});
+
+test("generateResponse falls back to an empty string when content is missing", async () => {
+    const fakeClient = {
+        chat: {
+            completions: {
+                create: async () => ({
+                    choices: [{ message: { content: null } }],
+                }),
+            },
+        },
+    } as unknown as OpenAI;
+
+    const service = new PlatformChatService(fakeClient);
+    assert.equal(await service.generateResponse("c", "q"), "");
+});

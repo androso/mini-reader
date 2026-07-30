@@ -96,7 +96,8 @@ and the [Code of Conduct](CODE_OF_CONDUCT.md).
 - `pnpm api:dev`: run only the API app on port `3000`.
 - `pnpm web:dev`: run the Next.js web app on port `3001`.
 - `pnpm web:build`: build the Next.js web app.
-- `pnpm mobile:dev`: start Metro for the Expo custom development client.
+- `pnpm mobile:dev`: start Metro for Expo Go (`expo start --go`).
+- `pnpm mobile:dev-client`: start Metro for a custom development client.
 - `pnpm mobile:typecheck`: validate the native TypeScript application.
 - `pnpm format:check`: verify repository formatting.
 - `pnpm db:generate`: generate Drizzle migrations from the API schema.
@@ -116,8 +117,10 @@ the API through `NEXT_PUBLIC_API_URL` from `apps/web/.env`.
 
 The native app calls the same API through `EXPO_PUBLIC_API_URL`. Copy
 `apps/mobile/.env.template` to `apps/mobile/.env`, use a device-reachable origin,
-and use HTTPS for internal or production builds. Native modules require an Expo
-development build rather than Expo Go; see `apps/mobile/README.md`.
+and use HTTPS for physical iPhones and internal or production builds. `pnpm
+mobile:dev` launches Expo Go for EPUB workflows on iOS; Android PDF support
+still needs `pnpm mobile:dev-client` with a development build. See
+`apps/mobile/README.md`.
 
 Book uploads are processed asynchronously. The API stores the uploaded file,
 inserts a `processing` book row, enqueues a Postgres-backed job, and returns

@@ -3,7 +3,7 @@ import test from "node:test";
 import {
     readerHighlightContextFromMessage,
     type ReaderBridgeMessage,
-} from "../src/lib/readerBridge";
+} from "../src/lib/readerBridge.js";
 
 test("valid ask-context becomes HighlightContext", () => {
     assert.deepEqual(

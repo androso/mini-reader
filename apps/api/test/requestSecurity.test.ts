@@ -1,6 +1,4 @@
 import assert from "node:assert/strict";
-import { once } from "node:events";
-import type { AddressInfo } from "node:net";
 import test from "node:test";
 import cors from "cors";
 import express, {
@@ -14,6 +12,7 @@ import {
     frontendCorsOptions,
 } from "../src/middleware/csrf";
 import { terminalErrorHandler } from "../src/middleware/errorHandler";
+import { withHttpServer } from "./support/http";
 
 const trustedOrigin = "http://localhost:3000";
 
@@ -23,15 +22,7 @@ const withServer = async (
 ) => {
     const app = express();
     configure(app);
-    const server = app.listen(0, "127.0.0.1");
-    await once(server, "listening");
-    const { port } = server.address() as AddressInfo;
-    try {
-        await run(`http://127.0.0.1:${port}`);
-    } finally {
-        server.close();
-        await once(server, "close");
-    }
+    await withHttpServer(app, run);
 };
 
 test("trusted mutation origins are accepted", async () => {

@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { canOpenOffline, nextDownloadStatus } from "../src/lib/downloadState";
+import {
+    canOpenOffline,
+    nextDownloadStatus,
+} from "../src/lib/downloadState.js";
 
 test("only a completed download is available offline", () => {
     assert.equal(canOpenOffline("downloading"), false);

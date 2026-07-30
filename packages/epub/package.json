@@ -12,7 +12,8 @@
     "types": "dist/index.d.ts",
     "scripts": {
         "build": "tsc -p tsconfig.json",
-        "test": "tsc -p tsconfig.test.json && NODE_PATH=../../apps/api/node_modules:./node_modules node --test ../../.tmp/packages-epub-test/test/*.js"
+        "test": "tsc -p tsconfig.test.json && NODE_PATH=../../apps/api/node_modules:./node_modules node --test ../../.tmp/packages-epub-test/test/*.js",
+        "test:coverage": "tsc -p tsconfig.test.json && NODE_PATH=../../apps/api/node_modules:./node_modules c8 --all --allowExternal --src=../../.tmp/packages-epub-test/src --include='**/packages-epub-test/src/**/*.js' --exclude='**/test/**' --exclude='**/types.js' --reporter=text --reporter=lcov --reports-dir=../../coverage/epub --check-coverage --lines=90 --functions=90 --branches=80 node --test ../../.tmp/packages-epub-test/test/*.js"
     },
     "dependencies": {
         "dompurify": "^3.4.11",
@@ -22,6 +23,7 @@
     "devDependencies": {
         "@types/jsdom": "^21.1.7",
         "@types/node": "^22.10.2",
-        "typescript": "^5.7.2"
+        "typescript": "^5.7.2",
+        "c8": "11.0.0"
     }
 }

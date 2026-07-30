@@ -3,6 +3,7 @@ import test from "node:test";
 import JSZip from "jszip";
 import {
     acceptBookUpload,
+    BookUploadEnqueueError,
     BookUploadValidationError,
 } from "../src/services/BookUploadAcceptanceService";
 import { validateBookUpload } from "../src/utils/validateBookUpload";
@@ -319,4 +320,37 @@ test("rejects a traversal name in an Info-ZIP Unicode path override", async () =
 
 test("invalid content causes no storage, database, or queue side effects", async () => {
     await expectGenericRejectionWithoutSideEffects(Buffer.from("not a book"));
+});
+
+test("enqueue failure surfaces BookUploadEnqueueError after storage and insert", async () => {
+    const calls: string[] = [];
+    const cause = new Error("queue unavailable");
+    await assert.rejects(
+        acceptBookUpload(
+            {
+                userId: "user-a",
+                originalFilename: "book.pdf",
+                buffer: Buffer.from("%PDF-1.7\n"),
+            },
+            {
+                uploadFile: async () => void calls.push("storage"),
+                insertBook: async (book) => {
+                    calls.push("database");
+                    return book;
+                },
+                enqueue: async () => {
+                    calls.push("queue");
+                    throw cause;
+                },
+            }
+        ),
+        (error: unknown) => {
+            assert.ok(error instanceof BookUploadEnqueueError);
+            assert.equal(error.name, "BookUploadEnqueueError");
+            assert.equal(error.message, "Book processing queue is unavailable");
+            assert.equal(error.cause, cause);
+            return true;
+        }
+    );
+    assert.deepEqual(calls, ["storage", "database", "queue"]);
 });

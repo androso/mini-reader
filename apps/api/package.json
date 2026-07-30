@@ -18,7 +18,9 @@
         "start": "DOTENV_CONFIG_PATH=../../.env node -r dotenv/config build/index.js",
         "start:production": "NODE_ENV=production node build/production.js",
         "metadata:backfill": "DOTENV_CONFIG_PATH=../../.env node -r dotenv/config build/metadataBackfill.js",
-        "test": "tsc -p tsconfig.test.json && CODEX_OAUTH_ENABLED=false NODE_PATH=./node_modules:../../packages/processing/node_modules node --test ../../.tmp/apps-api-test/test/*.js"
+        "test": "node -e \"const fs=require('node:fs'); const p='../../.tmp/apps-api-test'; try { fs.rmSync(p,{recursive:true,force:true}); } catch {}\" && tsc -p tsconfig.test.json && CODEX_OAUTH_ENABLED=false NODE_PATH=./node_modules:../../packages/processing/node_modules node --test ../../.tmp/apps-api-test/test/*.js",
+        "pretest:coverage": "pnpm --filter @reader/contracts --filter @reader/epub --filter @reader/processing --filter @reader/providers build",
+        "test:coverage": "node -e \"const fs=require('node:fs'); const p='../../.tmp/apps-api-test'; try { fs.rmSync(p,{recursive:true,force:true}); } catch {}\" && tsc -p tsconfig.test.json && CODEX_OAUTH_ENABLED=false NODE_PATH=./node_modules:../../packages/processing/node_modules c8 --all --allowExternal --src=../../.tmp/apps-api-test/src --include='**/apps-api-test/src/services/**/*.js' --include='**/apps-api-test/src/middleware/**/*.js' --include='**/apps-api-test/src/routes/**/*.js' --include='**/apps-api-test/src/utils/**/*.js' --exclude='**/test/**' --exclude='**/utils/swagger.js' --exclude='**/legacy/**' --reporter=text --reporter=lcov --reports-dir=../../coverage/api --check-coverage --lines=90 --functions=90 --branches=80 node --test --test-concurrency=1 ../../.tmp/apps-api-test/test/*.js"
     },
     "dependencies": {
         "@langfuse/openai": "^5.9.1",
@@ -58,6 +60,7 @@
         "@types/swagger-ui-express": "^4.1.7",
         "ts-node": "^10.9.2",
         "ts-node-dev": "^2.0.0",
-        "typescript": "^5.7.2"
+        "typescript": "^5.7.2",
+        "c8": "11.0.0"
     }
 }

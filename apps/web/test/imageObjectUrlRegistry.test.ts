@@ -77,3 +77,21 @@ test("stale chapter registration is rejected when chapter id is empty", () => {
     assert.equal(registry.register(generation, "", "blob:empty"), false);
     assert.deepEqual(revoked, ["blob:empty"]);
 });
+
+test("cleanup helpers no-op for unknown chapters and stale dispose generations", () => {
+    const { registry, revoked } = setup();
+    const generation = registry.startArchive();
+    registry.register(generation, "c1", "blob:c1");
+
+    registry.releaseChapter("missing");
+    registry.dispose(generation - 1);
+    assert.deepEqual(revoked, []);
+    assert.equal(registry.isCurrent(generation), true);
+
+    registry.retainChapters([]);
+    assert.deepEqual(revoked, ["blob:c1"]);
+
+    const next = registry.startArchive();
+    assert.equal(next, generation + 1);
+    assert.deepEqual(revoked, ["blob:c1"]);
+});

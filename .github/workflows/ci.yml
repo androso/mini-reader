@@ -33,16 +33,14 @@ jobs:
         env:
             NODE_ENV: test
             DATABASE_URL: postgresql://postgres:postgres@localhost:5432/reader_test
-            BOOK_DELETION_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/reader_deletion_test
-            PROGRESS_MIGRATION_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/reader_progress_test
-            MESSAGE_COMPLETION_MIGRATION_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/reader_completion_test
-            MESSAGE_EXECUTION_METADATA_MIGRATION_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/reader_metadata_test
+            INTEGRATION_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/reader_test
             JWT_SECRET: ci-only-jwt-secret
             GOOGLE_CLIENT_ID: reader-ci.apps.googleusercontent.com
             FRONTEND_URL: http://localhost:3001
             OPENAI_API_KEY: ci-placeholder-openai-key
             STORAGE_DRIVER: local
             LOCAL_STORAGE_DIR: .tmp/ci-storage
+            EXPO_PUBLIC_API_URL: https://reader.example.test
         steps:
             - uses: actions/checkout@v7
               with:
@@ -55,17 +53,54 @@ jobs:
                   node-version: 22
                   cache: pnpm
             - run: pnpm install --frozen-lockfile
-            - name: Create isolated integration databases
-              env:
-                  PGPASSWORD: postgres
-              run: |
-                  for database in reader_deletion_test reader_progress_test reader_completion_test reader_metadata_test; do
-                    psql -h localhost -U postgres -d reader_test -c "CREATE DATABASE ${database}"
-                  done
             - run: pnpm format:check
-            - run: pnpm test
+            - run: pnpm test:coverage
             - run: pnpm build
             - run: git diff --check
+            - uses: actions/upload-artifact@v7
+              if: always()
+              with:
+                  name: coverage-lcov
+                  path: coverage/**/lcov.info
+
+    web-e2e:
+        runs-on: ubuntu-latest
+        services:
+            postgres:
+                image: pgvector/pgvector:pg16
+                env:
+                    POSTGRES_USER: postgres
+                    POSTGRES_PASSWORD: postgres
+                    POSTGRES_DB: reader_e2e
+                ports:
+                    - 5432:5432
+                options: >-
+                    --health-cmd "pg_isready -U postgres -d reader_e2e"
+                    --health-interval 5s
+                    --health-timeout 5s
+                    --health-retries 10
+        env:
+            E2E_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/reader_e2e
+            DOTENV_CONFIG_PATH: .env
+        steps:
+            - uses: actions/checkout@v7
+            - uses: pnpm/action-setup@v6
+              with:
+                  version: 10.11.1
+            - uses: actions/setup-node@v7
+              with:
+                  node-version: 22
+                  cache: pnpm
+            - run: pnpm install --frozen-lockfile
+            - run: pnpm --filter @reader/web exec playwright install --with-deps chromium
+            - run: pnpm test:e2e
+            - uses: actions/upload-artifact@v7
+              if: failure()
+              with:
+                  name: playwright-e2e
+                  path: |
+                      .tmp/playwright/
+                      .tmp/playwright-report/
 
     dependency-audit:
         runs-on: ubuntu-latest

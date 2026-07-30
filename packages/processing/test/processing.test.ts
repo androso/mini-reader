@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -6,9 +7,14 @@ import type { StorageProvider, VectorStoreProvider } from "@reader/providers";
 import JSZip from "jszip";
 import {
     createBookCollectionName,
+    createEpubCollectionName,
+    createPdfCollectionName,
     decodePdfTextRuns,
+    extractBookMetadata,
     extractEpubBook,
+    extractEpubMetadata,
     extractPdfBook,
+    extractPdfMetadata,
     normalizeBookMetadataValue,
     processBookForSearch,
     TextChunker,
@@ -553,4 +559,76 @@ test("extracts EPUB chunks within constrained heap limit", (t) => {
         `Child process failed with stderr: ${result.stderr}`
     );
     assert.match(result.stdout, /EPUB_EXTRACTION_OK:\d+/);
+});
+
+test("createEpubCollectionName and extractEpubMetadata hash normalized metadata", async () => {
+    const buffer = await createMetadataEpub();
+    const collectionName = await createEpubCollectionName(buffer);
+    assert.match(collectionName, /^book_[a-f0-9]{12}$/);
+
+    const metadata = await extractEpubMetadata(buffer);
+    assert.deepEqual(metadata, {
+        title: "The Left Hand of Darkness",
+        creator: "Ursula K. Le Guin",
+        identifier: "urn:isbn:test",
+    });
+
+    const viaDispatcher = await extractBookMetadata(buffer, "epub");
+    assert.deepEqual(viaDispatcher, metadata);
+});
+
+test("PDF ingestion covers default parser, metadata, and collection naming", async () => {
+    const samplePdf = fs.readFileSync(
+        path.resolve(process.cwd(), "test/fixtures/sample.pdf")
+    );
+
+    const metadata = await extractPdfMetadata(samplePdf);
+    assert.equal(metadata.title, "Left Hand");
+    assert.equal(metadata.creator, "Le Guin");
+    assert.equal(metadata.identifier, null);
+
+    const viaDispatcher = await extractBookMetadata(samplePdf, "pdf");
+    assert.deepEqual(viaDispatcher, metadata);
+
+    const collectionName = await createPdfCollectionName(samplePdf);
+    assert.match(collectionName, /^pdf_[a-f0-9]{12}$/);
+
+    const content = await extractPdfBook(samplePdf);
+    assert.ok(Array.isArray(content.chunks));
+    assert.equal(content.metadata.title, "Left Hand");
+
+    await assert.rejects(createPdfCollectionName(Buffer.from("not-a-pdf")));
+    await assert.rejects(extractPdfMetadata(Buffer.from("%PDF-broken")));
+});
+
+test("text chunker covers match fallback and failed rebalance guards", () => {
+    const originalMatch = String.prototype.match;
+    const chunker = new TextChunker({
+        minChunkSize: 10,
+        targetChunkSize: 12,
+        maxChunkSize: 20,
+    });
+
+    try {
+        // Force the regex match fallback branch for oversized input.
+        String.prototype.match = function matchOverride(this: string) {
+            if (this.length > 20) return null;
+            return originalMatch.call(this, arguments[0] as RegExp);
+        } as typeof String.prototype.match;
+        const chunks = chunker.chunkText("A".repeat(45));
+        assert.ok(chunks.length >= 2);
+        assert.equal(chunks.join(""), "A".repeat(45));
+    } finally {
+        String.prototype.match = originalMatch;
+    }
+
+    const tight = new TextChunker({
+        minChunkSize: 8,
+        targetChunkSize: 10,
+        maxChunkSize: 12,
+    });
+    const input = `${"W".repeat(11)}. ${"Z".repeat(11)}.`;
+    const rebalanced = tight.chunkText(input);
+    assert.ok(rebalanced.every((chunk) => chunk.length <= 12));
+    assert.equal(rebalanced.join(""), input.replace(/\s+/g, " ").trim());
 });

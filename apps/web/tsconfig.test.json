@@ -7,18 +7,30 @@
         "noEmit": false,
         "outDir": "../../.tmp/apps-web-test",
         "rootDir": ".",
-        "types": ["node"]
+        "types": ["node"],
+        "sourceMap": true,
+        "inlineSources": true
     },
     "include": [
-        "src/components/bookCoverLoading.ts",
+        "src/lib/api.ts",
+        "src/lib/bookBinary.ts",
         "src/lib/bookFileKind.ts",
-        "src/lib/epubCoverExtraction.ts",
-        "src/hooks/chat/chatInput.ts",
-        "src/hooks/imageObjectUrlRegistry.ts",
+        "src/lib/bookProcessingRetry.ts",
+        "src/lib/bookReaderRouting.ts",
         "src/lib/chapterPullGesture.ts",
-        "src/lib/readerNavigationBounds.ts",
+        "src/lib/chatProvider.ts",
+        "src/lib/chatSources.ts",
+        "src/lib/epubChapterProcessing.ts",
+        "src/lib/epubCoverExtraction.ts",
+        "src/lib/epubNavigation.ts",
+        "src/lib/offlineLibrary.ts",
+        "src/lib/offlineProgress.ts",
         "src/lib/offlineStore.ts",
-        "src/types/bookTypes.ts",
+        "src/lib/readerNavigationBounds.ts",
+        "src/hooks/chat/chatInput.ts",
+        "src/hooks/epubImageVisibility.ts",
+        "src/hooks/imageObjectUrlRegistry.ts",
+        "src/components/bookCoverLoading.ts",
         "test/**/*.ts"
     ]
 }

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { normalizeAllowedWebUrl } from "../src/lib/chatSources";
+import { normalizeAllowedWebUrl } from "../src/lib/chatSources.js";
 
 test("allows only exact canonical URLs from the message source list", () => {
     const allowed = new Set(["https://example.com/source"]);

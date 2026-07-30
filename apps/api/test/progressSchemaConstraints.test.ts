@@ -1,54 +1,26 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { randomUUID } from "node:crypto";
 import test from "node:test";
-import { Client } from "pg";
+import { integrationTestOptions, withTestDatabase } from "./support/postgres";
 
 const migrationPath = "migrations/0014_mighty_rattler.sql";
-const migrationTestDatabaseUrl =
-    process.env.PROGRESS_MIGRATION_TEST_DATABASE_URL;
-
-function quoteIdentifier(identifier: string): string {
-    return `"${identifier.replace(/"/g, '""')}"`;
-}
 
 test(
     "0014 migrates legacy progress in a disposable PostgreSQL 16/pgvector database",
-    {
-        skip: migrationTestDatabaseUrl
-            ? false
-            : "requires PROGRESS_MIGRATION_TEST_DATABASE_URL",
-    },
+    integrationTestOptions,
     async () => {
-        assert.ok(migrationTestDatabaseUrl);
+        await withTestDatabase(
+            "reader_progress",
+            { migrate: false },
+            async ({ client: database }) => {
+                const version = await database.query<{
+                    server_version_num: string;
+                }>("SHOW server_version_num");
+                assert.ok(
+                    Number(version.rows[0].server_version_num) >= 160000,
+                    "migration tests require PostgreSQL 16 or newer"
+                );
 
-        const adminUrl = new URL(migrationTestDatabaseUrl);
-        const disposableDatabase = `reader_progress_${randomUUID().replace(/-/g, "")}`;
-        const testUrl = new URL(adminUrl);
-        testUrl.pathname = `/${disposableDatabase}`;
-        const admin = new Client({ connectionString: adminUrl.toString() });
-        let databaseCreated = false;
-
-        await admin.connect();
-        try {
-            const version = await admin.query<{ server_version_num: string }>(
-                "SHOW server_version_num"
-            );
-            assert.ok(
-                Number(version.rows[0].server_version_num) >= 160000,
-                "migration tests require PostgreSQL 16 or newer"
-            );
-
-            await admin.query(
-                `CREATE DATABASE ${quoteIdentifier(disposableDatabase)}`
-            );
-            databaseCreated = true;
-
-            const database = new Client({
-                connectionString: testUrl.toString(),
-            });
-            await database.connect();
-            try {
                 await database.query('CREATE EXTENSION IF NOT EXISTS "vector"');
                 await database.query(`
                     CREATE TABLE "users" (
@@ -299,21 +271,8 @@ test(
                     ).rowCount,
                     0
                 );
-            } finally {
-                await database.end();
             }
-        } finally {
-            if (databaseCreated) {
-                await admin.query(
-                    `SELECT pg_terminate_backend("pid") FROM "pg_stat_activity" WHERE "datname" = $1`,
-                    [disposableDatabase]
-                );
-                await admin.query(
-                    `DROP DATABASE ${quoteIdentifier(disposableDatabase)}`
-                );
-            }
-            await admin.end();
-        }
+        );
     }
 );
 

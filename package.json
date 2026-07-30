@@ -6,20 +6,26 @@
     "scripts": {
         "dev": "pnpm --parallel --filter @reader/api --filter @reader/web dev",
         "build": "pnpm --filter @reader/contracts build && pnpm --filter @reader/epub build && pnpm --filter @reader/api build && pnpm --filter @reader/web build && pnpm --filter @reader/mobile typecheck",
-        "test": "pnpm --filter @reader/contracts test && pnpm --filter @reader/epub test && pnpm --filter @reader/processing test && pnpm --filter @reader/api test && pnpm --filter @reader/web test && pnpm --filter @reader/mobile test",
+        "test": "pnpm --filter @reader/contracts test && pnpm --filter @reader/epub test && pnpm --filter @reader/providers test && pnpm --filter @reader/processing test && pnpm --filter @reader/api test && pnpm --filter @reader/web test && pnpm --filter @reader/mobile test",
         "api:dev": "pnpm --filter @reader/api dev",
         "api:build": "pnpm --filter @reader/api build",
         "web:dev": "pnpm --filter @reader/web dev",
         "web:build": "pnpm --filter @reader/web build",
         "web:lint": "pnpm --filter @reader/web lint",
         "mobile:dev": "pnpm --filter @reader/mobile start",
+        "mobile:dev-client": "pnpm --filter @reader/mobile start:dev-client",
+        "mobile:android": "pnpm --filter @reader/mobile android",
+        "mobile:ios": "pnpm --filter @reader/mobile ios",
         "mobile:typecheck": "pnpm --filter @reader/mobile typecheck",
         "format:check": "prettier --check . --ignore-path .prettierignore",
         "db:generate": "DOTENV_CONFIG_PATH=.env NODE_OPTIONS='-r dotenv/config' drizzle-kit generate --config=drizzle.config.ts",
         "db:migrate": "DOTENV_CONFIG_PATH=.env NODE_OPTIONS='-r dotenv/config' drizzle-kit migrate --config=drizzle.config.ts",
         "db:push": "DOTENV_CONFIG_PATH=.env NODE_OPTIONS='-r dotenv/config' drizzle-kit push --config=drizzle.config.ts",
         "db:studio": "DOTENV_CONFIG_PATH=.env NODE_OPTIONS='-r dotenv/config' drizzle-kit studio --config=drizzle.config.ts",
-        "prepare": "husky install"
+        "prepare": "husky install",
+        "pretest:coverage": "node -e \"require('node:fs').mkdirSync('coverage', { recursive: true })\"",
+        "test:coverage": "pnpm --filter @reader/contracts test && pnpm --filter @reader/epub test:coverage && pnpm --filter @reader/providers test:coverage && pnpm --filter @reader/processing test:coverage && pnpm --filter @reader/api test:coverage && pnpm --filter @reader/web test:coverage && pnpm --filter @reader/mobile test:coverage",
+        "test:e2e": "DATABASE_URL=$E2E_DATABASE_URL pnpm db:migrate && pnpm --filter @reader/web test:e2e"
     },
     "keywords": [
         "reader",

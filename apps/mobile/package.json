@@ -4,16 +4,20 @@
     "private": true,
     "main": "expo-router/entry",
     "scripts": {
-        "start": "expo start --dev-client",
+        "start": "expo start --go",
+        "start:dev-client": "expo start --dev-client",
         "android": "bash ./scripts/run-android.sh",
-        "ios": "expo run:ios",
+        "ios": "bash ./scripts/run-ios.sh",
         "typecheck": "tsc --noEmit",
-        "test": "tsc -p tsconfig.test.json && node --test ../../.tmp/apps-mobile-test/test/*.js",
+        "test": "tsc -p tsconfig.test.json && node ./scripts/prepare-test-shims.cjs && node --experimental-test-module-mocks --test ../../.tmp/apps-mobile-test/test/*.js",
         "export:android": "expo export --platform android",
         "export:ios": "expo export --platform ios",
-        "doctor": "expo-doctor"
+        "doctor": "expo-doctor",
+        "test:coverage": "tsc -p tsconfig.test.json && node ./scripts/prepare-test-shims.cjs && c8 --all --allowExternal --src=../../.tmp/apps-mobile-test/src --include='**/apps-mobile-test/src/lib/api.js' --include='**/apps-mobile-test/src/lib/bookCompatibility.js' --include='**/apps-mobile-test/src/lib/bookUpload.js' --include='**/apps-mobile-test/src/lib/chatMarkdown.js' --include='**/apps-mobile-test/src/lib/chatModelLabel.js' --include='**/apps-mobile-test/src/lib/chatSources.js' --include='**/apps-mobile-test/src/lib/downloadState.js' --include='**/apps-mobile-test/src/lib/epubWebView.js' --include='**/apps-mobile-test/src/lib/keyboardInset.js' --include='**/apps-mobile-test/src/lib/readerBridge.js' --include='**/apps-mobile-test/src/lib/sse.js' --exclude='**/test/**' --reporter=text --reporter=lcov --reports-dir=../../coverage/mobile --check-coverage --lines=80 --functions=80 --branches=70 node --experimental-test-module-mocks --test ../../.tmp/apps-mobile-test/test/*.js"
     },
     "dependencies": {
+        "@config-plugins/react-native-blob-util": "14.0.1",
+        "@config-plugins/react-native-pdf": "14.0.1",
         "@expo-google-fonts/jetbrains-mono": "*",
         "@expo-google-fonts/literata": "*",
         "@expo-google-fonts/plus-jakarta-sans": "*",
@@ -33,6 +37,7 @@
         "expo-splash-screen": "*",
         "expo-sqlite": "*",
         "expo-status-bar": "*",
+        "expo-updates": "~57.0.11",
         "react": "19.2.3",
         "react-native": "0.86.0",
         "react-native-blob-util": "*",
@@ -44,6 +49,7 @@
     "devDependencies": {
         "@types/react": "~19.2.2",
         "expo-doctor": "*",
-        "typescript": "^5.9.2"
+        "typescript": "^5.9.2",
+        "c8": "11.0.0"
     }
 }

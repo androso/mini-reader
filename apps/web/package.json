@@ -15,7 +15,9 @@
         "build": "next build",
         "lint": "next lint",
         "test": "tsc -p tsconfig.test.json && NODE_PATH=./node_modules:../../packages/epub/node_modules node --test ../../.tmp/apps-web-test/test/*.js",
-        "test:epub": "pnpm --filter @reader/epub test"
+        "test:epub": "pnpm --filter @reader/epub test",
+        "test:coverage": "tsc -p tsconfig.test.json && NODE_PATH=./node_modules:../../packages/epub/node_modules c8 --all --allowExternal --src=../../.tmp/apps-web-test/src --include='**/apps-web-test/src/lib/api.js' --include='**/apps-web-test/src/lib/bookBinary.js' --include='**/apps-web-test/src/lib/bookFileKind.js' --include='**/apps-web-test/src/lib/bookProcessingRetry.js' --include='**/apps-web-test/src/lib/bookReaderRouting.js' --include='**/apps-web-test/src/lib/chapterPullGesture.js' --include='**/apps-web-test/src/lib/chatProvider.js' --include='**/apps-web-test/src/lib/chatSources.js' --include='**/apps-web-test/src/lib/epubChapterProcessing.js' --include='**/apps-web-test/src/lib/epubCoverExtraction.js' --include='**/apps-web-test/src/lib/epubNavigation.js' --include='**/apps-web-test/src/lib/offlineLibrary.js' --include='**/apps-web-test/src/lib/offlineProgress.js' --include='**/apps-web-test/src/lib/offlineStore.js' --include='**/apps-web-test/src/lib/readerNavigationBounds.js' --include='**/apps-web-test/src/hooks/chat/chatInput.js' --include='**/apps-web-test/src/hooks/epubImageVisibility.js' --include='**/apps-web-test/src/hooks/imageObjectUrlRegistry.js' --include='**/apps-web-test/src/components/bookCoverLoading.js' --exclude='**/test/**' --reporter=text --reporter=lcov --reports-dir=../../coverage/web --check-coverage --lines=80 --functions=80 --branches=70 node --test ../../.tmp/apps-web-test/test/*.js",
+        "test:e2e": "playwright test"
     },
     "dependencies": {
         "@radix-ui/react-scroll-area": "^1.2.0",
@@ -54,6 +56,8 @@
         "prettier": "^3.4.2",
         "serwist": "9.5.12",
         "tailwindcss": "^3.4.1",
-        "typescript": "^5"
+        "typescript": "^5",
+        "c8": "11.0.0",
+        "@playwright/test": "1.62.0"
     }
 }

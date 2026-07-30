@@ -3,7 +3,9 @@
     "compilerOptions": {
         "rootDir": ".",
         "outDir": "../../.tmp/apps-api-test",
-        "noEmit": false
+        "noEmit": false,
+        "sourceMap": true,
+        "inlineSources": true
     },
     "include": ["src/**/*", "test/**/*"]
 }

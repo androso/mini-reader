@@ -31,6 +31,12 @@ export interface VectorSearchResult {
     distance?: number;
 }
 
+export interface PgVectorStoreOptions {
+    pool?: Pool;
+    embeddingModel?: string;
+    embed?: (input: string[], model: string) => Promise<number[][]>;
+}
+
 const parsePositiveIntegerEnv = (name: string, fallback: number) => {
     const value = Number(process.env[name]);
     return Number.isInteger(value) && value > 0 ? value : fallback;
@@ -129,32 +135,45 @@ const withRetry = async <T>(
 const embeddingToPgVector = (embedding: number[]) => `[${embedding.join(",")}]`;
 
 export class PgVectorStore implements VectorStoreProvider {
-    private pool: Pool | null = null;
-    private readonly openai: OpenAI;
+    private pool: Pool | null;
+    private readonly openai: OpenAI | null;
     private readonly embeddingModel: string;
+    private readonly embed: (
+        input: string[],
+        model: string
+    ) => Promise<number[][]>;
 
-    constructor() {
+    constructor(options: PgVectorStoreOptions = {}) {
+        this.pool = options.pool ?? null;
         this.embeddingModel =
-            process.env.OPENAI_EMBEDDING_MODEL ||
-            DEFAULT_OPENAI_EMBEDDING_MODEL;
+            options.embeddingModel ??
+            (process.env.OPENAI_EMBEDDING_MODEL ||
+                DEFAULT_OPENAI_EMBEDDING_MODEL);
 
-        const openAiOptions: NonNullable<
-            ConstructorParameters<typeof OpenAI>[0]
-        > = {
-            apiKey: process.env.OPENAI_API_KEY || "",
-            maxRetries: 0,
-            defaultHeaders: {
-                "Accept-Encoding": "identity",
-            },
-        };
+        if (options.embed) {
+            this.openai = null;
+            this.embed = options.embed;
+        } else {
+            const openAiOptions: NonNullable<
+                ConstructorParameters<typeof OpenAI>[0]
+            > = {
+                apiKey: process.env.OPENAI_API_KEY || "",
+                maxRetries: 0,
+                defaultHeaders: {
+                    "Accept-Encoding": "identity",
+                },
+            };
 
-        if (typeof globalThis.fetch === "function") {
-            openAiOptions.fetch = globalThis.fetch.bind(
-                globalThis
-            ) as NonNullable<typeof openAiOptions.fetch>;
+            if (typeof globalThis.fetch === "function") {
+                openAiOptions.fetch = globalThis.fetch.bind(
+                    globalThis
+                ) as NonNullable<typeof openAiOptions.fetch>;
+            }
+
+            this.openai = new OpenAI(openAiOptions);
+            this.embed = (input, model) =>
+                this.createOpenAiEmbeddings(input, model);
         }
-
-        this.openai = new OpenAI(openAiOptions);
 
         log.info("Initialized Postgres vector store", {
             embeddingModel: this.embeddingModel,
@@ -330,6 +349,30 @@ export class PgVectorStore implements VectorStoreProvider {
         }
     }
 
+    private async createOpenAiEmbeddings(
+        input: string[],
+        model: string
+    ): Promise<number[][]> {
+        const { data: response, request_id: requestId } =
+            await this.openai!.embeddings.create({
+                model,
+                input,
+                encoding_format: "float",
+            }).withResponse();
+
+        log.info("OpenAI embedding request completed", {
+            inputCount: input.length,
+            model,
+            requestId,
+            promptTokens: response.usage?.prompt_tokens,
+            totalTokens: response.usage?.total_tokens,
+        });
+
+        return response.data.map(
+            (item: { embedding: number[] }) => item.embedding
+        );
+    }
+
     private async createEmbeddings(
         input: string[],
         context: { collectionName: string; batchIndex?: number }
@@ -341,18 +384,8 @@ export class PgVectorStore implements VectorStoreProvider {
             model: this.embeddingModel,
         });
 
-        const { data: response, request_id: requestId } =
-            await this.openai.embeddings
-                .create({
-                    model: this.embeddingModel,
-                    input,
-                    encoding_format: "float",
-                })
-                .withResponse();
+        const embeddings = await this.embed(input, this.embeddingModel);
 
-        const embeddings = response.data.map(
-            (item: { embedding: number[] }) => item.embedding
-        );
         if (embeddings.length !== input.length) {
             throw new Error(
                 `OpenAI returned ${embeddings.length} embeddings for ${input.length} inputs`
@@ -362,9 +395,6 @@ export class PgVectorStore implements VectorStoreProvider {
         log.info("OpenAI embeddings created", {
             ...context,
             inputCount: input.length,
-            requestId,
-            promptTokens: response.usage?.prompt_tokens,
-            totalTokens: response.usage?.total_tokens,
             durationMs: Date.now() - start,
         });
 

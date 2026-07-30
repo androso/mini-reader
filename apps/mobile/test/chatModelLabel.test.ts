@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { chatModelLabel } from "../src/lib/chatModelLabel";
+import { chatModelLabel } from "../src/lib/chatModelLabel.js";
 
 test("Codex picker IDs render as short display labels", () => {
     assert.equal(chatModelLabel("gpt-5.6"), "Sol");
