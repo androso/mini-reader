@@ -16,7 +16,7 @@
         "test:coverage": "tsc -p tsconfig.test.json && c8 --all --allowExternal --src=../../.tmp/packages-providers-test/src --include='**/packages-providers-test/src/**/*.js' --exclude='**/test/**' --reporter=text --reporter=lcov --reports-dir=../../coverage/providers --check-coverage --lines=90 --functions=90 --branches=80 node --test ../../.tmp/packages-providers-test/test/*.js"
     },
     "dependencies": {
-        "@aws-sdk/client-s3": "^3.1093.0",
+        "@aws-sdk/client-s3": "^3.1096.0",
         "openai": "^4.104.0",
         "pg": "^8.22.0"
     },

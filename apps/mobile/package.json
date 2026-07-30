@@ -24,7 +24,7 @@
         "@expo/vector-icons": "*",
         "@react-native-community/netinfo": "*",
         "@reader/contracts": "workspace:*",
-        "@tanstack/react-query": "^5.90.21",
+        "@tanstack/react-query": "^5.101.4",
         "expo": "~57.0.0",
         "expo-constants": "*",
         "expo-dev-client": "*",
@@ -38,16 +38,16 @@
         "expo-sqlite": "*",
         "expo-status-bar": "*",
         "expo-updates": "~57.0.11",
-        "react": "19.2.3",
-        "react-native": "0.86.0",
+        "react": "19.2.8",
+        "react-native": "0.86.2",
         "react-native-blob-util": "*",
         "react-native-pdf": "*",
-        "react-native-safe-area-context": "~5.7.0",
+        "react-native-safe-area-context": "~5.8.0",
         "react-native-screens": "*",
-        "react-native-webview": "13.16.1"
+        "react-native-webview": "13.17.0"
     },
     "devDependencies": {
-        "@types/react": "~19.2.2",
+        "@types/react": "~19.2.17",
         "expo-doctor": "*",
         "typescript": "^5.9.2",
         "c8": "11.0.0"
