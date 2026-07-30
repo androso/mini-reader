@@ -63,3 +63,34 @@ test("buildBookUploadFormData infers EPUB mime type from the filename", async ()
         globalThis.fetch = originalFetch;
     }
 });
+
+test("buildBookUploadFormData does not assign to Blob getters when File is unavailable", async () => {
+    const originalFetch = globalThis.fetch;
+    const originalFile = globalThis.File;
+    globalThis.fetch = (async () =>
+        new Response(Uint8Array.from([80, 75]), {
+            status: 200,
+        })) as typeof fetch;
+    Object.defineProperty(globalThis, "File", {
+        value: undefined,
+        configurable: true,
+    });
+
+    try {
+        const form = await buildBookUploadFormData({
+            uri: "content://books/infinity.epub",
+            name: "infinity.epub",
+            mimeType: null,
+        } as never);
+        const part = form.get("file") as Blob & { name?: string };
+        assert.equal(part.name, "infinity.epub");
+        assert.equal(part.type, "application/epub+zip");
+        assert.equal(part.size, 2);
+    } finally {
+        globalThis.fetch = originalFetch;
+        Object.defineProperty(globalThis, "File", {
+            value: originalFile,
+            configurable: true,
+        });
+    }
+});

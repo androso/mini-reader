@@ -1,5 +1,5 @@
 import type { DocumentPickerAsset } from "expo-document-picker";
-import { isPdfDocument } from "./bookCompatibility.js";
+import { isPdfDocument } from "./bookCompatibility";
 
 const mimeForAsset = (asset: DocumentPickerAsset) =>
     asset.mimeType ??
@@ -18,11 +18,9 @@ export const buildBookUploadFormData = async (
         throw new Error("The selected book file could not be read.");
     }
     const blob = await response.blob();
-    const file =
-        typeof File === "function"
-            ? new File([blob], asset.name, { type: mimeType })
-            : Object.assign(blob, { name: asset.name, type: mimeType });
+    const typedBlob =
+        blob.type === mimeType ? blob : new Blob([blob], { type: mimeType });
     const form = new FormData();
-    form.append("file", file);
+    form.append("file", typedBlob, asset.name);
     return form;
 };
