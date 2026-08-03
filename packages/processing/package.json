@@ -24,9 +24,9 @@
         "pdf2json": "^3.1.5"
     },
     "devDependencies": {
-        "@types/node": "^22.10.2",
+        "@types/node": "^20.19.43",
         "jszip": "^3.10.1",
-        "typescript": "^5.7.2",
+        "typescript": "^5.9.3",
         "c8": "11.0.0"
     }
 }
