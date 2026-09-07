@@ -45,7 +45,7 @@
         "pnpm": ">=10.11.1 <11"
     },
     "devDependencies": {
-        "dotenv": "16.4.7",
+        "dotenv": "16.6.1",
         "drizzle-kit": "0.30.1",
         "husky": "^9.1.7",
         "idb": "8.0.3",
