@@ -40,7 +40,7 @@
         "jsonwebtoken": "^9.0.3",
         "jszip": "^3.10.1",
         "minisearch": "^7.1.2",
-        "multer": "^2.2.0",
+        "multer": "^2.3.0",
         "next": "15.5.21",
         "openai": "^5.23.2",
         "pg": "^8.22.0",
