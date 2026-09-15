@@ -16,7 +16,7 @@
         "test:coverage": "tsc -p tsconfig.test.json && NODE_PATH=../../apps/api/node_modules:./node_modules c8 --all --allowExternal --src=../../.tmp/packages-epub-test/src --include='**/packages-epub-test/src/**/*.js' --exclude='**/test/**' --exclude='**/types.js' --reporter=text --reporter=lcov --reports-dir=../../coverage/epub --check-coverage --lines=90 --functions=90 --branches=80 node --test ../../.tmp/packages-epub-test/test/*.js"
     },
     "dependencies": {
-        "dompurify": "^3.4.11",
+        "dompurify": "^3.4.13",
         "jsdom": "^25.0.1",
         "jszip": "^3.10.1"
     },
